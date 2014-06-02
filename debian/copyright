@@ -9,11 +9,18 @@ License: Apache-2
 Files: *
 Copyright: (c) 2011-2014, RedHat Inc.
            (c) 2011-2014, IBM Corp.
-           (c) 2011-2014, Rackspace
+           (c) 2011-2014, Rackspace, Inc.
            (c) 2011-2014, NTT
-           (c) 2011-2014, HP
+           (c) 2011-2014, Hewlett-Packard Development Company, L.P.
+           (c) 2011-2014, Deutsche Telekom AG
+           (c) 2011-2014, Mirantis Inc.
            (c) 2011-2014, Intel Corp.
            (c) 2011-2014, OpenStack foundation
+           (c) 2011-2014, Nebula, Inc.
+           (c) 2010, United States Government as represented by the
+                     Administrator of the NASA.
+           (C) 2011-2014, eNovance SAS <licensing@enovance.com>
+           (c) 2001-2010, Twisted Matrix Laboratories.
 License: Apache-2
 
 License: Apache-2
