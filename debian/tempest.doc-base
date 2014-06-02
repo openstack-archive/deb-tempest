@@ -1,0 +1,9 @@
+Document: tempest-doc
+Title: Tempest Documentation
+Author: OpenStack
+Abstract: Sphinx documentation for Tempest
+Section: Programming/Python
+
+Format: HTML
+Index: /usr/share/doc/tempest/html/index.html
+Files: /usr/share/doc/tempest/html/*

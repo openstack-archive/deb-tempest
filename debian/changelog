@@ -1,0 +1,5 @@
+tempest (1-1) unstable; urgency=medium
+
+  * Initial release (Closes: #750164).
+
+ -- Thomas Goirand <zigo@debian.org>  Fri, 08 Mar 2013 17:50:11 +0800
