@@ -47,7 +47,8 @@ Build-Depends-Indep: pylint,
                      python-tox,
                      subunit (>= 0.0.18),
                      testrepository (>= 0.0.18)
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
+X-Python-Version: >= 2.7
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/tempest.git
 Vcs-Git: git://anonscm.debian.org/openstack/tempest.git
 Homepage: https://github.com/openstack/tempest
