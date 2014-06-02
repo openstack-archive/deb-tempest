@@ -44,6 +44,7 @@ Build-Depends-Indep: pylint,
                      python-testresources (>= 0.2.4),
                      python-testscenarios (>= 0.4),
                      python-testtools (>= 0.9.34),
+                     python-tox,
                      subunit (>= 0.0.18),
                      testrepository (>= 0.0.18)
 Standards-Version: 3.9.4
