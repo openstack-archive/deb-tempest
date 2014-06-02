@@ -8,6 +8,10 @@ export OSLO_PACKAGE_VERSION=$(VERSION)
 %:
 	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
 
+override_dh_auto_clean:
+	dh_auto_clean -O--buildsystem=python_distutils
+	rm .testrepository
+
 override_dh_auto_install:
 	dh_auto_install -O--buildsystem=python_distutils
 	install -D -m 0664 etc/tempest.conf.sample $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
