@@ -80,6 +80,7 @@ Depends: python-anyjson (>= 0.3.3),
          python-testresources (>= 0.2.4),
          python-testscenarios (>= 0.4),
          python-testtools,
+         subunit (>= 0.0.18),
          testrepository (>= 0.0.18),
          ${misc:Depends},
          ${python:Depends}
