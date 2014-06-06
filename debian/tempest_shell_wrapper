@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+cd /var/lib/tempest
+
+if [ ! -d .testrepository ] ; then
+	testr init
+fi
+
+test run --subunit $@ | subunit2pyunit
+
