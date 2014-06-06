@@ -10,7 +10,7 @@ export OSLO_PACKAGE_VERSION=$(VERSION)
 
 override_dh_auto_clean:
 	dh_auto_clean -O--buildsystem=python_distutils
-	rm .testrepository
+	rm -f .testrepository
 
 override_dh_auto_install:
 	dh_auto_install -O--buildsystem=python_distutils
