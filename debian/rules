@@ -23,9 +23,9 @@ override_dh_auto_install:
 	sed -i 's/^#tenant_name=<None>/tenant_name=admin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#password=<None>/password=pass/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#cli_dir=.*/cli_dir=\/usr\/bin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^#has_manage=true=.*/has_manage=false' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^#allow_tenant_isolation=false/allow_tenant_isolation=true' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^#image_ssh_user=root/image_ssh_user=debian' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
+	sed -i 's/^#has_manage=true=.*/has_manage=false/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
+	sed -i 's/^#allow_tenant_isolation=false/allow_tenant_isolation=true/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
+	sed -i 's/^#image_ssh_user=root/image_ssh_user=debian/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 
 	# Package stuff in /var/lib/tempest, since we need read/write access
 	# to run the testr stuff
