@@ -8,5 +8,4 @@ if [ ! -d .testrepository ] ; then
 	testr init
 fi
 
-test run --subunit $@ | subunit2pyunit
-
+testr run --subunit $@ | subunit2pyunit
