@@ -41,7 +41,7 @@ ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 	set -e && \
 		TEMP_REZ=`mktemp -t` && \
 		export OS_TEST_PATH=./tempest/tests && \
-		PYTHONPATH=$(CURDIR) testr run --parallel --subunit | tee $$TEMP_REZ | subunit2pyunit || true ; \
+		PYTHONPATH=$(CURDIR) testr run --parallel --subunit 'tests\.(?!.*test_pretty_tox.*)' | tee $$TEMP_REZ | subunit2pyunit || true ; \
 		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats || true ; \
 		rm -f $$TEMP_REZ ;
 	testr slowest
