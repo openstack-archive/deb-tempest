@@ -19,6 +19,8 @@ override_dh_auto_install:
 	cp -rfv etc/schemas $(CURDIR)/debian/tempest/etc/tempest
 
 	# Fix-up some preferences
+
+	sed -i 's/^#lock_path=<None>/#lock_path=\/var\/lock/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#username=<None>/username=admin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#tenant_name=<None>/tenant_name=admin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#password=<None>/password=pass/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf

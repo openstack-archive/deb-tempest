@@ -1,0 +1,36 @@
+.TH tempest 1
+.SH NAME
+tempest \- functional testing of an OpenStack cloud
+.SH SYNOPSIS
+.B tempest
+.B functional-test-suite
+.B [functional-test-suite]
+
+.SH DESCRIPTION
+
+.LP
+.I tempest
+Tempest is a set of integration tests to be run against a live Openstack
+cluster in order to make sure that all components are working as expected.
+Tempest will start and stop virtual machine in order to check that your
+cloud is working as expected.
+
+.LP
+.I Additional configuration files
+.IP
+Before running any test, you must configure /etc/tempest/tempest.conf
+
+.SH PARAMETERS
+.LP
+.I Parameters and options
+.IP
+List all integration tests to be run. The (non-exhaustive) list is:
+identity, image, compute, network, volume, object_storage,
+telemetry, orchestration, dashboard.
+
+.SH EXAMPLE
+.LP
+.I tempest identity image
+.IP
+This will run both the Keystone and Glance functional testing.
+
