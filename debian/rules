@@ -16,7 +16,7 @@ override_dh_auto_install:
 	dh_auto_install -O--buildsystem=python_distutils
 	install -D -m 0664 etc/tempest.conf.sample $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	install -D -m 0664 etc/logging.conf.sample $(CURDIR)/debian/tempest/etc/tempest/logging.conf
-	cp -rfv etc/schemas $(CURDIR)/debian/tempest/etc/tempest
+	#cp -rfv etc/schemas $(CURDIR)/debian/tempest/etc/tempest
 	cp tools/colorizer.py $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest
 	# Fix-up some preferences
 
@@ -26,7 +26,7 @@ override_dh_auto_install:
 	sed -i 's/^#password=<None>/password=pass/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#cli_dir=.*/cli_dir=\/usr\/bin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#has_manage=true=.*/has_manage=false/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^#allow_tenant_isolation=false/allow_tenant_isolation=true/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
+	#sed -i 's/^#allow_tenant_isolation=false/allow_tenant_isolation=true/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^#image_ssh_user=root/image_ssh_user=debian/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 
 	# Package stuff in /var/lib/tempest, since we need read/write access
