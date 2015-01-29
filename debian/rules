@@ -16,6 +16,9 @@ override_dh_auto_install:
 	dh_auto_install -O--buildsystem=python_distutils
 	install -D -m 0664 etc/tempest.conf.sample $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	install -D -m 0664 etc/logging.conf.sample $(CURDIR)/debian/tempest/etc/tempest/logging.conf
+	install -D -m 0664 etc/accounts.yaml.sample $(CURDIR)/debian/tempest/etc/tempest/accounts.yaml
+	install -D -m 0664 etc/whitelist.yaml $(CURDIR)/debian/tempest/etc/tempest/whitelist.yaml
+
 	#cp -rfv etc/schemas $(CURDIR)/debian/tempest/etc/tempest
 	cp tools/colorizer.py $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest
 	# Fix-up some preferences
