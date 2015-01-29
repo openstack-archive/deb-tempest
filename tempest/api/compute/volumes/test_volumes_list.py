@@ -16,7 +16,7 @@
 from tempest.api.compute import base
 from tempest.common.utils import data_utils
 from tempest import config
-from tempest.test import attr
+from tempest import test
 
 CONF = config.CONF
 
@@ -32,8 +32,8 @@ class VolumesTestJSON(base.BaseV2ComputeTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(VolumesTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(VolumesTestJSON, cls).resource_setup()
         cls.client = cls.volumes_extensions_client
         if not CONF.service_available.cinder:
             skip_msg = ("%s skipped as Cinder is not available" % cls.__name__)
@@ -69,13 +69,13 @@ class VolumesTestJSON(base.BaseV2ComputeTest):
                 raise
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         # Delete the created Volumes
         for volume in cls.volume_list:
             cls.delete_volume(volume['id'])
-        super(VolumesTestJSON, cls).tearDownClass()
+        super(VolumesTestJSON, cls).resource_cleanup()
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_volume_list(self):
         # Should return the list of Volumes
         # Fetch all Volumes
@@ -91,7 +91,7 @@ class VolumesTestJSON(base.BaseV2ComputeTest):
                          ', '.join(m_vol['displayName']
                                    for m_vol in missing_volumes))
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_volume_list_with_details(self):
         # Should return the list of Volumes with details
         # Fetch all Volumes
@@ -107,7 +107,7 @@ class VolumesTestJSON(base.BaseV2ComputeTest):
                          ', '.join(m_vol['displayName']
                                    for m_vol in missing_volumes))
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_volume_list_param_limit(self):
         # Return the list of volumes based on limit set
         params = {'limit': 2}
@@ -117,7 +117,7 @@ class VolumesTestJSON(base.BaseV2ComputeTest):
         self.assertEqual(len(fetched_vol_list), params['limit'],
                          "Failed to list volumes by limit set")
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_volume_list_with_detail_param_limit(self):
         # Return the list of volumes with details based on limit set.
         params = {'limit': 2}
@@ -128,7 +128,7 @@ class VolumesTestJSON(base.BaseV2ComputeTest):
         self.assertEqual(len(fetched_vol_list), params['limit'],
                          "Failed to list volume details by limit set")
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_volume_list_param_offset_and_limit(self):
         # Return the list of volumes based on offset and limit set.
         # get all volumes list
@@ -146,7 +146,7 @@ class VolumesTestJSON(base.BaseV2ComputeTest):
                              all_vol_list[index + params['offset']]['id'],
                              "Failed to list volumes by offset and limit")
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_volume_list_with_detail_param_offset_and_limit(self):
         # Return the list of volumes details based on offset and limit set.
         # get all volumes list

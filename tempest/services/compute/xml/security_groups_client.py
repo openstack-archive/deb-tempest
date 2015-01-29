@@ -13,8 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from lxml import etree
 import urllib
+
+from lxml import etree
 
 from tempest.common import rest_client
 from tempest.common import xml_utils
@@ -158,3 +159,8 @@ class SecurityGroupsClientXML(rest_client.RestClient):
         except exceptions.NotFound:
             return True
         return False
+
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'security_group'

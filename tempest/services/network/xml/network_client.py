@@ -10,8 +10,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from lxml import etree
 import xml.etree.ElementTree as ET
+
+from lxml import etree
 
 from tempest.common import rest_client
 from tempest.common import xml_utils as common
@@ -24,7 +25,8 @@ class NetworkClientXML(client_base.NetworkClientBase):
     # list of plurals used for xml serialization
     PLURALS = ['dns_nameservers', 'host_routes', 'allocation_pools',
                'fixed_ips', 'extensions', 'extra_dhcp_opts', 'pools',
-               'health_monitors', 'vips', 'members']
+               'health_monitors', 'vips', 'members', 'allowed_address_pairs',
+               'firewall_rules', 'security_groups']
 
     def get_rest_client(self, auth_provider):
         rc = rest_client.RestClient(auth_provider)
@@ -38,7 +40,7 @@ class NetworkClientXML(client_base.NetworkClientBase):
         return _root_tag_fetcher_and_xml_to_json_parse(body)
 
     def serialize(self, body):
-        #TODO(enikanorov): implement better json to xml conversion
+        # TODO(enikanorov): implement better json to xml conversion
         # expecting the dict with single key
         root = body.keys()[0]
         post_body = common.Element(root)
@@ -102,17 +104,21 @@ class NetworkClientXML(client_base.NetworkClientBase):
         post_body.append(p1)
         resp, body = self.post(uri, str(common.Document(post_body)))
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
+        self.rest_client.expected_success(201, resp.status)
         return resp, body
 
     def disassociate_health_monitor_with_pool(self, health_monitor_id,
                                               pool_id):
         uri = '%s/lb/pools/%s/health_monitors/%s' % (self.uri_prefix, pool_id,
                                                      health_monitor_id)
-        return self.delete(uri)
+        resp, body = self.delete(uri)
+        self.rest_client.expected_success(204, resp.status)
+        return resp, body
 
     def show_extension_details(self, ext_alias):
         uri = '%s/extensions/%s' % (self.uri_prefix, str(ext_alias))
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
@@ -122,6 +128,7 @@ class NetworkClientXML(client_base.NetworkClientBase):
         router.append(common.Element("name", name))
         common.deep_dict_to_xml(router, kwargs)
         resp, body = self.post(uri, str(common.Document(router)))
+        self.rest_client.expected_success(201, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
@@ -131,44 +138,50 @@ class NetworkClientXML(client_base.NetworkClientBase):
         for element, content in kwargs.iteritems():
             router.append(common.Element(element, content))
         resp, body = self.put(uri, str(common.Document(router)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
     def add_router_interface_with_subnet_id(self, router_id, subnet_id):
         uri = '%s/routers/%s/add_router_interface' % (self.uri_prefix,
-              router_id)
+                                                      router_id)
         subnet = common.Element("subnet_id", subnet_id)
         resp, body = self.put(uri, str(common.Document(subnet)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
     def add_router_interface_with_port_id(self, router_id, port_id):
         uri = '%s/routers/%s/add_router_interface' % (self.uri_prefix,
-              router_id)
+                                                      router_id)
         port = common.Element("port_id", port_id)
         resp, body = self.put(uri, str(common.Document(port)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
     def remove_router_interface_with_subnet_id(self, router_id, subnet_id):
         uri = '%s/routers/%s/remove_router_interface' % (self.uri_prefix,
-              router_id)
+                                                         router_id)
         subnet = common.Element("subnet_id", subnet_id)
         resp, body = self.put(uri, str(common.Document(subnet)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
     def remove_router_interface_with_port_id(self, router_id, port_id):
         uri = '%s/routers/%s/remove_router_interface' % (self.uri_prefix,
-              router_id)
+                                                         router_id)
         port = common.Element("port_id", port_id)
         resp, body = self.put(uri, str(common.Document(port)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
     def list_router_interfaces(self, uuid):
         uri = '%s/ports?device_id=%s' % (self.uri_prefix, uuid)
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         ports = common.parse_array(etree.fromstring(body), self.PLURALS)
         ports = {"ports": ports}
         return resp, ports
@@ -180,12 +193,14 @@ class NetworkClientXML(client_base.NetworkClientBase):
             p = common.Element(key, value)
             agent.append(p)
         resp, body = self.put(uri, str(common.Document(agent)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
     def list_pools_hosted_by_one_lbaas_agent(self, agent_id):
         uri = '%s/agents/%s/loadbalancer-pools' % (self.uri_prefix, agent_id)
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         pools = common.parse_array(etree.fromstring(body))
         body = {'pools': pools}
         return resp, body
@@ -194,12 +209,14 @@ class NetworkClientXML(client_base.NetworkClientBase):
         uri = ('%s/lb/pools/%s/loadbalancer-agent' %
                (self.uri_prefix, pool_id))
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
     def list_routers_on_l3_agent(self, agent_id):
         uri = '%s/agents/%s/l3-routers' % (self.uri_prefix, agent_id)
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         routers = common.parse_array(etree.fromstring(body))
         body = {'routers': routers}
         return resp, body
@@ -207,6 +224,7 @@ class NetworkClientXML(client_base.NetworkClientBase):
     def list_l3_agents_hosting_router(self, router_id):
         uri = '%s/routers/%s/l3-agents' % (self.uri_prefix, router_id)
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         agents = common.parse_array(etree.fromstring(body))
         body = {'agents': agents}
         return resp, body
@@ -215,6 +233,7 @@ class NetworkClientXML(client_base.NetworkClientBase):
         uri = '%s/agents/%s/l3-routers' % (self.uri_prefix, agent_id)
         router = (common.Element("router_id", router_id))
         resp, body = self.post(uri, str(common.Document(router)))
+        self.rest_client.expected_success(201, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
@@ -222,11 +241,13 @@ class NetworkClientXML(client_base.NetworkClientBase):
         uri = '%s/agents/%s/l3-routers/%s' % (
             self.uri_prefix, agent_id, router_id)
         resp, body = self.delete(uri)
+        self.rest_client.expected_success(204, resp.status)
         return resp, body
 
     def list_dhcp_agent_hosting_network(self, network_id):
         uri = '%s/networks/%s/dhcp-agents' % (self.uri_prefix, network_id)
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         agents = common.parse_array(etree.fromstring(body))
         body = {'agents': agents}
         return resp, body
@@ -234,6 +255,7 @@ class NetworkClientXML(client_base.NetworkClientBase):
     def list_networks_hosted_by_one_dhcp_agent(self, agent_id):
         uri = '%s/agents/%s/dhcp-networks' % (self.uri_prefix, agent_id)
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         networks = common.parse_array(etree.fromstring(body))
         body = {'networks': networks}
         return resp, body
@@ -242,11 +264,13 @@ class NetworkClientXML(client_base.NetworkClientBase):
         uri = '%s/agents/%s/dhcp-networks/%s' % (self.uri_prefix, agent_id,
                                                  network_id)
         resp, body = self.delete(uri)
+        self.rest_client.expected_success(204, resp.status)
         return resp, body
 
     def list_lb_pool_stats(self, pool_id):
         uri = '%s/lb/pools/%s/stats' % (self.uri_prefix, pool_id)
         resp, body = self.get(uri)
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
@@ -254,38 +278,28 @@ class NetworkClientXML(client_base.NetworkClientBase):
         uri = '%s/agents/%s/dhcp-networks' % (self.uri_prefix, agent_id)
         network = common.Element("network_id", network_id)
         resp, body = self.post(uri, str(common.Document(network)))
+        self.rest_client.expected_success(201, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
-    def create_vpnservice(self, subnet_id, router_id, **kwargs):
-        uri = '%s/vpn/vpnservices' % (self.uri_prefix)
-        vpnservice = common.Element("vpnservice")
-        p1 = common.Element("subnet_id", subnet_id)
-        p2 = common.Element("router_id", router_id)
-        vpnservice.append(p1)
-        vpnservice.append(p2)
-        common.deep_dict_to_xml(vpnservice, kwargs)
-        resp, body = self.post(uri, str(common.Document(vpnservice)))
+    def insert_firewall_rule_in_policy(self, firewall_policy_id,
+                                       firewall_rule_id, insert_after="",
+                                       insert_before=""):
+        uri = '%s/fw/firewall_policies/%s/insert_rule' % (self.uri_prefix,
+                                                          firewall_policy_id)
+        rule = common.Element("firewall_rule_id", firewall_rule_id)
+        resp, body = self.put(uri, str(common.Document(rule)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 
-    def create_ikepolicy(self, name, **kwargs):
-        uri = '%s/vpn/ikepolicies' % (self.uri_prefix)
-        ikepolicy = common.Element("ikepolicy")
-        p1 = common.Element("name", name)
-        ikepolicy.append(p1)
-        common.deep_dict_to_xml(ikepolicy, kwargs)
-        resp, body = self.post(uri, str(common.Document(ikepolicy)))
-        body = _root_tag_fetcher_and_xml_to_json_parse(body)
-        return resp, body
-
-    def create_ipsecpolicy(self, name, **kwargs):
-        uri = '%s/vpn/ipsecpolicies' % (self.uri_prefix)
-        ipsecpolicy = common.Element("ipsecpolicy")
-        p1 = common.Element("name", name)
-        ipsecpolicy.append(p1)
-        common.deep_dict_to_xml(ipsecpolicy, kwargs)
-        resp, body = self.post(uri, str(common.Document(ipsecpolicy)))
+    def remove_firewall_rule_from_policy(self, firewall_policy_id,
+                                         firewall_rule_id):
+        uri = '%s/fw/firewall_policies/%s/remove_rule' % (self.uri_prefix,
+                                                          firewall_policy_id)
+        rule = common.Element("firewall_rule_id", firewall_rule_id)
+        resp, body = self.put(uri, str(common.Document(rule)))
+        self.rest_client.expected_success(200, resp.status)
         body = _root_tag_fetcher_and_xml_to_json_parse(body)
         return resp, body
 

@@ -12,8 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import mock
 import subprocess
+
+import mock
 
 from tempest.common import commands
 from tempest.tests import base
@@ -47,7 +48,8 @@ class TestCommands(base.TestCase):
     @mock.patch('subprocess.Popen')
     def test_iptables_raw(self, mock):
         table = 'filter'
-        expected = ['/usr/bin/sudo', '-n', 'iptables', '-v', '-S', '-t',
+        expected = ['/usr/bin/sudo', '-n', 'iptables', '--line-numbers',
+                    '-L', '-nv', '-t',
                     '%s' % table]
         commands.iptables_raw(table)
         mock.assert_called_once_with(expected, **self.subprocess_args)

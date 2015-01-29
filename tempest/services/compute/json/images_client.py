@@ -16,7 +16,7 @@
 import json
 import urllib
 
-from tempest.api_schema.compute.v2 import images as schema
+from tempest.api_schema.response.compute.v2 import images as schema
 from tempest.common import rest_client
 from tempest.common import waiters
 from tempest import config
@@ -70,12 +70,13 @@ class ImagesClientJSON(rest_client.RestClient):
 
         resp, body = self.get(url)
         body = json.loads(body)
+        self.validate_response(schema.list_images_details, resp, body)
         return resp, body['images']
 
     def get_image(self, image_id):
         """Returns the details of a single image."""
         resp, body = self.get("images/%s" % str(image_id))
-        self.expected_success(200, resp)
+        self.expected_success(200, resp.status)
         body = json.loads(body)
         self.validate_response(schema.get_image, resp, body)
         return resp, body['image']
@@ -142,3 +143,8 @@ class ImagesClientJSON(rest_client.RestClient):
         except exceptions.NotFound:
             return True
         return False
+
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'image'

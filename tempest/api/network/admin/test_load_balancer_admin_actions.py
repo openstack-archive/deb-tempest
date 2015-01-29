@@ -29,18 +29,15 @@ class LoadBalancerAdminTestJSON(base.BaseAdminNetworkTest):
     """
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
-        super(LoadBalancerAdminTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(LoadBalancerAdminTestJSON, cls).resource_setup()
         if not test.is_extension_enabled('lbaas', 'network'):
             msg = "lbaas extension not enabled."
             raise cls.skipException(msg)
         cls.force_tenant_isolation = True
         manager = cls.get_client_manager()
         cls.client = manager.network_client
-        username, tenant_name, passwd = cls.isolated_creds.get_primary_creds()
-        cls.tenant_id = cls.os_adm.identity_client.get_tenant_by_name(
-            tenant_name)['id']
+        cls.tenant_id = cls.isolated_creds.get_primary_creds().tenant_id
         cls.network = cls.create_network()
         cls.subnet = cls.create_subnet(cls.network)
         cls.pool = cls.create_pool(data_utils.rand_name('pool-'),
@@ -49,56 +46,54 @@ class LoadBalancerAdminTestJSON(base.BaseAdminNetworkTest):
     @test.attr(type='smoke')
     def test_create_vip_as_admin_for_another_tenant(self):
         name = data_utils.rand_name('vip-')
-        resp, body = self.admin_client.create_pool(
-            name=data_utils.rand_name('pool-'), lb_method="ROUND_ROBIN",
-            protocol="HTTP", subnet_id=self.subnet['id'],
+        _, body = self.admin_client.create_pool(
+            name=data_utils.rand_name('pool-'),
+            lb_method="ROUND_ROBIN",
+            protocol="HTTP",
+            subnet_id=self.subnet['id'],
             tenant_id=self.tenant_id)
-        self.assertEqual('201', resp['status'])
         pool = body['pool']
         self.addCleanup(self.admin_client.delete_pool, pool['id'])
-        resp, body = self.admin_client.create_vip(name=name,
-                                                  protocol="HTTP",
-                                                  protocol_port=80,
-                                                  subnet_id=self.subnet['id'],
-                                                  pool_id=pool['id'],
-                                                  tenant_id=self.tenant_id)
-        self.assertEqual('201', resp['status'])
+        _, body = self.admin_client.create_vip(name=name,
+                                               protocol="HTTP",
+                                               protocol_port=80,
+                                               subnet_id=self.subnet['id'],
+                                               pool_id=pool['id'],
+                                               tenant_id=self.tenant_id)
         vip = body['vip']
         self.addCleanup(self.admin_client.delete_vip, vip['id'])
         self.assertIsNotNone(vip['id'])
         self.assertEqual(self.tenant_id, vip['tenant_id'])
-        resp, body = self.client.show_vip(vip['id'])
-        self.assertEqual('200', resp['status'])
+        _, body = self.client.show_vip(vip['id'])
         show_vip = body['vip']
         self.assertEqual(vip['id'], show_vip['id'])
         self.assertEqual(vip['name'], show_vip['name'])
 
     @test.attr(type='smoke')
     def test_create_health_monitor_as_admin_for_another_tenant(self):
-        resp, body = (
+        _, body = (
             self.admin_client.create_health_monitor(delay=4,
                                                     max_retries=3,
                                                     type="TCP",
                                                     timeout=1,
                                                     tenant_id=self.tenant_id))
-        self.assertEqual('201', resp['status'])
         health_monitor = body['health_monitor']
         self.addCleanup(self.admin_client.delete_health_monitor,
                         health_monitor['id'])
         self.assertIsNotNone(health_monitor['id'])
         self.assertEqual(self.tenant_id, health_monitor['tenant_id'])
-        resp, body = self.client.show_health_monitor(health_monitor['id'])
-        self.assertEqual('200', resp['status'])
+        _, body = self.client.show_health_monitor(health_monitor['id'])
         show_health_monitor = body['health_monitor']
         self.assertEqual(health_monitor['id'], show_health_monitor['id'])
 
     @test.attr(type='smoke')
     def test_create_pool_from_admin_user_other_tenant(self):
-        resp, body = self.admin_client.create_pool(
-            name=data_utils.rand_name('pool-'), lb_method="ROUND_ROBIN",
-            protocol="HTTP", subnet_id=self.subnet['id'],
+        _, body = self.admin_client.create_pool(
+            name=data_utils.rand_name('pool-'),
+            lb_method="ROUND_ROBIN",
+            protocol="HTTP",
+            subnet_id=self.subnet['id'],
             tenant_id=self.tenant_id)
-        self.assertEqual('201', resp['status'])
         pool = body['pool']
         self.addCleanup(self.admin_client.delete_pool, pool['id'])
         self.assertIsNotNone(pool['id'])
@@ -106,10 +101,10 @@ class LoadBalancerAdminTestJSON(base.BaseAdminNetworkTest):
 
     @test.attr(type='smoke')
     def test_create_member_from_admin_user_other_tenant(self):
-        resp, body = self.admin_client.create_member(
-            address="10.0.9.47", protocol_port=80, pool_id=self.pool['id'],
-            tenant_id=self.tenant_id)
-        self.assertEqual('201', resp['status'])
+        _, body = self.admin_client.create_member(address="10.0.9.47",
+                                                  protocol_port=80,
+                                                  pool_id=self.pool['id'],
+                                                  tenant_id=self.tenant_id)
         member = body['member']
         self.addCleanup(self.admin_client.delete_member, member['id'])
         self.assertIsNotNone(member['id'])

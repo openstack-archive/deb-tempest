@@ -23,31 +23,7 @@ CONF = config.CONF
 LOG = logging.getLogger(__name__)
 
 
-# power/provision states as of icehouse
-class PowerStates(object):
-    """Possible power states of an Ironic node."""
-    POWER_ON = 'power on'
-    POWER_OFF = 'power off'
-    REBOOT = 'rebooting'
-    SUSPEND = 'suspended'
-
-
-class ProvisionStates(object):
-    """Possible provision states of an Ironic node."""
-    NOSTATE = None
-    INIT = 'initializing'
-    ACTIVE = 'active'
-    BUILDING = 'building'
-    DEPLOYWAIT = 'wait call-back'
-    DEPLOYING = 'deploying'
-    DEPLOYFAIL = 'deploy failed'
-    DEPLOYDONE = 'deploy complete'
-    DELETING = 'deleting'
-    DELETED = 'deleted'
-    ERROR = 'error'
-
-
-class BaremetalBasicOptsPXESSH(manager.BaremetalScenarioTest):
+class BaremetalBasicOps(manager.BaremetalScenarioTest):
     """
     This smoke test tests the pxe_ssh Ironic driver.  It follows this basic
     set of operations:
@@ -55,93 +31,125 @@ class BaremetalBasicOptsPXESSH(manager.BaremetalScenarioTest):
         * Boots an instance using the keypair
         * Monitors the associated Ironic node for power and
           expected state transitions
-        * Validates Ironic node's driver_info has been properly
-          updated
         * Validates Ironic node's port data has been properly updated
         * Verifies SSH connectivity using created keypair via fixed IP
         * Associates a floating ip
         * Verifies SSH connectivity using created keypair via floating IP
+        * Verifies instance rebuild with ephemeral partition preservation
         * Deletes instance
         * Monitors the associated Ironic node for power and
           expected state transitions
     """
-    def add_keypair(self):
-        self.keypair = self.create_keypair()
+    def rebuild_instance(self, preserve_ephemeral=False):
+        self.rebuild_server(server_id=self.instance['id'],
+                            preserve_ephemeral=preserve_ephemeral,
+                            wait=False)
+
+        node = self.get_node(instance_id=self.instance['id'])
+
+        # We should remain on the same node
+        self.assertEqual(self.node['uuid'], node['uuid'])
+        self.node = node
+
+        self.servers_client.wait_for_server_status(
+            server_id=self.instance['id'],
+            status='REBUILD',
+            ready_wait=False)
+        self.servers_client.wait_for_server_status(
+            server_id=self.instance['id'],
+            status='ACTIVE')
+
+    def create_remote_file(self, client, filename):
+        """Create a file on the remote client connection.
+
+        After creating the file, force a filesystem sync. Otherwise,
+        if we issue a rebuild too quickly, the file may not exist.
+        """
+        client.exec_command('sudo touch ' + filename)
+        client.exec_command('sync')
+
+    def verify_partition(self, client, label, mount, gib_size):
+        """Verify a labeled partition's mount point and size."""
+        LOG.info("Looking for partition %s mounted on %s" % (label, mount))
+
+        # Validate we have a device with the given partition label
+        cmd = "/sbin/blkid | grep '%s' | cut -d':' -f1" % label
+        device = client.exec_command(cmd).rstrip('\n')
+        LOG.debug("Partition device is %s" % device)
+        self.assertNotEqual('', device)
+
+        # Validate the mount point for the device
+        cmd = "mount | grep '%s' | cut -d' ' -f3" % device
+        actual_mount = client.exec_command(cmd).rstrip('\n')
+        LOG.debug("Partition mount point is %s" % actual_mount)
+        self.assertEqual(actual_mount, mount)
+
+        # Validate the partition size matches what we expect
+        numbers = '0123456789'
+        devnum = device.replace('/dev/', '')
+        cmd = "cat /sys/block/%s/%s/size" % (devnum.rstrip(numbers), devnum)
+        num_bytes = client.exec_command(cmd).rstrip('\n')
+        num_bytes = int(num_bytes) * 512
+        actual_gib_size = num_bytes / (1024 * 1024 * 1024)
+        LOG.debug("Partition size is %d GiB" % actual_gib_size)
+        self.assertEqual(actual_gib_size, gib_size)
+
+    def get_flavor_ephemeral_size(self):
+        """Returns size of the ephemeral partition in GiB."""
+        f_id = self.instance['flavor']['id']
+        _, flavor = self.flavors_client.get_flavor_details(f_id)
+        ephemeral = flavor.get('OS-FLV-EXT-DATA:ephemeral')
+        if not ephemeral or ephemeral == 'N/A':
+            return None
+        return int(ephemeral)
 
     def add_floating_ip(self):
-        floating_ip = self.compute_client.floating_ips.create()
-        self.instance.add_floating_ip(floating_ip)
-        return floating_ip.ip
-
-    def verify_connectivity(self, ip=None):
-        if ip:
-            dest = self.get_remote_client(ip)
-        else:
-            dest = self.get_remote_client(self.instance)
-        dest.validate_authentication()
-
-    def validate_driver_info(self):
-        f_id = self.instance.flavor['id']
-        flavor_extra = self.compute_client.flavors.get(f_id).get_keys()
-        driver_info = self.node.driver_info
-        self.assertEqual(driver_info['pxe_deploy_kernel'],
-                         flavor_extra['baremetal:deploy_kernel_id'])
-        self.assertEqual(driver_info['pxe_deploy_ramdisk'],
-                         flavor_extra['baremetal:deploy_ramdisk_id'])
-        self.assertEqual(driver_info['pxe_image_source'],
-                         self.instance.image['id'])
+        _, floating_ip = self.floating_ips_client.create_floating_ip()
+        self.floating_ips_client.associate_floating_ip_to_server(
+            floating_ip['ip'], self.instance['id'])
+        return floating_ip['ip']
 
     def validate_ports(self):
-        for port in self.get_ports(self.node.uuid):
-            n_port_id = port.extra['vif_port_id']
-            n_port = self.network_client.show_port(n_port_id)['port']
-            self.assertEqual(n_port['device_id'], self.instance.id)
-            self.assertEqual(n_port['mac_address'], port.address)
-
-    def boot_instance(self):
-        create_kwargs = {
-            'key_name': self.keypair.id
-        }
-        self.instance = self.create_server(
-            wait=False, create_kwargs=create_kwargs)
-
-        self.set_resource('instance', self.instance)
-
-        self.wait_node(self.instance.id)
-        self.node = self.get_node(instance_id=self.instance.id)
-
-        self.wait_power_state(self.node.uuid, PowerStates.POWER_ON)
-
-        self.wait_provisioning_state(
-            self.node.uuid,
-            [ProvisionStates.DEPLOYWAIT, ProvisionStates.ACTIVE],
-            timeout=15)
-
-        self.wait_provisioning_state(self.node.uuid, ProvisionStates.ACTIVE,
-                                     timeout=CONF.baremetal.active_timeout)
-
-        self.status_timeout(
-            self.compute_client.servers, self.instance.id, 'ACTIVE')
-
-        self.node = self.get_node(instance_id=self.instance.id)
-        self.instance = self.compute_client.servers.get(self.instance.id)
-
-    def terminate_instance(self):
-        self.instance.delete()
-        self.remove_resource('instance')
-        self.wait_power_state(self.node.uuid, PowerStates.POWER_OFF)
-        self.wait_provisioning_state(
-            self.node.uuid,
-            ProvisionStates.NOSTATE,
-            timeout=CONF.baremetal.unprovision_timeout)
+        for port in self.get_ports(self.node['uuid']):
+            n_port_id = port['extra']['vif_port_id']
+            _, body = self.network_client.show_port(n_port_id)
+            n_port = body['port']
+            self.assertEqual(n_port['device_id'], self.instance['id'])
+            self.assertEqual(n_port['mac_address'], port['address'])
 
     @test.services('baremetal', 'compute', 'image', 'network')
     def test_baremetal_server_ops(self):
+        test_filename = '/mnt/rebuild_test.txt'
         self.add_keypair()
         self.boot_instance()
-        self.validate_driver_info()
         self.validate_ports()
         self.verify_connectivity()
         floating_ip = self.add_floating_ip()
         self.verify_connectivity(ip=floating_ip)
+
+        vm_client = self.get_remote_client(self.instance)
+
+        # We expect the ephemeral partition to be mounted on /mnt and to have
+        # the same size as our flavor definition.
+        eph_size = self.get_flavor_ephemeral_size()
+        self.assertIsNotNone(eph_size)
+        if eph_size > 0:
+            preserve_ephemeral = True
+
+            self.verify_partition(vm_client, 'ephemeral0', '/mnt', eph_size)
+            # Create the test file
+            self.create_remote_file(vm_client, test_filename)
+        else:
+            preserve_ephemeral = False
+
+        # Rebuild and preserve the ephemeral partition if it exists
+        self.rebuild_instance(preserve_ephemeral)
+        self.verify_connectivity()
+
+        # Check that we maintained our data
+        if eph_size > 0:
+            vm_client = self.get_remote_client(self.instance)
+            self.verify_partition(vm_client, 'ephemeral0', '/mnt', eph_size)
+            vm_client.exec_command('ls ' + test_filename)
+
         self.terminate_instance()

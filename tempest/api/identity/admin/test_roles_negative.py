@@ -18,7 +18,7 @@ import uuid
 from tempest.api.identity import base
 from tempest.common.utils import data_utils
 from tempest import exceptions
-from tempest.test import attr
+from tempest import test
 
 
 class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
@@ -32,13 +32,13 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
         role = self.get_role_by_name(self.data.test_role)
         return (user, tenant, role)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_list_roles_by_unauthorized_user(self):
         # Non-administrator user should not be able to list roles
         self.assertRaises(exceptions.Unauthorized,
                           self.non_admin_client.list_roles)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_list_roles_request_without_token(self):
         # Request to list roles without a valid token should fail
         token = self.client.auth_provider.get_token()
@@ -46,19 +46,19 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.assertRaises(exceptions.Unauthorized, self.client.list_roles)
         self.client.auth_provider.clear_auth()
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_role_create_blank_name(self):
         # Should not be able to create a role with a blank name
         self.assertRaises(exceptions.BadRequest, self.client.create_role, '')
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_create_role_by_unauthorized_user(self):
         # Non-administrator user should not be able to create role
         role_name = data_utils.rand_name(name='role-')
         self.assertRaises(exceptions.Unauthorized,
                           self.non_admin_client.create_role, role_name)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_create_role_request_without_token(self):
         # Request to create role without a valid token should fail
         token = self.client.auth_provider.get_token()
@@ -68,34 +68,31 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
                           self.client.create_role, role_name)
         self.client.auth_provider.clear_auth()
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_role_create_duplicate(self):
         # Role names should be unique
         role_name = data_utils.rand_name(name='role-dup-')
-        resp, body = self.client.create_role(role_name)
+        _, body = self.client.create_role(role_name)
         role1_id = body.get('id')
-        self.assertEqual(200, resp.status)
         self.addCleanup(self.client.delete_role, role1_id)
         self.assertRaises(exceptions.Conflict, self.client.create_role,
                           role_name)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_delete_role_by_unauthorized_user(self):
         # Non-administrator user should not be able to delete role
         role_name = data_utils.rand_name(name='role-')
-        resp, body = self.client.create_role(role_name)
-        self.assertEqual(200, resp.status)
+        _, body = self.client.create_role(role_name)
         self.data.roles.append(body)
         role_id = body.get('id')
         self.assertRaises(exceptions.Unauthorized,
                           self.non_admin_client.delete_role, role_id)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_delete_role_request_without_token(self):
         # Request to delete role without a valid token should fail
         role_name = data_utils.rand_name(name='role-')
-        resp, body = self.client.create_role(role_name)
-        self.assertEqual(200, resp.status)
+        _, body = self.client.create_role(role_name)
         self.data.roles.append(body)
         role_id = body.get('id')
         token = self.client.auth_provider.get_token()
@@ -105,14 +102,14 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
                           role_id)
         self.client.auth_provider.clear_auth()
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_delete_role_non_existent(self):
         # Attempt to delete a non existent role should fail
         non_existent_role = str(uuid.uuid4().hex)
         self.assertRaises(exceptions.NotFound, self.client.delete_role,
                           non_existent_role)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_assign_user_role_by_unauthorized_user(self):
         # Non-administrator user should not be authorized to
         # assign a role to user
@@ -121,7 +118,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
                           self.non_admin_client.assign_user_role,
                           tenant['id'], user['id'], role['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_assign_user_role_request_without_token(self):
         # Request to assign a role to a user without a valid token
         (user, tenant, role) = self._get_role_params()
@@ -132,7 +129,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
                           user['id'], role['id'])
         self.client.auth_provider.clear_auth()
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_assign_user_role_for_non_existent_role(self):
         # Attempt to assign a non existent role to user should fail
         (user, tenant, role) = self._get_role_params()
@@ -140,7 +137,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.assertRaises(exceptions.NotFound, self.client.assign_user_role,
                           tenant['id'], user['id'], non_existent_role)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_assign_user_role_for_non_existent_tenant(self):
         # Attempt to assign a role on a non existent tenant should fail
         (user, tenant, role) = self._get_role_params()
@@ -148,7 +145,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.assertRaises(exceptions.NotFound, self.client.assign_user_role,
                           non_existent_tenant, user['id'], role['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_assign_duplicate_user_role(self):
         # Duplicate user role should not get assigned
         (user, tenant, role) = self._get_role_params()
@@ -156,7 +153,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.assertRaises(exceptions.Conflict, self.client.assign_user_role,
                           tenant['id'], user['id'], role['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_remove_user_role_by_unauthorized_user(self):
         # Non-administrator user should not be authorized to
         # remove a user's role
@@ -168,7 +165,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
                           self.non_admin_client.remove_user_role,
                           tenant['id'], user['id'], role['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_remove_user_role_request_without_token(self):
         # Request to remove a user's role without a valid token
         (user, tenant, role) = self._get_role_params()
@@ -182,7 +179,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
                           user['id'], role['id'])
         self.client.auth_provider.clear_auth()
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_remove_user_role_non_existent_role(self):
         # Attempt to delete a non existent role from a user should fail
         (user, tenant, role) = self._get_role_params()
@@ -193,7 +190,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.assertRaises(exceptions.NotFound, self.client.remove_user_role,
                           tenant['id'], user['id'], non_existent_role)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_remove_user_role_non_existent_tenant(self):
         # Attempt to remove a role from a non existent tenant should fail
         (user, tenant, role) = self._get_role_params()
@@ -204,7 +201,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.assertRaises(exceptions.NotFound, self.client.remove_user_role,
                           non_existent_tenant, user['id'], role['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_list_user_roles_by_unauthorized_user(self):
         # Non-administrator user should not be authorized to list
         # a user's roles
@@ -214,7 +211,7 @@ class RolesNegativeTestJSON(base.BaseIdentityV2AdminTest):
                           self.non_admin_client.list_user_roles, tenant['id'],
                           user['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_list_user_roles_request_without_token(self):
         # Request to list user's roles without a valid token should fail
         (user, tenant, role) = self._get_role_params()

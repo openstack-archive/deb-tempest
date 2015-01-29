@@ -22,9 +22,8 @@ class VolumesActionsTest(base.BaseVolumeV1AdminTest):
     _interface = "json"
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
-        super(VolumesActionsTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(VolumesActionsTest, cls).resource_setup()
         cls.client = cls.volumes_client
 
         # Create admin volume client
@@ -33,23 +32,23 @@ class VolumesActionsTest(base.BaseVolumeV1AdminTest):
         # Create a test shared volume for tests
         vol_name = utils.rand_name(cls.__name__ + '-Volume-')
 
-        resp, cls.volume = cls.client.create_volume(size=1,
-                                                    display_name=vol_name)
+        _, cls.volume = cls.client.create_volume(size=1,
+                                                 display_name=vol_name)
         cls.client.wait_for_volume_status(cls.volume['id'], 'available')
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         # Delete the test volume
         cls.client.delete_volume(cls.volume['id'])
         cls.client.wait_for_resource_deletion(cls.volume['id'])
 
-        super(VolumesActionsTest, cls).tearDownClass()
+        super(VolumesActionsTest, cls).resource_cleanup()
 
     def _reset_volume_status(self, volume_id, status):
         # Reset the volume status
-        resp, body = self.admin_volume_client.reset_volume_status(volume_id,
-                                                                  status)
-        return resp, body
+        _, body = self.admin_volume_client.reset_volume_status(volume_id,
+                                                               status)
+        return _, body
 
     def tearDown(self):
         # Set volume's status to available after test
@@ -59,8 +58,8 @@ class VolumesActionsTest(base.BaseVolumeV1AdminTest):
     def _create_temp_volume(self):
         # Create a temp volume for force delete tests
         vol_name = utils.rand_name('Volume')
-        resp, temp_volume = self.client.create_volume(size=1,
-                                                      display_name=vol_name)
+        _, temp_volume = self.client.create_volume(size=1,
+                                                   display_name=vol_name)
         self.client.wait_for_volume_status(temp_volume['id'], 'available')
 
         return temp_volume
@@ -69,39 +68,18 @@ class VolumesActionsTest(base.BaseVolumeV1AdminTest):
         # Create volume, reset volume status, and force delete temp volume
         temp_volume = self._create_temp_volume()
         if status:
-            resp, body = self._reset_volume_status(temp_volume['id'], status)
-            self.assertEqual(202, resp.status)
-        resp_delete, volume_delete = self.admin_volume_client.\
+            _, body = self._reset_volume_status(temp_volume['id'], status)
+        _, volume_delete = self.admin_volume_client.\
             force_delete_volume(temp_volume['id'])
-        self.assertEqual(202, resp_delete.status)
         self.client.wait_for_resource_deletion(temp_volume['id'])
 
     @test.attr(type='gate')
     def test_volume_reset_status(self):
         # test volume reset status : available->error->available
-        resp, body = self._reset_volume_status(self.volume['id'], 'error')
-        self.assertEqual(202, resp.status)
-        resp_get, volume_get = self.admin_volume_client.get_volume(
+        _, body = self._reset_volume_status(self.volume['id'], 'error')
+        _, volume_get = self.admin_volume_client.get_volume(
             self.volume['id'])
         self.assertEqual('error', volume_get['status'])
-
-    @test.attr(type='gate')
-    def test_volume_begin_detaching(self):
-        # test volume begin detaching : available -> detaching -> available
-        resp, body = self.client.volume_begin_detaching(self.volume['id'])
-        self.assertEqual(202, resp.status)
-        resp_get, volume_get = self.client.get_volume(self.volume['id'])
-        self.assertEqual('detaching', volume_get['status'])
-
-    @test.attr(type='gate')
-    def test_volume_roll_detaching(self):
-        # test volume roll detaching : detaching -> in-use -> available
-        resp, body = self.client.volume_begin_detaching(self.volume['id'])
-        self.assertEqual(202, resp.status)
-        resp, body = self.client.volume_roll_detaching(self.volume['id'])
-        self.assertEqual(202, resp.status)
-        resp_get, volume_get = self.client.get_volume(self.volume['id'])
-        self.assertEqual('in-use', volume_get['status'])
 
     def test_volume_force_delete_when_volume_is_creating(self):
         # test force delete when status of volume is creating

@@ -14,6 +14,7 @@
 #    under the License.
 
 from tempest.api.compute import base
+from tempest.api_schema.request.compute.v3 import flavors
 from tempest import test
 
 
@@ -24,16 +25,16 @@ load_tests = test.NegativeAutoTest.load_tests
 class FlavorsListNegativeV3Test(base.BaseV3ComputeTest,
                                 test.NegativeAutoTest):
     _service = 'computev3'
-    _schema_file = 'compute/flavors/flavors_list_v3.json'
+    _schema = flavors.flavor_list
 
 
 @test.SimpleNegativeAutoTest
 class FlavorDetailsNegativeV3Test(base.BaseV3ComputeTest,
                                   test.NegativeAutoTest):
     _service = 'computev3'
-    _schema_file = 'compute/flavors/flavor_details_v3.json'
+    _schema = flavors.flavors_details
 
     @classmethod
-    def setUpClass(cls):
-        super(FlavorDetailsNegativeV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(FlavorDetailsNegativeV3Test, cls).resource_setup()
         cls.set_resource("flavor", cls.flavor_ref)

@@ -28,8 +28,8 @@ class FlavorsAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(FlavorsAdminNegativeV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(FlavorsAdminNegativeV3Test, cls).resource_setup()
 
         cls.client = cls.flavors_admin_client
         cls.user_client = cls.flavors_client
@@ -57,7 +57,7 @@ class FlavorsAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
         resp, flavor = self.client.create_flavor(flavor_name,
                                                  self.ram,
                                                  self.vcpus, self.disk,
-                                                 '',
+                                                 None,
                                                  ephemeral=self.ephemeral,
                                                  swap=self.swap,
                                                  rxtx=self.rxtx)

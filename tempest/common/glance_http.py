@@ -19,14 +19,16 @@ import copy
 import hashlib
 import httplib
 import json
-import OpenSSL
 import posixpath
 import re
-from six import moves
 import socket
 import StringIO
 import struct
 import urlparse
+
+
+import OpenSSL
+from six import moves
 
 from tempest import exceptions as exc
 from tempest.openstack.common import log as logging
@@ -160,6 +162,9 @@ class HTTPClient(object):
     def json_request(self, method, url, **kwargs):
         kwargs.setdefault('headers', {})
         kwargs['headers'].setdefault('Content-Type', 'application/json')
+        if kwargs['headers']['Content-Type'] != 'application/json':
+            msg = "Only application/json content-type is supported."
+            raise exc.InvalidContentType(msg)
 
         if 'body' in kwargs:
             kwargs['body'] = json.dumps(kwargs['body'])
@@ -173,7 +178,8 @@ class HTTPClient(object):
             except ValueError:
                 LOG.error('Could not decode response body as JSON')
         else:
-            body = None
+            msg = "Only json/application content-type is supported."
+            raise exc.InvalidContentType(msg)
 
         return resp, body
 

@@ -12,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import copy
+
 import httplib2
 
 
@@ -31,7 +33,6 @@ class fake_httplib2(object):
                 'headers': headers
             }
             return (fake_headers, return_obj)
-           # return (headers, return_obj)
         elif isinstance(self.return_type, int):
             body = "fake_body"
             header_info = {
@@ -44,3 +45,29 @@ class fake_httplib2(object):
         else:
             msg = "unsupported return type %s" % self.return_type
             raise TypeError(msg)
+
+
+class fake_httplib(object):
+    def __init__(self, headers, body=None,
+                 version=1.0, status=200, reason="Ok"):
+        """
+        :param headers: dict representing HTTP response headers
+        :param body: file-like object
+        :param version: HTTP Version
+        :param status: Response status code
+        :param reason: Status code related message.
+        """
+        self.body = body
+        self.status = status
+        self.reason = reason
+        self.version = version
+        self.headers = headers
+
+    def getheaders(self):
+        return copy.deepcopy(self.headers).items()
+
+    def getheader(self, key, default):
+        return self.headers.get(key, default)
+
+    def read(self, amt):
+        return self.body.read(amt)

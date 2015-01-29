@@ -33,8 +33,8 @@ class ExtensionsTestJSON(base.BaseNetworkTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(ExtensionsTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(ExtensionsTestJSON, cls).resource_setup()
 
     @test.attr(type='smoke')
     def test_list_show_extensions(self):
@@ -47,16 +47,14 @@ class ExtensionsTestJSON(base.BaseNetworkTest):
         expected_alias = [ext for ext in expected_alias if
                           test.is_extension_enabled(ext, 'network')]
         actual_alias = list()
-        resp, extensions = self.client.list_extensions()
-        self.assertEqual('200', resp['status'])
+        _, extensions = self.client.list_extensions()
         list_extensions = extensions['extensions']
         # Show and verify the details of the available extensions
         for ext in list_extensions:
             ext_name = ext['name']
             ext_alias = ext['alias']
             actual_alias.append(ext['alias'])
-            resp, ext_details = self.client.show_extension(ext_alias)
-            self.assertEqual('200', resp['status'])
+            _, ext_details = self.client.show_extension(ext_alias)
             ext_details = ext_details['extension']
 
             self.assertIsNotNone(ext_details)

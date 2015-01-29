@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import testtools
 import time
 import urlparse
 
@@ -31,10 +32,11 @@ CONF = config.CONF
 
 
 class ContainerSyncTest(base.BaseObjectTest):
+    clients = {}
 
     @classmethod
-    def setUpClass(cls):
-        super(ContainerSyncTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(ContainerSyncTest, cls).resource_setup()
         cls.containers = []
         cls.objects = []
 
@@ -50,7 +52,6 @@ class ContainerSyncTest(base.BaseObjectTest):
             int(container_sync_timeout / cls.container_sync_interval)
 
         # define container and object clients
-        cls.clients = {}
         cls.clients[data_utils.rand_name(name='TestContainerSync')] = \
             (cls.container_client, cls.object_client)
         cls.clients[data_utils.rand_name(name='TestContainerSync')] = \
@@ -60,12 +61,16 @@ class ContainerSyncTest(base.BaseObjectTest):
             cls.containers.append(cont_name)
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         for client in cls.clients.values():
             cls.delete_containers(cls.containers, client[0], client[1])
-        super(ContainerSyncTest, cls).tearDownClass()
+        super(ContainerSyncTest, cls).resource_cleanup()
 
     @test.attr(type='slow')
+    @test.skip_because(bug='1317133')
+    @testtools.skipIf(
+        not CONF.object_storage_feature_enabled.container_sync,
+        'Old-style container sync function is disabled')
     def test_container_synchronization(self):
         # container to container synchronization
         # to allow/accept sync requests to/from other accounts

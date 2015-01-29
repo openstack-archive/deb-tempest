@@ -26,10 +26,9 @@ CONF = config.CONF
 class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
+    def resource_setup(cls):
         cls.set_network_resources(network=True, subnet=True, dhcp=True)
-        super(ListServerFiltersTestJSON, cls).setUpClass()
+        super(ListServerFiltersTestJSON, cls).resource_setup()
         cls.client = cls.servers_client
 
         # Check to see if the alternate image ref actually exists...
@@ -70,12 +69,12 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         resp, cls.s3 = cls.create_test_server(name=cls.s3_name,
                                               flavor=cls.flavor_ref_alt,
                                               wait_until='ACTIVE')
-        if (CONF.service_available.neutron and
-                CONF.compute.allow_tenant_isolation):
-            network = cls.isolated_creds.get_primary_network()
-            cls.fixed_network_name = network['name']
-        else:
-            cls.fixed_network_name = CONF.compute.fixed_network_name
+
+        cls.fixed_network_name = CONF.compute.fixed_network_name
+        if CONF.service_available.neutron:
+            if hasattr(cls.isolated_creds, 'get_primary_network'):
+                network = cls.isolated_creds.get_primary_network()
+                cls.fixed_network_name = network['name']
 
     @utils.skip_unless_attr('multiple_images', 'Only one image found')
     @test.attr(type='gate')
@@ -203,11 +202,13 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         params = {'status': 'active'}
         resp, body = self.client.list_servers_with_detail(params)
         servers = body['servers']
+        test_ids = [s['id'] for s in (self.s1, self.s2, self.s3)]
 
         self.assertIn(self.s1['id'], map(lambda x: x['id'], servers))
         self.assertIn(self.s2['id'], map(lambda x: x['id'], servers))
         self.assertIn(self.s3['id'], map(lambda x: x['id'], servers))
-        self.assertEqual(['ACTIVE'] * 3, [x['status'] for x in servers])
+        self.assertEqual(['ACTIVE'] * 3, [x['status'] for x in servers
+                                          if x['id'] in test_ids])
 
     @test.attr(type='gate')
     def test_list_servers_filtered_by_name_wildcard(self):
@@ -222,6 +223,30 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
 
         # Let's take random part of name and try to search it
         part_name = self.s1_name[6:-1]
+
+        params = {'name': part_name}
+        resp, body = self.client.list_servers(params)
+        servers = body['servers']
+
+        self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
+        self.assertNotIn(self.s2_name, map(lambda x: x['name'], servers))
+        self.assertNotIn(self.s3_name, map(lambda x: x['name'], servers))
+
+    @test.attr(type='gate')
+    def test_list_servers_filtered_by_name_regex(self):
+        # list of regex that should match s1, s2 and s3
+        regexes = ['^.*\-instance\-[0-9]+$', '^.*\-instance\-.*$']
+        for regex in regexes:
+            params = {'name': regex}
+            resp, body = self.client.list_servers(params)
+            servers = body['servers']
+
+            self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
+            self.assertIn(self.s2_name, map(lambda x: x['name'], servers))
+            self.assertIn(self.s3_name, map(lambda x: x['name'], servers))
+
+        # Let's take random part of name and try to search it
+        part_name = self.s1_name[-10:]
 
         params = {'name': part_name}
         resp, body = self.client.list_servers(params)

@@ -13,8 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from lxml import etree
 import urllib
+
+from lxml import etree
 
 from tempest.common import rest_client
 from tempest.common import xml_utils
@@ -106,6 +107,11 @@ class FloatingIPsClientXML(rest_client.RestClient):
         except exceptions.NotFound:
             return True
         return False
+
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'floating_ip'
 
     def list_floating_ip_pools(self, params=None):
         """Returns a list of all floating IP Pools."""

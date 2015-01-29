@@ -14,7 +14,7 @@
 #    under the License.
 
 from tempest.api.compute import base
-from tempest.test import attr
+from tempest import test
 
 
 class HypervisorAdminV3Test(base.BaseV3ComputeAdminTest):
@@ -24,8 +24,8 @@ class HypervisorAdminV3Test(base.BaseV3ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(HypervisorAdminV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(HypervisorAdminV3Test, cls).resource_setup()
         cls.client = cls.hypervisor_admin_client
 
     def _list_hypervisors(self):
@@ -34,20 +34,20 @@ class HypervisorAdminV3Test(base.BaseV3ComputeAdminTest):
         self.assertEqual(200, resp.status)
         return hypers
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_get_hypervisor_list(self):
         # List of hypervisor and available hypervisors hostname
         hypers = self._list_hypervisors()
         self.assertTrue(len(hypers) > 0)
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_get_hypervisor_list_details(self):
         # Display the details of the all hypervisor
         resp, hypers = self.client.get_hypervisor_list_details()
         self.assertEqual(200, resp.status)
         self.assertTrue(len(hypers) > 0)
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_get_hypervisor_show_details(self):
         # Display the details of the specified hypervisor
         hypers = self._list_hypervisors()
@@ -60,7 +60,7 @@ class HypervisorAdminV3Test(base.BaseV3ComputeAdminTest):
         self.assertEqual(details['hypervisor_hostname'],
                          hypers[0]['hypervisor_hostname'])
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_get_hypervisor_show_servers(self):
         # Show instances about the specific hypervisors
         hypers = self._list_hypervisors()
@@ -71,23 +71,43 @@ class HypervisorAdminV3Test(base.BaseV3ComputeAdminTest):
         self.assertEqual(200, resp.status)
         self.assertTrue(len(hypervisors) > 0)
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_get_hypervisor_stats(self):
         # Verify the stats of the all hypervisor
         resp, stats = self.client.get_hypervisor_stats()
         self.assertEqual(200, resp.status)
         self.assertTrue(len(stats) > 0)
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_get_hypervisor_uptime(self):
         # Verify that GET shows the specified hypervisor uptime
         hypers = self._list_hypervisors()
 
-        resp, uptime = self.client.get_hypervisor_uptime(hypers[0]['id'])
+        # Ironic will register each baremetal node as a 'hypervisor',
+        # so the hypervisor list can contain many hypervisors of type
+        # 'ironic'. If they are ALL ironic, skip this test since ironic
+        # doesn't support hypervisor uptime. Otherwise, remove them
+        # from the list of hypervisors to test.
+        ironic_only = True
+        hypers_without_ironic = []
+        for hyper in hypers:
+            resp, details = (self.client.
+                             get_hypervisor_show_details(hypers[0]['id']))
+            self.assertEqual(200, resp.status)
+            if details['hypervisor_type'] != 'ironic':
+                hypers_without_ironic.append(hyper)
+                ironic_only = False
+
+        if ironic_only:
+            raise self.skipException(
+                "Ironic does not support hypervisor uptime")
+
+        resp, uptime = self.client.get_hypervisor_uptime(
+            hypers_without_ironic[0]['id'])
         self.assertEqual(200, resp.status)
         self.assertTrue(len(uptime) > 0)
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_search_hypervisor(self):
         hypers = self._list_hypervisors()
         self.assertTrue(len(hypers) > 0)

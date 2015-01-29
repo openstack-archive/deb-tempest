@@ -26,9 +26,12 @@ from tempest import test
 
 class ObjectFormPostTest(base.BaseObjectTest):
 
+    metadata = {}
+    containers = []
+
     @classmethod
-    def setUpClass(cls):
-        super(ObjectFormPostTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(ObjectFormPostTest, cls).resource_setup()
         cls.container_name = data_utils.rand_name(name='TestContainer')
         cls.object_name = data_utils.rand_name(name='ObjectTemp')
 
@@ -52,11 +55,10 @@ class ObjectFormPostTest(base.BaseObjectTest):
             self.key)
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         cls.account_client.delete_account_metadata(metadata=cls.metadata)
         cls.delete_containers(cls.containers)
-        cls.data.teardown_all()
-        super(ObjectFormPostTest, cls).tearDownClass()
+        super(ObjectFormPostTest, cls).resource_cleanup()
 
     def get_multipart_form(self, expires=600):
         path = "%s/%s/%s" % (

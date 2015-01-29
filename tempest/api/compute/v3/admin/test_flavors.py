@@ -28,8 +28,8 @@ class FlavorsAdminV3Test(base.BaseV3ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(FlavorsAdminV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(FlavorsAdminV3Test, cls).resource_setup()
 
         cls.client = cls.flavors_admin_client
         cls.user_client = cls.flavors_client
@@ -229,7 +229,7 @@ class FlavorsAdminV3Test(base.BaseV3ComputeAdminTest):
         flavor_name = data_utils.rand_name(self.flavor_name_prefix)
         new_flavor_id = data_utils.rand_int_id(start=1000)
 
-            # Create the flavor
+        # Create the flavor
         resp, flavor = self.client.create_flavor(flavor_name,
                                                  self.ram, self.vcpus,
                                                  self.disk,
@@ -294,7 +294,7 @@ class FlavorsAdminV3Test(base.BaseV3ComputeAdminTest):
         flavor_name = data_utils.rand_name(self.flavor_name_prefix)
         new_flavor_id = data_utils.rand_int_id(start=1000)
 
-        ram = " 1024 "
+        ram = "1024"
         resp, flavor = self.client.create_flavor(flavor_name,
                                                  ram, self.vcpus,
                                                  self.disk,

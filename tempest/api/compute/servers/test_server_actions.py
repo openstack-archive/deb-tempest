@@ -14,9 +14,10 @@
 #    under the License.
 
 import base64
+import logging
+import urlparse
 
 import testtools
-import urlparse
 
 from tempest.api.compute import base
 from tempest.common.utils import data_utils
@@ -26,6 +27,8 @@ from tempest import exceptions
 from tempest import test
 
 CONF = config.CONF
+
+LOG = logging.getLogger(__name__)
 
 
 class ServerActionsTestJSON(base.BaseV2ComputeTest):
@@ -42,9 +45,16 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
             # Rebuild server if something happened to it during a test
             self.__class__.server_id = self.rebuild_server(self.server_id)
 
+    def tearDown(self):
+        _, server = self.client.get_server(self.server_id)
+        self.assertEqual(self.image_ref, server['image']['id'])
+        self.server_check_teardown()
+        super(ServerActionsTestJSON, self).tearDown()
+
     @classmethod
-    def setUpClass(cls):
-        super(ServerActionsTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        cls.prepare_instance_network()
+        super(ServerActionsTestJSON, cls).resource_setup()
         cls.client = cls.servers_client
         cls.server_id = cls.rebuild_server(None)
 
@@ -65,9 +75,7 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                                                       new_password)
             linux_client.validate_authentication()
 
-    @test.attr(type='smoke')
-    def test_reboot_server_hard(self):
-        # The server should be power cycled
+    def _test_reboot_server(self, reboot_type):
         if self.run_ssh:
             # Get the time the server was last rebooted,
             resp, server = self.client.get_server(self.server_id)
@@ -75,7 +83,7 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                                                       self.password)
             boot_time = linux_client.get_boot_time()
 
-        resp, body = self.client.reboot(self.server_id, 'HARD')
+        resp, body = self.client.reboot(self.server_id, reboot_type)
         self.assertEqual(202, resp.status)
         self.client.wait_for_server_status(self.server_id, 'ACTIVE')
 
@@ -86,29 +94,17 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
             new_boot_time = linux_client.get_boot_time()
             self.assertTrue(new_boot_time > boot_time,
                             '%s > %s' % (new_boot_time, boot_time))
+
+    @test.attr(type='smoke')
+    def test_reboot_server_hard(self):
+        # The server should be power cycled
+        self._test_reboot_server('HARD')
 
     @test.skip_because(bug="1014647")
     @test.attr(type='smoke')
     def test_reboot_server_soft(self):
         # The server should be signaled to reboot gracefully
-        if self.run_ssh:
-            # Get the time the server was last rebooted,
-            resp, server = self.client.get_server(self.server_id)
-            linux_client = remote_client.RemoteClient(server, self.ssh_user,
-                                                      self.password)
-            boot_time = linux_client.get_boot_time()
-
-        resp, body = self.client.reboot(self.server_id, 'SOFT')
-        self.assertEqual(202, resp.status)
-        self.client.wait_for_server_status(self.server_id, 'ACTIVE')
-
-        if self.run_ssh:
-            # Log in and verify the boot time has changed
-            linux_client = remote_client.RemoteClient(server, self.ssh_user,
-                                                      self.password)
-            new_boot_time = linux_client.get_boot_time()
-            self.assertTrue(new_boot_time > boot_time,
-                            '%s > %s' % (new_boot_time, boot_time))
+        self._test_reboot_server('SOFT')
 
     @test.attr(type='smoke')
     def test_rebuild_server(self):
@@ -125,7 +121,6 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                                                    metadata=meta,
                                                    personality=personality,
                                                    adminPass=password)
-        self.addCleanup(self.client.rebuild, self.server_id, self.image_ref)
 
         # Verify the properties in the initial response are correct
         self.assertEqual(self.server_id, rebuilt_server['id'])
@@ -145,6 +140,8 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
             linux_client = remote_client.RemoteClient(server, self.ssh_user,
                                                       password)
             linux_client.validate_authentication()
+        if self.image_ref_alt != self.image_ref:
+            self.client.rebuild(self.server_id, self.image_ref)
 
     @test.attr(type='gate')
     def test_rebuild_server_in_stop_state(self):
@@ -157,11 +154,7 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         resp, server = self.client.stop(self.server_id)
         self.assertEqual(202, resp.status)
         self.client.wait_for_server_status(self.server_id, 'SHUTOFF')
-        self.addCleanup(self.client.start, self.server_id)
         resp, rebuilt_server = self.client.rebuild(self.server_id, new_image)
-        self.addCleanup(self.client.wait_for_server_status, self.server_id,
-                        'SHUTOFF')
-        self.addCleanup(self.client.rebuild, self.server_id, old_image)
 
         # Verify the properties in the initial response are correct
         self.assertEqual(self.server_id, rebuilt_server['id'])
@@ -175,6 +168,12 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         rebuilt_image_id = server['image']['id']
         self.assertEqual(new_image, rebuilt_image_id)
 
+        # Restore to the original image (The tearDown will test it again)
+        if self.image_ref_alt != self.image_ref:
+            self.client.rebuild(self.server_id, old_image)
+            self.client.wait_for_server_status(self.server_id, 'SHUTOFF')
+        self.client.start(self.server_id)
+
     def _detect_server_image_flavor(self, server_id):
         # Detects the current server image flavor ref.
         resp, server = self.client.get_server(server_id)
@@ -183,25 +182,45 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
             if current_flavor == self.flavor_ref else self.flavor_ref
         return current_flavor, new_flavor_ref
 
-    @testtools.skipUnless(CONF.compute_feature_enabled.resize,
-                          'Resize not available.')
-    @test.attr(type='smoke')
-    def test_resize_server_confirm(self):
+    def _test_resize_server_confirm(self, stop=False):
         # The server's RAM and disk space should be modified to that of
         # the provided flavor
 
         previous_flavor_ref, new_flavor_ref = \
             self._detect_server_image_flavor(self.server_id)
 
+        if stop:
+            resp = self.servers_client.stop(self.server_id)[0]
+            self.assertEqual(202, resp.status)
+            self.servers_client.wait_for_server_status(self.server_id,
+                                                       'SHUTOFF')
+
         resp, server = self.client.resize(self.server_id, new_flavor_ref)
         self.assertEqual(202, resp.status)
         self.client.wait_for_server_status(self.server_id, 'VERIFY_RESIZE')
 
         self.client.confirm_resize(self.server_id)
-        self.client.wait_for_server_status(self.server_id, 'ACTIVE')
+        expected_status = 'SHUTOFF' if stop else 'ACTIVE'
+        self.client.wait_for_server_status(self.server_id, expected_status)
 
         resp, server = self.client.get_server(self.server_id)
         self.assertEqual(new_flavor_ref, server['flavor']['id'])
+
+        if stop:
+            # NOTE(mriedem): tearDown requires the server to be started.
+            self.client.start(self.server_id)
+
+    @testtools.skipUnless(CONF.compute_feature_enabled.resize,
+                          'Resize not available.')
+    @test.attr(type='smoke')
+    def test_resize_server_confirm(self):
+        self._test_resize_server_confirm(stop=False)
+
+    @testtools.skipUnless(CONF.compute_feature_enabled.resize,
+                          'Resize not available.')
+    @test.attr(type='smoke')
+    def test_resize_server_confirm_from_stopped(self):
+        self._test_resize_server_confirm(stop=True)
 
     @testtools.skipUnless(CONF.compute_feature_enabled.resize,
                           'Resize not available.')
@@ -223,7 +242,10 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         resp, server = self.client.get_server(self.server_id)
         self.assertEqual(previous_flavor_ref, server['flavor']['id'])
 
+    @testtools.skipUnless(CONF.compute_feature_enabled.snapshot,
+                          'Snapshotting not available, backup not possible.')
     @test.attr(type='gate')
+    @test.services('image')
     def test_create_backup(self):
         # Positive test:create backup successfully and rotate backups correctly
         # create the first and the second backup
@@ -237,7 +259,14 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         # the oldest one should be deleted automatically in this test
         def _clean_oldest_backup(oldest_backup):
             if oldest_backup_exist:
-                self.os.image_client.delete_image(oldest_backup)
+                try:
+                    self.os.image_client.delete_image(oldest_backup)
+                except exceptions.NotFound:
+                    pass
+                else:
+                    LOG.warning("Deletion of oldest backup %s should not have "
+                                "been successful as it should have been "
+                                "deleted during rotation." % oldest_backup)
 
         image1_id = data_utils.parse_image_id(resp['location'])
         self.addCleanup(_clean_oldest_backup, image1_id)
@@ -308,6 +337,8 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         lines = len(output.split('\n'))
         self.assertEqual(lines, 10)
 
+    @testtools.skipUnless(CONF.compute_feature_enabled.console_output,
+                          'Console output not supported.')
     @test.attr(type='gate')
     def test_get_console_output(self):
         # Positive test:Should be able to GET the console output
@@ -324,6 +355,27 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
 
         self.wait_for(self._get_output)
 
+    @testtools.skipUnless(CONF.compute_feature_enabled.console_output,
+                          'Console output not supported.')
+    @test.attr(type='gate')
+    def test_get_console_output_with_unlimited_size(self):
+        _, server = self.create_test_server(wait_until='ACTIVE')
+
+        def _check_full_length_console_log():
+            _, output = self.servers_client.get_console_output(server['id'],
+                                                               None)
+            self.assertTrue(output, "Console output was empty.")
+            lines = len(output.split('\n'))
+
+            # NOTE: This test tries to get full length console log, and the
+            # length should be bigger than the one of test_get_console_output.
+            self.assertTrue(lines > 10, "Cannot get enough console log length."
+                                        " (lines: %s)" % lines)
+
+        self.wait_for(_check_full_length_console_log)
+
+    @testtools.skipUnless(CONF.compute_feature_enabled.console_output,
+                          'Console output not supported.')
     @test.attr(type='gate')
     def test_get_console_output_server_id_in_shutoff_status(self):
         # Positive test:Should be able to GET the console output
@@ -363,6 +415,8 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         self.assertEqual(202, resp.status)
         self.client.wait_for_server_status(self.server_id, 'ACTIVE')
 
+    @testtools.skipUnless(CONF.compute_feature_enabled.shelve,
+                          'Shelve is not available.')
     @test.attr(type='gate')
     def test_shelve_unshelve_server(self):
         resp, server = self.client.shelve_server(self.server_id)

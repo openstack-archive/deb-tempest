@@ -26,9 +26,8 @@ class ListServersNegativeV3Test(base.BaseV3ComputeTest):
     force_tenant_isolation = True
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
-        super(ListServersNegativeV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(ListServersNegativeV3Test, cls).resource_setup()
         cls.client = cls.servers_client
 
         # The following servers are created for use
@@ -39,7 +38,7 @@ class ListServersNegativeV3Test(base.BaseV3ComputeTest):
         cls.deleted_fixtures = []
         cls.start_time = datetime.datetime.utcnow()
         for x in moves.xrange(2):
-            resp, srv = cls.create_test_server()
+            resp, srv = cls.create_test_server(wait_until='ACTIVE')
             cls.existing_fixtures.append(srv)
 
         resp, srv = cls.create_test_server()

@@ -24,7 +24,7 @@ class ValidTestGenerator(base.BasicGeneratorSet):
     @base.generator_type("string")
     @base.simple_generator
     def generate_valid_string(self, schema):
-        size = schema.get("minLength", 0)
+        size = schema.get("minLength", 1)
         # TODO(dkr mko): handle format and pattern
         return "x" * size
 
@@ -53,6 +53,29 @@ class ValidTestGenerator(base.BasicGeneratorSet):
         for k, v in schema["properties"].iteritems():
             obj[k] = self.generate_valid(v)
         return obj
+
+    def generate(self, schema):
+        schema_type = schema["type"]
+        if isinstance(schema_type, list):
+            if "integer" in schema_type:
+                schema_type = "integer"
+            else:
+                raise Exception("non-integer list types not supported")
+        result = []
+        if schema_type not in self.types_dict:
+            raise TypeError("generator (%s) doesn't support type: %s"
+                            % (self.__class__.__name__, schema_type))
+        for generator in self.types_dict[schema_type]:
+            ret = generator(schema)
+            if ret is not None:
+                if isinstance(ret, list):
+                    result.extend(ret)
+                elif isinstance(ret, tuple):
+                    result.append(ret)
+                else:
+                    raise Exception("generator (%s) returns invalid result: %s"
+                                    % (generator, ret))
+        return result
 
     def generate_valid(self, schema):
         return self.generate(schema)[0][1]

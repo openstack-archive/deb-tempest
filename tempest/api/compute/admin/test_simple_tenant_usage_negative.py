@@ -23,8 +23,8 @@ from tempest import test
 class TenantUsagesNegativeTestJSON(base.BaseV2ComputeAdminTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(TenantUsagesNegativeTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(TenantUsagesNegativeTestJSON, cls).resource_setup()
         cls.adm_client = cls.os_adm.tenant_usages_client
         cls.client = cls.os.tenant_usages_client
         cls.identity_client = cls._get_identity_admin_client()
@@ -51,12 +51,9 @@ class TenantUsagesNegativeTestJSON(base.BaseV2ComputeAdminTest):
         # Get usage for tenant with invalid date
         params = {'start': self.end,
                   'end': self.start}
-        resp, tenants = self.identity_client.list_tenants()
-        tenant_id = [tnt['id'] for tnt in tenants if tnt['name'] ==
-                     self.client.tenant_name][0]
         self.assertRaises(exceptions.BadRequest,
                           self.adm_client.get_tenant_usage,
-                          tenant_id, params)
+                          self.client.tenant_id, params)
 
     @test.attr(type=['negative', 'gate'])
     def test_list_usage_all_tenants_with_non_admin_user(self):

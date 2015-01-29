@@ -14,19 +14,23 @@
 #    under the License.
 
 
+from tempest import auth
 from tempest import clients
 from tempest.common.utils import data_utils
 from tempest import config
+from tempest import exceptions
+from tempest.openstack.common import log as logging
 import tempest.test
 
 CONF = config.CONF
+LOG = logging.getLogger(__name__)
 
 
 class BaseIdentityAdminTest(tempest.test.BaseTestCase):
 
     @classmethod
-    def setUpClass(cls):
-        super(BaseIdentityAdminTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(BaseIdentityAdminTest, cls).resource_setup()
         cls.os_adm = clients.AdminManager(interface=cls._interface)
         cls.os = clients.Manager(interface=cls._interface)
 
@@ -68,10 +72,10 @@ class BaseIdentityAdminTest(tempest.test.BaseTestCase):
 class BaseIdentityV2AdminTest(BaseIdentityAdminTest):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         if not CONF.identity_feature_enabled.api_v2:
             raise cls.skipException("Identity api v2 is not enabled")
-        super(BaseIdentityV2AdminTest, cls).setUpClass()
+        super(BaseIdentityV2AdminTest, cls).resource_setup()
         cls.client = cls.os_adm.identity_client
         cls.token_client = cls.os_adm.token_client
         if not cls.client.has_admin_extensions():
@@ -80,21 +84,22 @@ class BaseIdentityV2AdminTest(BaseIdentityAdminTest):
         cls.non_admin_client = cls.os.identity_client
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         cls.data.teardown_all()
-        super(BaseIdentityV2AdminTest, cls).tearDownClass()
+        super(BaseIdentityV2AdminTest, cls).resource_cleanup()
 
 
 class BaseIdentityV3AdminTest(BaseIdentityAdminTest):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         if not CONF.identity_feature_enabled.api_v3:
             raise cls.skipException("Identity api v3 is not enabled")
-        super(BaseIdentityV3AdminTest, cls).setUpClass()
+        super(BaseIdentityV3AdminTest, cls).resource_setup()
         cls.client = cls.os_adm.identity_v3_client
         cls.token = cls.os_adm.token_v3_client
         cls.endpoints_client = cls.os_adm.endpoints_client
+        cls.region_client = cls.os_adm.region_client
         cls.data = DataGenerator(cls.client)
         cls.non_admin_client = cls.os.identity_v3_client
         cls.service_client = cls.os_adm.service_client
@@ -103,9 +108,9 @@ class BaseIdentityV3AdminTest(BaseIdentityAdminTest):
         cls.non_admin_client = cls.os.identity_v3_client
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         cls.data.teardown_all()
-        super(BaseIdentityV3AdminTest, cls).tearDownClass()
+        super(BaseIdentityV3AdminTest, cls).resource_cleanup()
 
 
 class DataGenerator(object):
@@ -119,6 +124,15 @@ class DataGenerator(object):
             self.v3_users = []
             self.projects = []
             self.v3_roles = []
+            self.domains = []
+
+        @property
+        def test_credentials(self):
+            return auth.get_credentials(username=self.test_user,
+                                        user_id=self.user['id'],
+                                        password=self.test_password,
+                                        tenant_name=self.test_tenant,
+                                        tenant_id=self.tenant['id'])
 
         def setup_test_user(self):
             """Set up a test user."""
@@ -126,17 +140,17 @@ class DataGenerator(object):
             self.test_user = data_utils.rand_name('test_user_')
             self.test_password = data_utils.rand_name('pass_')
             self.test_email = self.test_user + '@testmail.tm'
-            resp, self.user = self.client.create_user(self.test_user,
-                                                      self.test_password,
-                                                      self.tenant['id'],
-                                                      self.test_email)
+            _, self.user = self.client.create_user(self.test_user,
+                                                   self.test_password,
+                                                   self.tenant['id'],
+                                                   self.test_email)
             self.users.append(self.user)
 
         def setup_test_tenant(self):
             """Set up a test tenant."""
             self.test_tenant = data_utils.rand_name('test_tenant_')
             self.test_description = data_utils.rand_name('desc_')
-            resp, self.tenant = self.client.create_tenant(
+            _, self.tenant = self.client.create_tenant(
                 name=self.test_tenant,
                 description=self.test_description)
             self.tenants.append(self.tenant)
@@ -144,7 +158,7 @@ class DataGenerator(object):
         def setup_test_role(self):
             """Set up a test role."""
             self.test_role = data_utils.rand_name('role')
-            resp, self.role = self.client.create_role(self.test_role)
+            _, self.role = self.client.create_role(self.test_role)
             self.roles.append(self.role)
 
         def setup_test_v3_user(self):
@@ -153,7 +167,7 @@ class DataGenerator(object):
             self.test_user = data_utils.rand_name('test_user_')
             self.test_password = data_utils.rand_name('pass_')
             self.test_email = self.test_user + '@testmail.tm'
-            resp, self.v3_user = self.client.create_user(
+            _, self.v3_user = self.client.create_user(
                 self.test_user,
                 password=self.test_password,
                 project_id=self.project['id'],
@@ -164,7 +178,7 @@ class DataGenerator(object):
             """Set up a test project."""
             self.test_project = data_utils.rand_name('test_project_')
             self.test_description = data_utils.rand_name('desc_')
-            resp, self.project = self.client.create_project(
+            _, self.project = self.client.create_project(
                 name=self.test_project,
                 description=self.test_description)
             self.projects.append(self.project)
@@ -172,19 +186,48 @@ class DataGenerator(object):
         def setup_test_v3_role(self):
             """Set up a test v3 role."""
             self.test_role = data_utils.rand_name('role')
-            resp, self.v3_role = self.client.create_role(self.test_role)
+            _, self.v3_role = self.client.create_role(self.test_role)
             self.v3_roles.append(self.v3_role)
 
+        def setup_test_domain(self):
+            """Set up a test domain."""
+            self.test_domain = data_utils.rand_name('test_domain')
+            self.test_description = data_utils.rand_name('desc')
+            _, self.domain = self.client.create_domain(
+                name=self.test_domain,
+                description=self.test_description)
+            self.domains.append(self.domain)
+
+        @staticmethod
+        def _try_wrapper(func, item, **kwargs):
+            try:
+                if kwargs:
+                    func(item['id'], **kwargs)
+                else:
+                    func(item['id'])
+            except exceptions.NotFound:
+                pass
+            except Exception:
+                LOG.exception("Unexpected exception occurred in %s deletion."
+                              " But ignored here." % item['id'])
+
         def teardown_all(self):
+            # NOTE(masayukig): v3 client doesn't have v2 method.
+            # (e.g. delete_tenant) So we need to check resources existence
+            # before using client methods.
             for user in self.users:
-                self.client.delete_user(user['id'])
+                self._try_wrapper(self.client.delete_user, user)
             for tenant in self.tenants:
-                self.client.delete_tenant(tenant['id'])
+                self._try_wrapper(self.client.delete_tenant, tenant)
             for role in self.roles:
-                self.client.delete_role(role['id'])
+                self._try_wrapper(self.client.delete_role, role)
             for v3_user in self.v3_users:
-                self.client.delete_user(v3_user['id'])
+                self._try_wrapper(self.client.delete_user, v3_user)
             for v3_project in self.projects:
-                self.client.delete_project(v3_project['id'])
+                self._try_wrapper(self.client.delete_project, v3_project)
             for v3_role in self.v3_roles:
-                self.client.delete_role(v3_role['id'])
+                self._try_wrapper(self.client.delete_role, v3_role)
+            for domain in self.domains:
+                self._try_wrapper(self.client.update_domain, domain,
+                                  enabled=False)
+                self._try_wrapper(self.client.delete_domain, domain)

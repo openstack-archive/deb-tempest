@@ -118,7 +118,7 @@ class StackBuildErrorException(TempestException):
 
 
 class StackResourceBuildErrorException(TempestException):
-    message = ("Resource %(resource_name) in stack %(stack_identifier)s is "
+    message = ("Resource %(resource_name)s in stack %(stack_identifier)s is "
                "in %(resource_status)s status due to "
                "'%(resource_status_reason)s'")
 
@@ -197,6 +197,10 @@ class InvalidHTTPResponseBody(RestClientException):
     message = "HTTP response body is invalid json or xml"
 
 
+class InvalidHTTPResponseHeader(RestClientException):
+    message = "HTTP response header is invalid"
+
+
 class InvalidContentType(RestClientException):
     message = "Invalid content type provided"
 
@@ -207,3 +211,20 @@ class UnexpectedResponseCode(RestClientException):
 
 class InvalidStructure(TempestException):
     message = "Invalid structure of table with details"
+
+
+class CommandFailed(Exception):
+    def __init__(self, returncode, cmd, output, stderr):
+        super(CommandFailed, self).__init__()
+        self.returncode = returncode
+        self.cmd = cmd
+        self.stdout = output
+        self.stderr = stderr
+
+    def __str__(self):
+        return ("Command '%s' returned non-zero exit status %d.\n"
+                "stdout:\n%s\n"
+                "stderr:\n%s" % (self.cmd,
+                                 self.returncode,
+                                 self.stdout,
+                                 self.stderr))

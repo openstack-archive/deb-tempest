@@ -41,20 +41,21 @@ class ImagesOneServerV3Test(base.BaseV3ComputeTest):
             # Usually it means the server had a serious accident
             self.__class__.server_id = self.rebuild_server(self.server_id)
 
+    def tearDown(self):
+        """Terminate test instances created after a test is executed."""
+        self.server_check_teardown()
+        super(ImagesOneServerV3Test, self).tearDown()
+
     @classmethod
-    def setUpClass(cls):
-        super(ImagesOneServerV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(ImagesOneServerV3Test, cls).resource_setup()
         cls.client = cls.images_client
         if not CONF.service_available.glance:
             skip_msg = ("%s skipped as glance is not available" % cls.__name__)
             raise cls.skipException(skip_msg)
 
-        try:
-            resp, server = cls.create_test_server(wait_until='ACTIVE')
-            cls.server_id = server['id']
-        except Exception:
-            cls.tearDownClass()
-            raise
+        resp, server = cls.create_test_server(wait_until='ACTIVE')
+        cls.server_id = server['id']
 
     def _get_default_flavor_disk_size(self, flavor_id):
         resp, flavor = self.flavors_client.get_flavor_details(flavor_id)

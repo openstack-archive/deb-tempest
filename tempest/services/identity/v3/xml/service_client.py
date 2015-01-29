@@ -37,6 +37,14 @@ class ServiceClientXML(rest_client.RestClient):
         data = common.xml_to_json(body)
         return data
 
+    def _parse_array(self, node):
+        array = []
+        for child in node.getchildren():
+            tag_list = child.tag.split('}', 1)
+            if tag_list[1] == "service":
+                array.append(common.xml_to_json(child))
+        return array
+
     def update_service(self, service_id, **kwargs):
         """Updates a service_id."""
         resp, body = self.get_service(service_id)
@@ -51,6 +59,7 @@ class ServiceClientXML(rest_client.RestClient):
                                         type=type)
         resp, body = self.patch('services/%s' % service_id,
                                 str(common.Document(update_service)))
+        self.expected_success(200, resp.status)
         body = self._parse_body(etree.fromstring(body))
         return resp, body
 
@@ -58,6 +67,7 @@ class ServiceClientXML(rest_client.RestClient):
         """Get Service."""
         url = 'services/%s' % service_id
         resp, body = self.get(url)
+        self.expected_success(200, resp.status)
         body = self._parse_body(etree.fromstring(body))
         return resp, body
 
@@ -68,10 +78,18 @@ class ServiceClientXML(rest_client.RestClient):
                                    description=description,
                                    type=serv_type)
         resp, body = self.post("services", str(common.Document(post_body)))
+        self.expected_success(201, resp.status)
         body = self._parse_body(etree.fromstring(body))
         return resp, body
 
     def delete_service(self, serv_id):
         url = "services/" + serv_id
         resp, body = self.delete(url)
+        self.expected_success(204, resp.status)
+        return resp, body
+
+    def list_services(self):
+        resp, body = self.get('services')
+        self.expected_success(200, resp.status)
+        body = self._parse_array(etree.fromstring(body))
         return resp, body

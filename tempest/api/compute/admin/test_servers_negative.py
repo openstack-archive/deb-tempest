@@ -17,6 +17,7 @@ import uuid
 import testtools
 
 from tempest.api.compute import base
+from tempest.common import tempest_fixtures as fixtures
 from tempest.common.utils import data_utils
 from tempest import config
 from tempest import exceptions
@@ -32,15 +33,12 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(ServersAdminNegativeTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(ServersAdminNegativeTestJSON, cls).resource_setup()
         cls.client = cls.os_adm.servers_client
         cls.non_adm_client = cls.servers_client
         cls.flavors_client = cls.os_adm.flavors_client
-        cls.identity_client = cls._get_identity_admin_client()
-        tenant = cls.identity_client.get_tenant_by_name(
-            cls.client.tenant_name)
-        cls.tenant_id = tenant['id']
+        cls.tenant_id = cls.client.tenant_id
 
         cls.s1_name = data_utils.rand_name('server')
         resp, server = cls.create_test_server(name=cls.s1_name,
@@ -57,8 +55,12 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
             flavor_id = data_utils.rand_int_id(start=1000)
         return flavor_id
 
+    @testtools.skipUnless(CONF.compute_feature_enabled.resize,
+                          'Resize not available.')
     @test.attr(type=['negative', 'gate'])
     def test_resize_server_using_overlimit_ram(self):
+        # NOTE(mriedem): Avoid conflicts with os-quota-class-sets tests.
+        self.useFixture(fixtures.LockFixture('compute_quotas'))
         flavor_name = data_utils.rand_name("flavor-")
         flavor_id = self._get_unused_flavor_id()
         resp, quota_set = self.quotas_client.get_default_quota_set(
@@ -70,13 +72,17 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
                                                              ram, vcpus, disk,
                                                              flavor_id)
         self.addCleanup(self.flavors_client.delete_flavor, flavor_id)
-        self.assertRaises(exceptions.OverLimit,
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
                           self.client.resize,
                           self.servers[0]['id'],
                           flavor_ref['id'])
 
+    @testtools.skipUnless(CONF.compute_feature_enabled.resize,
+                          'Resize not available.')
     @test.attr(type=['negative', 'gate'])
     def test_resize_server_using_overlimit_vcpus(self):
+        # NOTE(mriedem): Avoid conflicts with os-quota-class-sets tests.
+        self.useFixture(fixtures.LockFixture('compute_quotas'))
         flavor_name = data_utils.rand_name("flavor-")
         flavor_id = self._get_unused_flavor_id()
         ram = 512
@@ -88,7 +94,7 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
                                                              ram, vcpus, disk,
                                                              flavor_id)
         self.addCleanup(self.flavors_client.delete_flavor, flavor_id)
-        self.assertRaises(exceptions.OverLimit,
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
                           self.client.resize,
                           self.servers[0]['id'],
                           flavor_ref['id'])
@@ -124,6 +130,8 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
                           self.client.migrate_server,
                           str(uuid.uuid4()))
 
+    @testtools.skipUnless(CONF.compute_feature_enabled.resize,
+                          'Resize not available.')
     @testtools.skipUnless(CONF.compute_feature_enabled.suspend,
                           'Suspend is not available.')
     @test.attr(type=['negative', 'gate'])

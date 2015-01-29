@@ -14,25 +14,26 @@
 #    under the License.
 
 import random
-
 from six import moves
+import testtools
 
 from tempest.api.object_storage import base
 from tempest import clients
 from tempest.common import custom_matchers
 from tempest.common.utils import data_utils
 from tempest import config
-from tempest import exceptions
 from tempest import test
 
 CONF = config.CONF
 
 
 class AccountTest(base.BaseObjectTest):
+
+    containers = []
+
     @classmethod
-    def setUpClass(cls):
-        super(AccountTest, cls).setUpClass()
-        cls.containers = []
+    def resource_setup(cls):
+        super(AccountTest, cls).resource_setup()
         for i in moves.xrange(ord('a'), ord('f') + 1):
             name = data_utils.rand_name(name='%s-' % chr(i))
             cls.container_client.create_container(name)
@@ -40,10 +41,9 @@ class AccountTest(base.BaseObjectTest):
         cls.containers_count = len(cls.containers)
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         cls.delete_containers(cls.containers)
-        cls.data.teardown_all()
-        super(AccountTest, cls).tearDownClass()
+        super(AccountTest, cls).resource_cleanup()
 
     @test.attr(type='smoke')
     def test_list_containers(self):
@@ -63,37 +63,7 @@ class AccountTest(base.BaseObjectTest):
         # the base user of this instance.
         self.data.setup_test_user()
 
-        os_test_user = clients.Manager(
-            self.data.test_user,
-            self.data.test_password,
-            self.data.test_tenant)
-
-        # Retrieve the id of an operator role of object storage
-        test_role_id = None
-        swift_role = CONF.object_storage.operator_role
-        try:
-            _, roles = self.os_admin.identity_client.list_roles()
-            test_role_id = next(r['id'] for r in roles if r['name']
-                                == swift_role)
-        except StopIteration:
-            msg = "%s role found" % swift_role
-            raise exceptions.NotFound(msg)
-
-        # Retrieve the test_user id
-        _, users = self.os_admin.identity_client.get_users()
-        test_user_id = next(usr['id'] for usr in users if usr['name']
-                            == self.data.test_user)
-
-        # Retrieve the test_tenant id
-        _, tenants = self.os_admin.identity_client.list_tenants()
-        test_tenant_id = next(tnt['id'] for tnt in tenants if tnt['name']
-                              == self.data.test_tenant)
-
-        # Assign the newly created user the appropriate operator role
-        self.os_admin.identity_client.assign_user_role(
-            test_tenant_id,
-            test_user_id,
-            test_role_id)
+        os_test_user = clients.Manager(self.data.test_credentials)
 
         resp, container_list = \
             os_test_user.account_client.list_account_containers()
@@ -147,6 +117,9 @@ class AccountTest(base.BaseObjectTest):
         self.assertEqual(container_list.find(".//bytes").tag, 'bytes')
 
     @test.attr(type='smoke')
+    @testtools.skipIf(
+        not CONF.object_storage_feature_enabled.discoverability,
+        'Discoverability function is disabled')
     def test_list_extensions(self):
         resp, extensions = self.account_client.list_extensions()
 

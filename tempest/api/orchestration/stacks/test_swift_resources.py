@@ -26,11 +26,10 @@ CONF = config.CONF
 
 class SwiftResourcesTestJSON(base.BaseOrchestrationTest):
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
-        super(SwiftResourcesTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(SwiftResourcesTestJSON, cls).resource_setup()
         cls.stack_name = data_utils.rand_name('heat')
-        template = cls.load_template('swift_basic')
+        template = cls.read_template('swift_basic')
         os = clients.Manager()
         if not CONF.service_available.swift:
             raise cls.skipException("Swift support is required")
@@ -49,8 +48,11 @@ class SwiftResourcesTestJSON(base.BaseOrchestrationTest):
 
     def test_created_resources(self):
         """Created stack should be in the list of existing stacks."""
-        resources = [('SwiftContainer', 'OS::Swift::Container'),
-                     ('SwiftContainerWebsite', 'OS::Swift::Container')]
+        swift_basic_template = self.load_template('swift_basic')
+        resources = [('SwiftContainer', swift_basic_template['resources'][
+                      'SwiftContainer']['type']),
+                     ('SwiftContainerWebsite', swift_basic_template[
+                      'resources']['SwiftContainerWebsite']['type'])]
         for resource_name, resource_type in resources:
             resource = self.test_resources.get(resource_name)
             self.assertIsInstance(resource, dict)
@@ -58,15 +60,16 @@ class SwiftResourcesTestJSON(base.BaseOrchestrationTest):
             self.assertEqual(resource_name, resource['logical_resource_id'])
             self.assertEqual('CREATE_COMPLETE', resource['resource_status'])
 
+    @test.services('object_storage')
     def test_created_containers(self):
         params = {'format': 'json'}
-        resp, container_list = \
+        _, container_list = \
             self.account_client.list_account_containers(params=params)
-        self.assertEqual('200', resp['status'])
-        self.assertEqual(2, len(container_list))
-        for cont in container_list:
-            self.assertTrue(cont['name'].startswith(self.stack_name))
+        created_containers = [cont for cont in container_list
+                              if cont['name'].startswith(self.stack_name)]
+        self.assertEqual(2, len(created_containers))
 
+    @test.services('object_storage')
     def test_acl(self):
         acl_headers = ('x-container-meta-web-index', 'x-container-read')
 
@@ -83,11 +86,11 @@ class SwiftResourcesTestJSON(base.BaseOrchestrationTest):
         for h in acl_headers:
             self.assertIn(h, headers)
 
+    @test.services('object_storage')
     def test_metadata(self):
-        metadatas = {
-            "web-index": "index.html",
-            "web-error": "error.html"
-        }
+        swift_basic_template = self.load_template('swift_basic')
+        metadatas = swift_basic_template['resources']['SwiftContainerWebsite'][
+            'properties']['X-Container-Meta']
         swcont_website = self.test_resources.get(
             'SwiftContainerWebsite')['physical_resource_id']
         headers, _ = self.container_client.list_container_metadata(

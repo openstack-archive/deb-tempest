@@ -33,6 +33,7 @@ class ImagesOneServerNegativeV3Test(base.BaseV3ComputeTest):
         for image_id in self.image_ids:
             self.client.delete_image(image_id)
             self.image_ids.remove(image_id)
+        self.server_check_teardown()
         super(ImagesOneServerNegativeV3Test, self).tearDown()
 
     def setUp(self):
@@ -54,19 +55,15 @@ class ImagesOneServerNegativeV3Test(base.BaseV3ComputeTest):
         self.__class__.server_id = self.rebuild_server(self.server_id)
 
     @classmethod
-    def setUpClass(cls):
-        super(ImagesOneServerNegativeV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(ImagesOneServerNegativeV3Test, cls).resource_setup()
         cls.client = cls.images_client
         if not CONF.service_available.glance:
             skip_msg = ("%s skipped as glance is not available" % cls.__name__)
             raise cls.skipException(skip_msg)
 
-        try:
-            resp, server = cls.create_test_server(wait_until='ACTIVE')
-            cls.server_id = server['id']
-        except Exception:
-            cls.tearDownClass()
-            raise
+        resp, server = cls.create_test_server(wait_until='ACTIVE')
+        cls.server_id = server['id']
 
         cls.image_ids = []
 

@@ -29,8 +29,8 @@ import testscenarios
 import testtools
 
 from tempest import clients
+from tempest.common import credentials
 import tempest.common.generator.valid_generator as valid
-from tempest.common import isolated_creds
 from tempest import config
 from tempest import exceptions
 from tempest.openstack.common import importutils
@@ -66,31 +66,7 @@ def attr(*args, **kwargs):
     return decorator
 
 
-def safe_setup(f):
-    """A decorator used to wrap the setUpClass for cleaning up resources
-       when setUpClass failed.
-    """
-
-    def decorator(cls):
-            try:
-                f(cls)
-            except Exception as se:
-                LOG.exception("setUpClass failed: %s" % se)
-                try:
-                    cls.tearDownClass()
-                except Exception as te:
-                    LOG.exception("tearDownClass failed: %s" % te)
-                raise se
-
-    return decorator
-
-
-def services(*args, **kwargs):
-    """A decorator used to set an attr for each service used in a test case
-
-    This decorator applies a testtools attr for each service that gets
-    exercised by a test case.
-    """
+def get_service_list():
     service_list = {
         'compute': CONF.service_available.nova,
         'image': CONF.service_available.glance,
@@ -103,17 +79,32 @@ def services(*args, **kwargs):
         'identity': True,
         'object_storage': CONF.service_available.swift,
         'dashboard': CONF.service_available.horizon,
+        'telemetry': CONF.service_available.ceilometer,
+        'data_processing': CONF.service_available.sahara
     }
+    return service_list
 
+
+def services(*args, **kwargs):
+    """A decorator used to set an attr for each service used in a test case
+
+    This decorator applies a testtools attr for each service that gets
+    exercised by a test case.
+    """
     def decorator(f):
+        services = ['compute', 'image', 'baremetal', 'volume', 'orchestration',
+                    'network', 'identity', 'object_storage', 'dashboard',
+                    'telemetry', 'data_processing']
         for service in args:
-            if service not in service_list:
-                raise exceptions.InvalidServiceTag('%s is not a valid service'
-                                                   % service)
+            if service not in services:
+                raise exceptions.InvalidServiceTag('%s is not a valid '
+                                                   'service' % service)
         attr(type=list(args))(f)
 
         @functools.wraps(f)
         def wrapper(self, *func_args, **func_kwargs):
+            service_list = get_service_list()
+
             for service in args:
                 if not service_list[service]:
                     msg = 'Skipped because the %s service is not available' % (
@@ -209,6 +200,8 @@ def is_extension_enabled(extension_name, service):
         'network': CONF.network_feature_enabled.api_extensions,
         'object': CONF.object_storage_feature_enabled.discoverable_apis,
     }
+    if len(config_dict[service]) == 0:
+        return False
     if config_dict[service][0] == 'all':
         return True
     if extension_name in config_dict[service]:
@@ -252,17 +245,66 @@ class BaseTestCase(BaseDeps):
 
     network_resources = {}
 
+    # NOTE(sdague): log_format is defined inline here instead of using the oslo
+    # default because going through the config path recouples config to the
+    # stress tests too early, and depending on testr order will fail unit tests
+    log_format = ('%(asctime)s %(process)d %(levelname)-8s '
+                  '[%(name)s] %(message)s')
+
     @classmethod
     def setUpClass(cls):
+        # It should never be overridden by descendants
         if hasattr(super(BaseTestCase, cls), 'setUpClass'):
             super(BaseTestCase, cls).setUpClass()
         cls.setUpClassCalled = True
+        # No test resource is allocated until here
+        try:
+            # TODO(andreaf) Split-up resource_setup in stages:
+            # skip checks, pre-hook, credentials, clients, resources, post-hook
+            cls.resource_setup()
+        except Exception:
+            etype, value, trace = sys.exc_info()
+            LOG.info("%s in resource setup. Invoking tearDownClass." % etype)
+            # Catch any exception in tearDown so we can re-raise the original
+            # exception at the end
+            try:
+                cls.tearDownClass()
+            except Exception as te:
+                tetype, _, _ = sys.exc_info()
+                # TODO(gmann): Till we split-up resource_setup &
+                # resource_cleanup in more structural way, log
+                # AttributeError as info instead of exception.
+                if tetype is AttributeError:
+                    LOG.info("tearDownClass failed: %s" % te)
+                else:
+                    LOG.exception("tearDownClass failed: %s" % te)
+            try:
+                raise etype(value), None, trace
+            finally:
+                del trace  # for avoiding circular refs
 
     @classmethod
     def tearDownClass(cls):
         at_exit_set.discard(cls)
+        # It should never be overridden by descendants
         if hasattr(super(BaseTestCase, cls), 'tearDownClass'):
             super(BaseTestCase, cls).tearDownClass()
+        try:
+            cls.resource_cleanup()
+        finally:
+            cls.clear_isolated_creds()
+
+    @classmethod
+    def resource_setup(cls):
+        """Class level setup steps for test cases.
+        Recommended order: skip checks, credentials, clients, resources.
+        """
+        pass
+
+    @classmethod
+    def resource_cleanup(cls):
+        """Class level resource cleanup for test cases. """
+        pass
 
     def setUp(self):
         super(BaseTestCase, self).setUp()
@@ -289,9 +331,8 @@ class BaseTestCase(BaseDeps):
             self.useFixture(fixtures.MonkeyPatch('sys.stderr', stderr))
         if (os.environ.get('OS_LOG_CAPTURE') != 'False' and
             os.environ.get('OS_LOG_CAPTURE') != '0'):
-            log_format = '%(asctime)-15s %(message)s'
             self.useFixture(fixtures.LoggerFixture(nuke_handlers=False,
-                                                   format=log_format,
+                                                   format=self.log_format,
                                                    level=None))
 
     @classmethod
@@ -299,39 +340,20 @@ class BaseTestCase(BaseDeps):
         """
         Returns an OpenStack client manager
         """
-        cls.isolated_creds = isolated_creds.IsolatedCreds(
-            cls.__name__, network_resources=cls.network_resources)
-
         force_tenant_isolation = getattr(cls, 'force_tenant_isolation', None)
-        if (CONF.compute.allow_tenant_isolation or
-            force_tenant_isolation):
-            creds = cls.isolated_creds.get_primary_creds()
-            username, tenant_name, password = creds
-            if getattr(cls, '_interface', None):
-                os = clients.Manager(username=username,
-                                     password=password,
-                                     tenant_name=tenant_name,
-                                     interface=cls._interface,
-                                     service=cls._service)
-            elif interface:
-                os = clients.Manager(username=username,
-                                     password=password,
-                                     tenant_name=tenant_name,
-                                     interface=interface,
-                                     service=cls._service)
-            else:
-                os = clients.Manager(username=username,
-                                     password=password,
-                                     tenant_name=tenant_name,
-                                     service=cls._service)
-        else:
-            if getattr(cls, '_interface', None):
-                os = clients.Manager(interface=cls._interface,
-                                     service=cls._service)
-            elif interface:
-                os = clients.Manager(interface=interface, service=cls._service)
-            else:
-                os = clients.Manager(service=cls._service)
+
+        cls.isolated_creds = credentials.get_isolated_credentials(
+            name=cls.__name__, network_resources=cls.network_resources,
+            force_tenant_isolation=force_tenant_isolation,
+        )
+
+        creds = cls.isolated_creds.get_primary_creds()
+        params = dict(credentials=creds, service=cls._service)
+        if getattr(cls, '_interface', None):
+            interface = cls._interface
+        if interface:
+            params['interface'] = interface
+        os = clients.Manager(**params)
         return os
 
     @classmethod
@@ -339,7 +361,7 @@ class BaseTestCase(BaseDeps):
         """
         Clears isolated creds if set
         """
-        if getattr(cls, 'isolated_creds'):
+        if hasattr(cls, 'isolated_creds'):
             cls.isolated_creds.clear_isolated_creds()
 
     @classmethod
@@ -394,20 +416,6 @@ class NegativeAutoTest(BaseTestCase):
         cls.admin_client = os_admin.negative_client
 
     @staticmethod
-    def load_schema(file):
-        """
-        Loads a schema from a file on a specified location.
-
-        :param file: the file name
-        """
-        #NOTE(mkoderer): must be extended for xml support
-        fn = os.path.join(
-            os.path.abspath(os.path.dirname(os.path.dirname(__file__))),
-            "etc", "schemas", file)
-        LOG.debug("Open schema file: %s" % (fn))
-        return json.load(open(fn))
-
-    @staticmethod
     def load_tests(*args):
         """
         Wrapper for testscenarios to set the mandatory scenarios variable
@@ -420,17 +428,21 @@ class NegativeAutoTest(BaseTestCase):
             standard_tests, module, loader = args
         for test in testtools.iterate_tests(standard_tests):
             schema_file = getattr(test, '_schema_file', None)
+            schema = getattr(test, '_schema', None)
             if schema_file is not None:
                 setattr(test, 'scenarios',
                         NegativeAutoTest.generate_scenario(schema_file))
+            elif schema is not None:
+                setattr(test, 'scenarios',
+                        NegativeAutoTest.generate_scenario(schema))
         return testscenarios.load_tests_apply_scenarios(*args)
 
     @staticmethod
-    def generate_scenario(description_file):
+    def generate_scenario(description):
         """
         Generates the test scenario list for a given description.
 
-        :param description: A dictionary with the following entries:
+        :param description: A file or dictionary with the following entries:
             name (required) name for the api
             http-method (required) one of HEAD,GET,PUT,POST,PATCH,DELETE
             url (required) the url to be appended to the catalog url with '%s'
@@ -446,7 +458,6 @@ class NegativeAutoTest(BaseTestCase):
                 the data is used to generate query strings appended to the url,
                 otherwise for the body of the http call.
         """
-        description = NegativeAutoTest.load_schema(description_file)
         LOG.debug(description)
         generator = importutils.import_class(
             CONF.negative.test_generator)()
@@ -466,23 +477,20 @@ class NegativeAutoTest(BaseTestCase):
                                              "expected_result": expected_result
                                              }))
         if schema is not None:
-            for name, schema, expected_result in generator.generate(schema):
-                if (expected_result is None and
-                    "default_result_code" in description):
-                    expected_result = description["default_result_code"]
-                scenario_list.append((name,
-                                      {"schema": schema,
-                                       "expected_result": expected_result}))
+            for scenario in generator.generate_scenarios(schema):
+                scenario_list.append((scenario['_negtest_name'],
+                                      scenario))
         LOG.debug(scenario_list)
         return scenario_list
 
-    def execute(self, description_file):
+    def execute(self, description):
         """
         Execute a http call on an api that are expected to
         result in client errors. First it uses invalid resources that are part
         of the url, and then invalid data for queries and http request bodies.
 
-        :param description: A dictionary with the following entries:
+        :param description: A json file or dictionary with the following
+        entries:
             name (required) name for the api
             http-method (required) one of HEAD,GET,PUT,POST,PATCH,DELETE
             url (required) the url to be appended to the catalog url with '%s'
@@ -499,11 +507,16 @@ class NegativeAutoTest(BaseTestCase):
                 otherwise for the body of the http call.
 
         """
-        description = NegativeAutoTest.load_schema(description_file)
         LOG.info("Executing %s" % description["name"])
         LOG.debug(description)
+        generator = importutils.import_class(
+            CONF.negative.test_generator)()
+        schema = description.get("json-schema", None)
         method = description["http-method"]
         url = description["url"]
+        expected_result = None
+        if "default_result_code" in description:
+            expected_result = description["default_result_code"]
 
         resources = [self.get_resource(r) for
                      r in description.get("resources", [])]
@@ -513,13 +526,19 @@ class NegativeAutoTest(BaseTestCase):
             # entry (see get_resource).
             # We just send a valid json-schema with it
             valid_schema = None
-            schema = description.get("json-schema", None)
             if schema:
                 valid_schema = \
                     valid.ValidTestGenerator().generate_valid(schema)
             new_url, body = self._http_arguments(valid_schema, url, method)
-        elif hasattr(self, "schema"):
-            new_url, body = self._http_arguments(self.schema, url, method)
+        elif hasattr(self, "_negtest_name"):
+            schema_under_test = \
+                valid.ValidTestGenerator().generate_valid(schema)
+            local_expected_result = \
+                generator.generate_payload(self, schema_under_test)
+            if local_expected_result is not None:
+                expected_result = local_expected_result
+            new_url, body = \
+                self._http_arguments(schema_under_test, url, method)
         else:
             raise Exception("testscenarios are not active. Please make sure "
                             "that your test runner supports the load_tests "
@@ -531,7 +550,7 @@ class NegativeAutoTest(BaseTestCase):
             client = self.client
         resp, resp_body = client.send_request(method, new_url,
                                               resources, body=body)
-        self._check_negative_response(resp.status, resp_body)
+        self._check_negative_response(expected_result, resp.status, resp_body)
 
     def _http_arguments(self, json_dict, url, method):
         LOG.debug("dict: %s url: %s method: %s" % (json_dict, url, method))
@@ -542,8 +561,7 @@ class NegativeAutoTest(BaseTestCase):
         else:
             return url, json.dumps(json_dict)
 
-    def _check_negative_response(self, result, body):
-        expected_result = getattr(self, "expected_result", None)
+    def _check_negative_response(self, expected_result, result, body):
         self.assertTrue(result >= 400 and result < 500 and result != 413,
                         "Expected client error, got %s:%s" %
                         (result, body))
@@ -589,7 +607,8 @@ def SimpleNegativeAutoTest(klass):
     """
     @attr(type=['negative', 'gate'])
     def generic_test(self):
-        self.execute(self._schema_file)
+        if hasattr(self, '_schema'):
+            self.execute(self._schema)
 
     cn = klass.__name__
     cn = cn.replace('JSON', '')
@@ -618,7 +637,6 @@ def call_until_true(func, duration, sleep_for):
     while now < timeout:
         if func():
             return True
-        LOG.debug("Sleeping for %d seconds", sleep_for)
         time.sleep(sleep_for)
         now = time.time()
     return False

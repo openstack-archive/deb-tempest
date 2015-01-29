@@ -18,7 +18,6 @@ from tempest.api.object_storage import base
 from tempest import clients
 from tempest.common.utils import data_utils
 from tempest import config
-from tempest import exceptions
 from tempest import test
 
 CONF = config.CONF
@@ -27,43 +26,14 @@ CONF = config.CONF
 class AccountQuotasTest(base.BaseObjectTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(AccountQuotasTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(AccountQuotasTest, cls).resource_setup()
         cls.container_name = data_utils.rand_name(name="TestContainer")
         cls.container_client.create_container(cls.container_name)
 
-        cls.data.setup_test_user()
+        cls.data.setup_test_user(reseller=True)
 
-        cls.os_reselleradmin = clients.Manager(
-            cls.data.test_user,
-            cls.data.test_password,
-            cls.data.test_tenant)
-
-        # Retrieve the ResellerAdmin role id
-        reseller_role_id = None
-        try:
-            _, roles = cls.os_admin.identity_client.list_roles()
-            reseller_role_id = next(r['id'] for r in roles if r['name']
-                                    == CONF.object_storage.reseller_admin_role)
-        except StopIteration:
-            msg = "No ResellerAdmin role found"
-            raise exceptions.NotFound(msg)
-
-        # Retrieve the ResellerAdmin tenant id
-        _, users = cls.os_admin.identity_client.get_users()
-        reseller_user_id = next(usr['id'] for usr in users if usr['name']
-                                == cls.data.test_user)
-
-        # Retrieve the ResellerAdmin tenant id
-        _, tenants = cls.os_admin.identity_client.list_tenants()
-        reseller_tenant_id = next(tnt['id'] for tnt in tenants if tnt['name']
-                                  == cls.data.test_tenant)
-
-        # Assign the newly created user the appropriate ResellerAdmin role
-        cls.os_admin.identity_client.assign_user_role(
-            reseller_tenant_id,
-            reseller_user_id,
-            reseller_role_id)
+        cls.os_reselleradmin = clients.Manager(cls.data.test_credentials)
 
         # Retrieve a ResellerAdmin auth data and use it to set a quota
         # on the client's account
@@ -100,10 +70,10 @@ class AccountQuotasTest(base.BaseObjectTest):
         super(AccountQuotasTest, self).tearDown()
 
     @classmethod
-    def tearDownClass(cls):
-        cls.delete_containers([cls.container_name])
-        cls.data.teardown_all()
-        super(AccountQuotasTest, cls).tearDownClass()
+    def resource_cleanup(cls):
+        if hasattr(cls, "container_name"):
+            cls.delete_containers([cls.container_name])
+        super(AccountQuotasTest, cls).resource_cleanup()
 
     @test.attr(type="smoke")
     @test.requires_ext(extension='account_quotas', service='object')

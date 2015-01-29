@@ -18,7 +18,7 @@ from six import moves
 from tempest.api.identity import base
 from tempest.common.utils import data_utils
 from tempest import exceptions
-from tempest.test import attr
+from tempest import test
 
 
 class ServicesTestJSON(base.BaseIdentityV2AdminTest):
@@ -26,24 +26,22 @@ class ServicesTestJSON(base.BaseIdentityV2AdminTest):
 
     def _del_service(self, service_id):
         # Deleting the service created in this method
-        resp, _ = self.client.delete_service(service_id)
-        self.assertEqual(204, resp.status)
+        self.client.delete_service(service_id)
         # Checking whether service is deleted successfully
         self.assertRaises(exceptions.NotFound, self.client.get_service,
                           service_id)
 
-    @attr(type='smoke')
+    @test.attr(type='smoke')
     def test_create_get_delete_service(self):
         # GET Service
         # Creating a Service
         name = data_utils.rand_name('service-')
         type = data_utils.rand_name('type--')
         description = data_utils.rand_name('description-')
-        resp, service_data = self.client.create_service(
+        _, service_data = self.client.create_service(
             name, type, description=description)
         self.assertFalse(service_data['id'] is None)
         self.addCleanup(self._del_service, service_data['id'])
-        self.assertEqual(200, resp.status)
         # Verifying response body of create service
         self.assertIn('id', service_data)
         self.assertIn('name', service_data)
@@ -53,8 +51,7 @@ class ServicesTestJSON(base.BaseIdentityV2AdminTest):
         self.assertIn('description', service_data)
         self.assertEqual(description, service_data['description'])
         # Get service
-        resp, fetched_service = self.client.get_service(service_data['id'])
-        self.assertEqual(200, resp.status)
+        _, fetched_service = self.client.get_service(service_data['id'])
         # verifying the existence of service created
         self.assertIn('id', fetched_service)
         self.assertEqual(fetched_service['id'], service_data['id'])
@@ -66,21 +63,20 @@ class ServicesTestJSON(base.BaseIdentityV2AdminTest):
         self.assertEqual(fetched_service['description'],
                          service_data['description'])
 
-    @attr(type='gate')
+    @test.attr(type='gate')
     def test_create_service_without_description(self):
         # Create a service only with name and type
         name = data_utils.rand_name('service-')
         type = data_utils.rand_name('type--')
-        resp, service = self.client.create_service(name, type)
+        _, service = self.client.create_service(name, type)
         self.assertIn('id', service)
-        self.assertTrue('200', resp['status'])
         self.addCleanup(self._del_service, service['id'])
         self.assertIn('name', service)
         self.assertEqual(name, service['name'])
         self.assertIn('type', service)
         self.assertEqual(type, service['type'])
 
-    @attr(type='smoke')
+    @test.attr(type='smoke')
     def test_list_services(self):
         # Create, List, Verify and Delete Services
         services = []
@@ -88,7 +84,7 @@ class ServicesTestJSON(base.BaseIdentityV2AdminTest):
             name = data_utils.rand_name('service-')
             type = data_utils.rand_name('type--')
             description = data_utils.rand_name('description-')
-            resp, service = self.client.create_service(
+            _, service = self.client.create_service(
                 name, type, description=description)
             services.append(service)
         service_ids = map(lambda x: x['id'], services)
@@ -99,9 +95,8 @@ class ServicesTestJSON(base.BaseIdentityV2AdminTest):
 
         self.addCleanup(delete_services)
         # List and Verify Services
-        resp, body = self.client.list_services()
-        self.assertEqual(200, resp.status)
-        found = [service for service in body if service['id'] in service_ids]
+        _, body = self.client.list_services()
+        found = [serv for serv in body if serv['id'] in service_ids]
         self.assertEqual(len(found), len(services), 'Services not found')
 
 

@@ -12,14 +12,15 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import httplib2
 import json
+
+import httplib2
+from oslotest import mockpatch
 
 from tempest.common import rest_client
 from tempest.common import xml_utils as xml
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common.fixture import mockpatch
 from tempest.tests import base
 from tempest.tests import fake_auth_provider
 from tempest.tests import fake_config
@@ -540,3 +541,50 @@ class TestNegativeRestClient(BaseRestClientTestClass):
         self.assertRaises(AssertionError,
                           self.negative_rest_client.send_request,
                           'OTHER', self.url, [])
+
+
+class TestExpectedSuccess(BaseRestClientTestClass):
+
+    def setUp(self):
+        self.fake_http = fake_http.fake_httplib2()
+        super(TestExpectedSuccess, self).setUp()
+
+    def test_expected_succes_int_match(self):
+        expected_code = 202
+        read_code = 202
+        resp = self.rest_client.expected_success(expected_code, read_code)
+        # Assert None resp on success
+        self.assertFalse(resp)
+
+    def test_expected_succes_int_no_match(self):
+        expected_code = 204
+        read_code = 202
+        self.assertRaises(exceptions.InvalidHttpSuccessCode,
+                          self.rest_client.expected_success,
+                          expected_code, read_code)
+
+    def test_expected_succes_list_match(self):
+        expected_code = [202, 204]
+        read_code = 202
+        resp = self.rest_client.expected_success(expected_code, read_code)
+        # Assert None resp on success
+        self.assertFalse(resp)
+
+    def test_expected_succes_list_no_match(self):
+        expected_code = [202, 204]
+        read_code = 200
+        self.assertRaises(exceptions.InvalidHttpSuccessCode,
+                          self.rest_client.expected_success,
+                          expected_code, read_code)
+
+    def test_non_success_expected_int(self):
+        expected_code = 404
+        read_code = 202
+        self.assertRaises(AssertionError, self.rest_client.expected_success,
+                          expected_code, read_code)
+
+    def test_non_success_expected_list(self):
+        expected_code = [404, 202]
+        read_code = 202
+        self.assertRaises(AssertionError, self.rest_client.expected_success,
+                          expected_code, read_code)

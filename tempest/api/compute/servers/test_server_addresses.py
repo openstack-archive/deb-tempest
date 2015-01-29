@@ -23,10 +23,10 @@ CONF = config.CONF
 class ServerAddressesTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         # This test module might use a network and a subnet
         cls.set_network_resources(network=True, subnet=True)
-        super(ServerAddressesTestJSON, cls).setUpClass()
+        super(ServerAddressesTestJSON, cls).resource_setup()
         cls.client = cls.servers_client
 
         resp, cls.server = cls.create_test_server(wait_until='ACTIVE')
@@ -34,6 +34,7 @@ class ServerAddressesTestJSON(base.BaseV2ComputeTest):
     @test.skip_because(bug="1210483",
                        condition=CONF.service_available.neutron)
     @test.attr(type='smoke')
+    @test.services('network')
     def test_list_server_addresses(self):
         # All public and private addresses for
         # a server should be returned
@@ -51,6 +52,7 @@ class ServerAddressesTestJSON(base.BaseV2ComputeTest):
                 self.assertTrue(address['version'])
 
     @test.attr(type='smoke')
+    @test.services('network')
     def test_list_server_addresses_by_network(self):
         # Providing a network type should filter
         # the addresses return by that type

@@ -26,9 +26,8 @@ class ServersAdminV3Test(base.BaseV3ComputeAdminTest):
     _host_key = 'os-extended-server-attributes:host'
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
-        super(ServersAdminV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(ServersAdminV3Test, cls).resource_setup()
         cls.client = cls.servers_admin_client
         cls.non_admin_client = cls.servers_client
         cls.flavors_client = cls.flavors_admin_client
@@ -51,7 +50,6 @@ class ServersAdminV3Test(base.BaseV3ComputeAdminTest):
         self.assertEqual('200', resp['status'])
         self.assertEqual([], servers)
 
-    @test.skip_because(bug='1265416')
     @test.attr(type='gate')
     def test_list_servers_by_admin_with_all_tenants(self):
         # Listing servers by admin user with all tenants parameter

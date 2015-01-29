@@ -17,7 +17,6 @@ import contextlib
 import logging as orig_logging
 import os
 import re
-import six
 import urlparse
 
 import boto
@@ -25,6 +24,7 @@ from boto import ec2
 from boto import exception
 from boto import s3
 import keystoneclient.exceptions
+import six
 
 import tempest.clients
 from tempest.common.utils import file_utils
@@ -56,8 +56,8 @@ def decision_maker():
     A_I_IMAGES_READY = all_read(ami_path, aki_path, ari_path)
     boto_logger = logging.getLogger('boto')
     level = boto_logger.logger.level
-    boto_logger.logger.setLevel(orig_logging.CRITICAL)  # suppress logging
-                                                        # for these
+    # suppress logging for boto
+    boto_logger.logger.setLevel(orig_logging.CRITICAL)
 
     def _cred_sub_check(connection_data):
         if not id_matcher.match(connection_data["aws_access_key_id"]):
@@ -108,8 +108,8 @@ class BotoExceptionMatcher(object):
     CODE_RE = '.*'  # regexp makes sense in group match
 
     def match(self, exc):
-        """:returns: Retruns with an error string if not matches,
-               returns with None when matches.
+        """:returns: Returns with an error string if it does not match,
+               returns with None when it matches.
         """
         if not isinstance(exc, exception.BotoServerError):
             return "%r not an BotoServerError instance" % exc
@@ -187,7 +187,7 @@ def friendly_function_call_str(call_able, *args, **kwargs):
         if len(args):
             string += ", "
     string += ", ".join("=".join(map(str, (key, value)))
-              for (key, value) in kwargs.items())
+                        for (key, value) in kwargs.items())
     return string + ")"
 
 
@@ -195,8 +195,8 @@ class BotoTestCase(tempest.test.BaseTestCase):
     """Recommended to use as base class for boto related test."""
 
     @classmethod
-    def setUpClass(cls):
-        super(BotoTestCase, cls).setUpClass()
+    def resource_setup(cls):
+        super(BotoTestCase, cls).resource_setup()
         cls.conclusion = decision_maker()
         cls.os = cls.get_client_manager()
         # The trash contains cleanup functions and paramaters in tuples
@@ -245,7 +245,7 @@ class BotoTestCase(tempest.test.BaseTestCase):
             raise self.failureException, "BotoServerError not raised"
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         """Calls the callables added by addResourceCleanUp,
         when you overwrite this function don't forget to call this too.
         """
@@ -264,7 +264,7 @@ class BotoTestCase(tempest.test.BaseTestCase):
             finally:
                 del cls._resource_trash_bin[key]
         cls.clear_isolated_creds()
-        super(BotoTestCase, cls).tearDownClass()
+        super(BotoTestCase, cls).resource_cleanup()
         # NOTE(afazekas): let the super called even on exceptions
         # The real exceptions already logged, if the super throws another,
         # does not causes hidden issues
@@ -485,7 +485,7 @@ class BotoTestCase(tempest.test.BaseTestCase):
 
     @classmethod
     def destroy_volume_wait(cls, volume):
-        """Delete volume, tryies to detach first.
+        """Delete volume, tries to detach first.
            Use just for teardown!
         """
         exc_num = 0
@@ -498,7 +498,10 @@ class BotoTestCase(tempest.test.BaseTestCase):
         def _volume_state():
             volume.update(validate=True)
             try:
-                if volume.status != "available":
+                # NOTE(gmann): Make sure volume is attached.
+                # Checking status as 'not "available"' is not enough to make
+                # sure volume is attached as it can be in "error" state
+                if volume.status == "in-use":
                     volume.detach(force=True)
             except BaseException:
                 LOG.exception("Failed to detach volume %s" % volume)
@@ -518,7 +521,7 @@ class BotoTestCase(tempest.test.BaseTestCase):
 
     @classmethod
     def destroy_snapshot_wait(cls, snapshot):
-        """delete snaphot, wait until not exists."""
+        """delete snapshot, wait until it ceases to exist."""
         snapshot.delete()
 
         def _update():
@@ -592,83 +595,83 @@ for code in ('InsufficientAddressCapacity', 'InsufficientInstanceCapacity',
 
 
 for code in (('AccessDenied', 403),
-            ('AccountProblem', 403),
-            ('AmbiguousGrantByEmailAddress', 400),
-            ('BadDigest', 400),
-            ('BucketAlreadyExists', 409),
-            ('BucketAlreadyOwnedByYou', 409),
-            ('BucketNotEmpty', 409),
-            ('CredentialsNotSupported', 400),
-            ('CrossLocationLoggingProhibited', 403),
-            ('EntityTooSmall', 400),
-            ('EntityTooLarge', 400),
-            ('ExpiredToken', 400),
-            ('IllegalVersioningConfigurationException', 400),
-            ('IncompleteBody', 400),
-            ('IncorrectNumberOfFilesInPostRequest', 400),
-            ('InlineDataTooLarge', 400),
-            ('InvalidAccessKeyId', 403),
+             ('AccountProblem', 403),
+             ('AmbiguousGrantByEmailAddress', 400),
+             ('BadDigest', 400),
+             ('BucketAlreadyExists', 409),
+             ('BucketAlreadyOwnedByYou', 409),
+             ('BucketNotEmpty', 409),
+             ('CredentialsNotSupported', 400),
+             ('CrossLocationLoggingProhibited', 403),
+             ('EntityTooSmall', 400),
+             ('EntityTooLarge', 400),
+             ('ExpiredToken', 400),
+             ('IllegalVersioningConfigurationException', 400),
+             ('IncompleteBody', 400),
+             ('IncorrectNumberOfFilesInPostRequest', 400),
+             ('InlineDataTooLarge', 400),
+             ('InvalidAccessKeyId', 403),
              'InvalidAddressingHeader',
-            ('InvalidArgument', 400),
-            ('InvalidBucketName', 400),
-            ('InvalidBucketState', 409),
-            ('InvalidDigest', 400),
-            ('InvalidLocationConstraint', 400),
-            ('InvalidPart', 400),
-            ('InvalidPartOrder', 400),
-            ('InvalidPayer', 403),
-            ('InvalidPolicyDocument', 400),
-            ('InvalidRange', 416),
-            ('InvalidRequest', 400),
-            ('InvalidSecurity', 403),
-            ('InvalidSOAPRequest', 400),
-            ('InvalidStorageClass', 400),
-            ('InvalidTargetBucketForLogging', 400),
-            ('InvalidToken', 400),
-            ('InvalidURI', 400),
-            ('KeyTooLong', 400),
-            ('MalformedACLError', 400),
-            ('MalformedPOSTRequest', 400),
-            ('MalformedXML', 400),
-            ('MaxMessageLengthExceeded', 400),
-            ('MaxPostPreDataLengthExceededError', 400),
-            ('MetadataTooLarge', 400),
-            ('MethodNotAllowed', 405),
-            ('MissingAttachment'),
-            ('MissingContentLength', 411),
-            ('MissingRequestBodyError', 400),
-            ('MissingSecurityElement', 400),
-            ('MissingSecurityHeader', 400),
-            ('NoLoggingStatusForKey', 400),
-            ('NoSuchBucket', 404),
-            ('NoSuchKey', 404),
-            ('NoSuchLifecycleConfiguration', 404),
-            ('NoSuchUpload', 404),
-            ('NoSuchVersion', 404),
-            ('NotSignedUp', 403),
-            ('NotSuchBucketPolicy', 404),
-            ('OperationAborted', 409),
-            ('PermanentRedirect', 301),
-            ('PreconditionFailed', 412),
-            ('Redirect', 307),
-            ('RequestIsNotMultiPartContent', 400),
-            ('RequestTimeout', 400),
-            ('RequestTimeTooSkewed', 403),
-            ('RequestTorrentOfBucketError', 400),
-            ('SignatureDoesNotMatch', 403),
-            ('TemporaryRedirect', 307),
-            ('TokenRefreshRequired', 400),
-            ('TooManyBuckets', 400),
-            ('UnexpectedContent', 400),
-            ('UnresolvableGrantByEmailAddress', 400),
-            ('UserKeyMustBeSpecified', 400)):
+             ('InvalidArgument', 400),
+             ('InvalidBucketName', 400),
+             ('InvalidBucketState', 409),
+             ('InvalidDigest', 400),
+             ('InvalidLocationConstraint', 400),
+             ('InvalidPart', 400),
+             ('InvalidPartOrder', 400),
+             ('InvalidPayer', 403),
+             ('InvalidPolicyDocument', 400),
+             ('InvalidRange', 416),
+             ('InvalidRequest', 400),
+             ('InvalidSecurity', 403),
+             ('InvalidSOAPRequest', 400),
+             ('InvalidStorageClass', 400),
+             ('InvalidTargetBucketForLogging', 400),
+             ('InvalidToken', 400),
+             ('InvalidURI', 400),
+             ('KeyTooLong', 400),
+             ('MalformedACLError', 400),
+             ('MalformedPOSTRequest', 400),
+             ('MalformedXML', 400),
+             ('MaxMessageLengthExceeded', 400),
+             ('MaxPostPreDataLengthExceededError', 400),
+             ('MetadataTooLarge', 400),
+             ('MethodNotAllowed', 405),
+             ('MissingAttachment'),
+             ('MissingContentLength', 411),
+             ('MissingRequestBodyError', 400),
+             ('MissingSecurityElement', 400),
+             ('MissingSecurityHeader', 400),
+             ('NoLoggingStatusForKey', 400),
+             ('NoSuchBucket', 404),
+             ('NoSuchKey', 404),
+             ('NoSuchLifecycleConfiguration', 404),
+             ('NoSuchUpload', 404),
+             ('NoSuchVersion', 404),
+             ('NotSignedUp', 403),
+             ('NotSuchBucketPolicy', 404),
+             ('OperationAborted', 409),
+             ('PermanentRedirect', 301),
+             ('PreconditionFailed', 412),
+             ('Redirect', 307),
+             ('RequestIsNotMultiPartContent', 400),
+             ('RequestTimeout', 400),
+             ('RequestTimeTooSkewed', 403),
+             ('RequestTorrentOfBucketError', 400),
+             ('SignatureDoesNotMatch', 403),
+             ('TemporaryRedirect', 307),
+             ('TokenRefreshRequired', 400),
+             ('TooManyBuckets', 400),
+             ('UnexpectedContent', 400),
+             ('UnresolvableGrantByEmailAddress', 400),
+             ('UserKeyMustBeSpecified', 400)):
     _add_matcher_class(BotoTestCase.s3_error_code.client,
                        code, base=ClientError)
 
 
 for code in (('InternalError', 500),
-            ('NotImplemented', 501),
-            ('ServiceUnavailable', 503),
-            ('SlowDown', 503)):
+             ('NotImplemented', 501),
+             ('ServiceUnavailable', 503),
+             ('SlowDown', 503)):
     _add_matcher_class(BotoTestCase.s3_error_code.server,
                        code, base=ServerError)

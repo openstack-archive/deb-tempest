@@ -16,7 +16,9 @@
 import json
 import time
 
-from tempest.api_schema.compute import interfaces as common_schema
+from tempest.api_schema.response.compute import interfaces as common_schema
+from tempest.api_schema.response.compute import servers as servers_schema
+from tempest.api_schema.response.compute.v3 import interfaces as schema
 from tempest.common import rest_client
 from tempest import config
 from tempest import exceptions
@@ -33,6 +35,7 @@ class InterfacesV3ClientJSON(rest_client.RestClient):
     def list_interfaces(self, server):
         resp, body = self.get('servers/%s/os-attach-interfaces' % server)
         body = json.loads(body)
+        self.validate_response(schema.list_interfaces, resp, body)
         return resp, body['interface_attachments']
 
     def create_interface(self, server, port_id=None, network_id=None,
@@ -93,6 +96,8 @@ class InterfacesV3ClientJSON(rest_client.RestClient):
         })
         resp, body = self.post('servers/%s/action' % str(server_id),
                                post_body)
+        self.validate_response(servers_schema.server_actions_common_schema,
+                               resp, body)
         return resp, body
 
     def remove_fixed_ip(self, server_id, ip_address):
@@ -104,4 +109,6 @@ class InterfacesV3ClientJSON(rest_client.RestClient):
         })
         resp, body = self.post('servers/%s/action' % str(server_id),
                                post_body)
+        self.validate_response(servers_schema.server_actions_common_schema,
+                               resp, body)
         return resp, body

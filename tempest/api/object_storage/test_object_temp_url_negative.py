@@ -27,9 +27,12 @@ from tempest import test
 
 class ObjectTempUrlNegativeTest(base.BaseObjectTest):
 
+    metadata = {}
+    containers = []
+
     @classmethod
-    def setUpClass(cls):
-        super(ObjectTempUrlNegativeTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(ObjectTempUrlNegativeTest, cls).resource_setup()
 
         cls.container_name = data_utils.rand_name(name='TestContainer')
         cls.container_client.create_container(cls.container_name)
@@ -43,15 +46,13 @@ class ObjectTempUrlNegativeTest(base.BaseObjectTest):
             cls.account_client.list_account_metadata()
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         resp, _ = cls.account_client.delete_account_metadata(
             metadata=cls.metadata)
 
         cls.delete_containers(cls.containers)
 
-        # delete the user setup created
-        cls.data.teardown_all()
-        super(ObjectTempUrlNegativeTest, cls).tearDownClass()
+        super(ObjectTempUrlNegativeTest, cls).resource_cleanup()
 
     def setUp(self):
         super(ObjectTempUrlNegativeTest, self).setUp()
@@ -65,10 +66,10 @@ class ObjectTempUrlNegativeTest(base.BaseObjectTest):
 
         # create object
         self.object_name = data_utils.rand_name(name='ObjectTemp')
-        self.data = data_utils.arbitrary_string(size=len(self.object_name),
-                                                base_text=self.object_name)
+        self.content = data_utils.arbitrary_string(size=len(self.object_name),
+                                                   base_text=self.object_name)
         self.object_client.create_object(self.container_name,
-                                         self.object_name, self.data)
+                                         self.object_name, self.content)
 
     def _get_expiry_date(self, expiration_time=1000):
         return int(time.time() + expiration_time)

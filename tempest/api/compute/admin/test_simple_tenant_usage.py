@@ -23,15 +23,11 @@ from tempest import test
 class TenantUsagesTestJSON(base.BaseV2ComputeAdminTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(TenantUsagesTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(TenantUsagesTestJSON, cls).resource_setup()
         cls.adm_client = cls.os_adm.tenant_usages_client
         cls.client = cls.os.tenant_usages_client
-        cls.identity_client = cls._get_identity_admin_client()
-
-        resp, tenants = cls.identity_client.list_tenants()
-        cls.tenant_id = [tnt['id'] for tnt in tenants if tnt['name'] ==
-                         cls.client.tenant_name][0]
+        cls.tenant_id = cls.client.tenant_id
 
         # Create a server in the demo tenant
         resp, server = cls.create_test_server(wait_until='ACTIVE')

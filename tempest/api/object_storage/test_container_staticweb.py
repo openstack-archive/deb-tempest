@@ -23,8 +23,8 @@ from tempest import test
 class StaticWebTest(base.BaseObjectTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(StaticWebTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(StaticWebTest, cls).resource_setup()
         cls.container_name = data_utils.rand_name(name="TestContainer")
 
         # This header should be posted on the container before every test
@@ -44,10 +44,10 @@ class StaticWebTest(base.BaseObjectTest):
             metadata_prefix="X-Container-")
 
     @classmethod
-    def tearDownClass(cls):
-        cls.delete_containers([cls.container_name])
-        cls.data.teardown_all()
-        super(StaticWebTest, cls).tearDownClass()
+    def resource_cleanup(cls):
+        if hasattr(cls, "container_name"):
+            cls.delete_containers([cls.container_name])
+        super(StaticWebTest, cls).resource_cleanup()
 
     @test.requires_ext(extension='staticweb', service='object')
     @test.attr('gate')

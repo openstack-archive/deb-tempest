@@ -15,15 +15,16 @@
 #    under the License.
 
 import collections
-import inspect
 import json
-from lxml import etree
 import re
 import time
 
 import jsonschema
+from lxml import etree
+import six
 
 from tempest.common import http
+from tempest.common.utils import misc as misc_utils
 from tempest.common import xml_utils as common
 from tempest import config
 from tempest import exceptions
@@ -37,6 +38,19 @@ TOKEN_CHARS_RE = re.compile('^[-A-Za-z0-9+/=]*$')
 
 # All the successful HTTP status codes from RFC 2616
 HTTP_SUCCESS = (200, 201, 202, 203, 204, 205, 206)
+
+
+# convert a structure into a string safely
+def safe_body(body, maxlen=2048):
+    try:
+        text = six.text_type(body)
+    except UnicodeDecodeError:
+        # if this isn't actually text, return marker that
+        return "<BinaryData: removed>"
+    if len(text) > maxlen:
+        return text[:maxlen]
+    else:
+        return text
 
 
 class RestClient(object):
@@ -140,15 +154,23 @@ class RestClient(object):
 
     @property
     def user(self):
-        return self.auth_provider.credentials.get('username', None)
+        return self.auth_provider.credentials.username
+
+    @property
+    def user_id(self):
+        return self.auth_provider.credentials.user_id
 
     @property
     def tenant_name(self):
-        return self.auth_provider.credentials.get('tenant_name', None)
+        return self.auth_provider.credentials.tenant_name
+
+    @property
+    def tenant_id(self):
+        return self.auth_provider.credentials.tenant_id
 
     @property
     def password(self):
-        return self.auth_provider.credentials.get('password', None)
+        return self.auth_provider.credentials.password
 
     @property
     def base_url(self):
@@ -183,17 +205,26 @@ class RestClient(object):
         """
         self._skip_path = False
 
-    def expected_success(self, expected_code, read_code):
+    @classmethod
+    def expected_success(cls, expected_code, read_code):
         assert_msg = ("This function only allowed to use for HTTP status"
                       "codes which explicitly defined in the RFC 2616. {0}"
                       " is not a defined Success Code!").format(expected_code)
-        assert expected_code in HTTP_SUCCESS, assert_msg
+        if isinstance(expected_code, list):
+            for code in expected_code:
+                assert code in HTTP_SUCCESS, assert_msg
+        else:
+            assert expected_code in HTTP_SUCCESS, assert_msg
 
         # NOTE(afazekas): the http status code above 400 is processed by
         # the _error_checker method
-        if read_code < 400 and read_code != expected_code:
-                pattern = """Unexpected http success status code {0},
-                             The expected status code is {1}"""
+        if read_code < 400:
+            pattern = """Unexpected http success status code {0},
+                         The expected status code is {1}"""
+            if ((not isinstance(expected_code, list) and
+                 (read_code != expected_code)) or
+                (isinstance(expected_code, list) and
+                 (read_code not in expected_code))):
                 details = pattern.format(read_code, expected_code)
                 raise exceptions.InvalidHttpSuccessCode(details)
 
@@ -224,73 +255,59 @@ class RestClient(object):
         versions = map(lambda x: x['id'], body)
         return resp, versions
 
-    def _find_caller(self):
-        """Find the caller class and test name.
-
-        Because we know that the interesting things that call us are
-        test_* methods, and various kinds of setUp / tearDown, we
-        can look through the call stack to find appropriate methods,
-        and the class we were in when those were called.
-        """
-        caller_name = None
-        names = []
-        frame = inspect.currentframe()
-        is_cleanup = False
-        # Start climbing the ladder until we hit a good method
-        while True:
-            try:
-                frame = frame.f_back
-                name = frame.f_code.co_name
-                names.append(name)
-                if re.search("^(test_|setUp|tearDown)", name):
-                    cname = ""
-                    if 'self' in frame.f_locals:
-                        cname = frame.f_locals['self'].__class__.__name__
-                    if 'cls' in frame.f_locals:
-                        cname = frame.f_locals['cls'].__name__
-                    caller_name = cname + ":" + name
-                    break
-                elif re.search("^_run_cleanup", name):
-                    is_cleanup = True
-                else:
-                    cname = ""
-                    if 'self' in frame.f_locals:
-                        cname = frame.f_locals['self'].__class__.__name__
-                    if 'cls' in frame.f_locals:
-                        cname = frame.f_locals['cls'].__name__
-
-                    # the fact that we are running cleanups is indicated pretty
-                    # deep in the stack, so if we see that we want to just
-                    # start looking for a real class name, and declare victory
-                    # once we do.
-                    if is_cleanup and cname:
-                        if not re.search("^RunTest", cname):
-                            caller_name = cname + ":_run_cleanups"
-                            break
-            except Exception:
-                break
-        # prevents frame leaks
-        del frame
-        if caller_name is None:
-            self.LOG.debug("Sane call name not found in %s" % names)
-        return caller_name
-
     def _get_request_id(self, resp):
         for i in ('x-openstack-request-id', 'x-compute-request-id'):
             if i in resp:
                 return resp[i]
         return ""
 
+    def _log_request_start(self, method, req_url, req_headers=None,
+                           req_body=None):
+        if req_headers is None:
+            req_headers = {}
+        caller_name = misc_utils.find_test_caller()
+        trace_regex = CONF.debug.trace_requests
+        if trace_regex and re.search(trace_regex, caller_name):
+            self.LOG.debug('Starting Request (%s): %s %s' %
+                           (caller_name, method, req_url))
+
+    def _log_request_full(self, method, req_url, resp,
+                          secs="", req_headers=None,
+                          req_body=None, resp_body=None,
+                          caller_name=None, extra=None):
+        if 'X-Auth-Token' in req_headers:
+            req_headers['X-Auth-Token'] = '<omitted>'
+        log_fmt = """Request (%s): %s %s %s%s
+    Request - Headers: %s
+        Body: %s
+    Response - Headers: %s
+        Body: %s"""
+
+        self.LOG.debug(
+            log_fmt % (
+                caller_name,
+                resp['status'],
+                method,
+                req_url,
+                secs,
+                str(req_headers),
+                safe_body(req_body),
+                str(resp),
+                safe_body(resp_body)),
+            extra=extra)
+
     def _log_request(self, method, req_url, resp,
                      secs="", req_headers=None,
                      req_body=None, resp_body=None):
+        if req_headers is None:
+            req_headers = {}
         # if we have the request id, put it in the right part of the log
         extra = dict(request_id=self._get_request_id(resp))
         # NOTE(sdague): while we still have 6 callers to this function
         # we're going to just provide work around on who is actually
         # providing timings by gracefully adding no content if they don't.
         # Once we're down to 1 caller, clean this up.
-        caller_name = self._find_caller()
+        caller_name = misc_utils.find_test_caller()
         if secs:
             secs = " %.3fs" % secs
         self.LOG.info(
@@ -302,28 +319,10 @@ class RestClient(object):
                 secs),
             extra=extra)
 
-        # We intentionally duplicate the info content because in a parallel
-        # world this is important to match
-        trace_regex = CONF.debug.trace_requests
-        if trace_regex and re.search(trace_regex, caller_name):
-            log_fmt = """Request (%s): %s %s %s%s
-    Request - Headers: %s
-        Body: %s
-    Response - Headers: %s
-        Body: %s"""
-
-            self.LOG.debug(
-                log_fmt % (
-                    caller_name,
-                    resp['status'],
-                    method,
-                    req_url,
-                    secs,
-                    str(req_headers),
-                    str(req_body)[:2048],
-                    str(resp),
-                    str(resp_body)[:2048]),
-                extra=extra)
+        # Also look everything at DEBUG if you want to filter this
+        # out, don't run at debug.
+        self._log_request_full(method, req_url, resp, secs, req_headers,
+                               req_body, resp_body, caller_name, extra)
 
     def _parse_resp(self, body):
         if self._get_type() is "json":
@@ -369,7 +368,7 @@ class RestClient(object):
             # Parse one-item-like xmls (user, role, etc)
             return common.xml_to_json(element)
 
-    def response_checker(self, method, url, headers, body, resp, resp_body):
+    def response_checker(self, method, resp, resp_body):
         if (resp.status in set((204, 205, 304)) or resp.status < 200 or
                 method.upper() == 'HEAD') and resp_body:
             raise exceptions.ResponseWithNonEmptyBody(status=resp.status)
@@ -394,7 +393,7 @@ class RestClient(object):
         # The warning is normal for SHOULD/SHOULD NOT case
 
         # Likely it will cause an error
-        if not resp_body and resp.status >= 400:
+        if method != 'HEAD' and not resp_body and resp.status >= 400:
             self.LOG.warning("status >= 400 response with empty body")
 
     def _request(self, method, url, headers=None, body=None):
@@ -405,6 +404,7 @@ class RestClient(object):
 
         # Do the actual request, and time it
         start = time.time()
+        self._log_request_start(method, req_url)
         resp, resp_body = self.http_obj.request(
             req_url, method, headers=req_headers, body=req_body)
         end = time.time()
@@ -413,8 +413,7 @@ class RestClient(object):
                           resp_body=resp_body)
 
         # Verify HTTP response codes
-        self.response_checker(method, url, req_headers, req_body, resp,
-                              resp_body)
+        self.response_checker(method, resp, resp_body)
 
         return resp, resp_body
 
@@ -569,7 +568,14 @@ class RestClient(object):
             if self.is_resource_deleted(id):
                 return
             if int(time.time()) - start_time >= self.build_timeout:
-                raise exceptions.TimeoutException
+                message = ('Failed to delete %(resource_type)s %(id)s within '
+                           'the required time (%(timeout)s s).' %
+                           {'resource_type': self.resource_type, 'id': id,
+                            'timeout': self.build_timeout})
+                caller = misc_utils.find_test_caller()
+                if caller:
+                    message = '(%s) %s' % (caller, message)
+                raise exceptions.TimeoutException(message)
             time.sleep(self.build_interval)
 
     def is_resource_deleted(self, id):
@@ -580,6 +586,11 @@ class RestClient(object):
                    % self.__class__.__name__)
         raise NotImplementedError(message)
 
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'resource'
+
     @classmethod
     def validate_response(cls, schema, resp, body):
         # Only check the response if the status code is a success code
@@ -588,15 +599,13 @@ class RestClient(object):
         # declared in the V3 API and so we should be able to export this in
         # the response schema. For now we'll ignore it.
         if resp.status in HTTP_SUCCESS:
-            response_code = schema['status_code']
-            if resp.status not in response_code:
-                msg = ("The status code(%s) is different than the expected "
-                       "one(%s)") % (resp.status, response_code)
-                raise exceptions.InvalidHttpSuccessCode(msg)
-            response_schema = schema.get('response_body')
-            if response_schema:
+            cls.expected_success(schema['status_code'], resp.status)
+
+            # Check the body of a response
+            body_schema = schema.get('response_body')
+            if body_schema:
                 try:
-                    jsonschema.validate(body, response_schema)
+                    jsonschema.validate(body, body_schema)
                 except jsonschema.ValidationError as ex:
                     msg = ("HTTP response body is invalid (%s)") % ex
                     raise exceptions.InvalidHTTPResponseBody(msg)
@@ -604,6 +613,15 @@ class RestClient(object):
                 if body:
                     msg = ("HTTP response body should not exist (%s)") % body
                     raise exceptions.InvalidHTTPResponseBody(msg)
+
+            # Check the header of a response
+            header_schema = schema.get('response_header')
+            if header_schema:
+                try:
+                    jsonschema.validate(resp, header_schema)
+                except jsonschema.ValidationError as ex:
+                    msg = ("HTTP response header is invalid (%s)") % ex
+                    raise exceptions.InvalidHTTPResponseHeader(msg)
 
 
 class NegativeRestClient(RestClient):

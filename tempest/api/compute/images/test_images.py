@@ -23,11 +23,17 @@ CONF = config.CONF
 class ImagesTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(ImagesTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(ImagesTestJSON, cls).resource_setup()
         if not CONF.service_available.glance:
             skip_msg = ("%s skipped as glance is not available" % cls.__name__)
             raise cls.skipException(skip_msg)
+
+        if not CONF.compute_feature_enabled.snapshot:
+            skip_msg = ("%s skipped as instance snapshotting is not supported"
+                        % cls.__name__)
+            raise cls.skipException(skip_msg)
+
         cls.client = cls.images_client
         cls.servers_client = cls.servers_client
 

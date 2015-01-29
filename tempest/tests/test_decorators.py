@@ -14,13 +14,12 @@
 
 
 import mock
-import testtools
-
 from oslo.config import cfg
+from oslotest import mockpatch
+import testtools
 
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common.fixture import mockpatch
 from tempest import test
 from tempest.tests import base
 from tempest.tests import fake_config
@@ -97,6 +96,28 @@ class TestServicesDecorator(BaseDecoratorsTest):
         self.assertRaises(testtools.TestCase.skipException,
                           self._test_services_helper, 'compute',
                           'volume')
+
+    def test_services_list(self):
+        service_list = test.get_service_list()
+        for service in service_list:
+            try:
+                self._test_services_helper(service)
+            except exceptions.InvalidServiceTag:
+                self.fail('%s is not listed in the valid service tag list'
+                          % service)
+            except KeyError:
+                # NOTE(mtreinish): This condition is to test for a entry in
+                # the outer decorator list but not in the service_list dict.
+                # However, because we're looping over the service_list dict
+                # it's unlikely we'll trigger this. So manual review is still
+                # need for the list in the outer decorator.
+                self.fail('%s is in the list of valid service tags but there '
+                          'is no corresponding entry in the dict returned from'
+                          ' get_service_list()' % service)
+            except testtools.TestCase.skipException:
+                # Test didn't raise an exception because of an incorrect list
+                # entry so move onto the next entry
+                continue
 
 
 class TestStressDecorator(BaseDecoratorsTest):
@@ -238,7 +259,7 @@ class TestRequiresExtDecorator(BaseDecoratorsTest):
 class TestSimpleNegativeDecorator(BaseDecoratorsTest):
     @test.SimpleNegativeAutoTest
     class FakeNegativeJSONTest(test.NegativeAutoTest):
-        _schema_file = 'fake/schemas/file.json'
+        _schema = {}
 
     def test_testfunc_exist(self):
         self.assertIn("test_fake_negative", dir(self.FakeNegativeJSONTest))
@@ -248,4 +269,4 @@ class TestSimpleNegativeDecorator(BaseDecoratorsTest):
         obj = self.FakeNegativeJSONTest("test_fake_negative")
         self.assertIn("test_fake_negative", dir(obj))
         obj.test_fake_negative()
-        mock.assert_called_once_with(self.FakeNegativeJSONTest._schema_file)
+        mock.assert_called_once_with(self.FakeNegativeJSONTest._schema)

@@ -15,16 +15,22 @@
 
 from tempest.api.compute import base
 from tempest.common.utils import data_utils
+from tempest import config
 from tempest import test
+
+CONF = config.CONF
 
 
 class ServerRescueTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
+    def resource_setup(cls):
+        if not CONF.compute_feature_enabled.rescue:
+            msg = "Server rescue not available."
+            raise cls.skipException(msg)
+
         cls.set_network_resources(network=True, subnet=True, router=True)
-        super(ServerRescueTestJSON, cls).setUpClass()
+        super(ServerRescueTestJSON, cls).resource_setup()
 
         # Floating IP creation
         resp, body = cls.floating_ips_client.create_floating_ip()
@@ -47,7 +53,6 @@ class ServerRescueTestJSON(base.BaseV2ComputeTest):
 
         # Server for positive tests
         resp, server = cls.create_test_server(wait_until='BUILD')
-        resp, resc_server = cls.create_test_server(wait_until='ACTIVE')
         cls.server_id = server['id']
         cls.password = server['adminPass']
         cls.servers_client.wait_for_server_status(cls.server_id, 'ACTIVE')
@@ -56,13 +61,14 @@ class ServerRescueTestJSON(base.BaseV2ComputeTest):
         super(ServerRescueTestJSON, self).setUp()
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         # Deleting the floating IP which is created in this method
         cls.floating_ips_client.delete_floating_ip(cls.floating_ip_id)
-        cls.delete_volume(cls.volume['id'])
+        if getattr(cls, 'volume', None):
+            cls.delete_volume(cls.volume['id'])
         resp, cls.sg = cls.security_groups_client.delete_security_group(
             cls.sg_id)
-        super(ServerRescueTestJSON, cls).tearDownClass()
+        super(ServerRescueTestJSON, cls).resource_cleanup()
 
     def tearDown(self):
         super(ServerRescueTestJSON, self).tearDown()

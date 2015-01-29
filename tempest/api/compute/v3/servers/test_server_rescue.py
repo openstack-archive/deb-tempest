@@ -14,14 +14,20 @@
 #    under the License.
 
 from tempest.api.compute import base
+from tempest import config
 from tempest import test
+
+CONF = config.CONF
 
 
 class ServerRescueV3Test(base.BaseV3ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(ServerRescueV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        if not CONF.compute_feature_enabled.rescue:
+            msg = "Server rescue not available."
+            raise cls.skipException(msg)
+        super(ServerRescueV3Test, cls).resource_setup()
 
         # Server for positive tests
         resp, server = cls.create_test_server(wait_until='BUILD')

@@ -13,21 +13,26 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import testtools
+
 from tempest.api.object_storage import base
 from tempest.common.utils import data_utils
+from tempest import config
 from tempest import test
+
+CONF = config.CONF
 
 
 class ContainerTest(base.BaseObjectTest):
     @classmethod
-    def setUpClass(cls):
-        super(ContainerTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(ContainerTest, cls).resource_setup()
         cls.containers = []
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         cls.delete_containers(cls.containers)
-        super(ContainerTest, cls).tearDownClass()
+        super(ContainerTest, cls).resource_cleanup()
 
     def assertContainer(self, container, count, byte, versioned):
         resp, _ = self.container_client.list_container_metadata(container)
@@ -41,6 +46,9 @@ class ContainerTest(base.BaseObjectTest):
         self.assertEqual(header_value, versioned)
 
     @test.attr(type='smoke')
+    @testtools.skipIf(
+        not CONF.object_storage_feature_enabled.object_versioning,
+        'Object-versioning is disabled')
     def test_versioned_container(self):
         # create container
         vers_container_name = data_utils.rand_name(name='TestVersionContainer')

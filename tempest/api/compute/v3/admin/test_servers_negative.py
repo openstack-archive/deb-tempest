@@ -17,10 +17,11 @@ import uuid
 import testtools
 
 from tempest.api.compute import base
+from tempest.common import tempest_fixtures as fixtures
 from tempest.common.utils import data_utils
 from tempest import config
 from tempest import exceptions
-from tempest.test import attr
+from tempest import test
 
 CONF = config.CONF
 
@@ -32,15 +33,12 @@ class ServersAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(ServersAdminNegativeV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(ServersAdminNegativeV3Test, cls).resource_setup()
         cls.client = cls.servers_admin_client
         cls.non_adm_client = cls.servers_client
         cls.flavors_client = cls.flavors_admin_client
-        cls.identity_client = cls._get_identity_admin_client()
-        tenant = cls.identity_client.get_tenant_by_name(
-            cls.client.tenant_name)
-        cls.tenant_id = tenant['id']
+        cls.tenant_id = cls.client.tenant_id
 
         cls.s1_name = data_utils.rand_name('server')
         resp, server = cls.create_test_server(name=cls.s1_name,
@@ -57,8 +55,10 @@ class ServersAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
             flavor_id = data_utils.rand_int_id(start=1000)
         return flavor_id
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_resize_server_using_overlimit_ram(self):
+        # NOTE(mriedem): Avoid conflicts with os-quota-class-sets tests.
+        self.useFixture(fixtures.LockFixture('compute_quotas'))
         flavor_name = data_utils.rand_name("flavor-")
         flavor_id = self._get_unused_flavor_id()
         resp, quota_set = self.quotas_client.get_default_quota_set(
@@ -70,13 +70,15 @@ class ServersAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
                                                              ram, vcpus, disk,
                                                              flavor_id)
         self.addCleanup(self.flavors_client.delete_flavor, flavor_id)
-        self.assertRaises(exceptions.OverLimit,
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
                           self.client.resize,
                           self.servers[0]['id'],
                           flavor_ref['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_resize_server_using_overlimit_vcpus(self):
+        # NOTE(mriedem): Avoid conflicts with os-quota-class-sets tests.
+        self.useFixture(fixtures.LockFixture('compute_quotas'))
         flavor_name = data_utils.rand_name("flavor-")
         flavor_id = self._get_unused_flavor_id()
         ram = 512
@@ -88,36 +90,36 @@ class ServersAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
                                                              ram, vcpus, disk,
                                                              flavor_id)
         self.addCleanup(self.flavors_client.delete_flavor, flavor_id)
-        self.assertRaises(exceptions.OverLimit,
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
                           self.client.resize,
                           self.servers[0]['id'],
                           flavor_ref['id'])
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_reset_state_server_invalid_state(self):
         self.assertRaises(exceptions.BadRequest,
                           self.client.reset_state, self.s1_id,
                           state='invalid')
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_reset_state_server_invalid_type(self):
         self.assertRaises(exceptions.BadRequest,
                           self.client.reset_state, self.s1_id,
                           state=1)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_reset_state_server_nonexistent_server(self):
         self.assertRaises(exceptions.NotFound,
                           self.client.reset_state, '999')
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_get_server_diagnostics_by_non_admin(self):
         # Non-admin user can not view server diagnostics according to policy
         self.assertRaises(exceptions.Unauthorized,
                           self.non_adm_client.get_server_diagnostics,
                           self.s1_id)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_migrate_non_existent_server(self):
         # migrate a non existent server
         self.assertRaises(exceptions.NotFound,
@@ -126,7 +128,7 @@ class ServersAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
 
     @testtools.skipUnless(CONF.compute_feature_enabled.suspend,
                           'Suspend is not available.')
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_migrate_server_invalid_state(self):
         # create server.
         resp, server = self.create_test_server(wait_until='ACTIVE')

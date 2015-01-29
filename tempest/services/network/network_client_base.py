@@ -13,6 +13,7 @@
 import time
 import urllib
 
+from tempest.common.utils import misc
 from tempest import config
 from tempest import exceptions
 
@@ -28,8 +29,10 @@ service_resource_prefix_map = {
     'vips': 'lb',
     'health_monitors': 'lb',
     'members': 'lb',
+    'ipsecpolicies': 'vpn',
     'vpnservices': 'vpn',
     'ikepolicies': 'vpn',
+    'ipsecpolicies': 'vpn',
     'metering_labels': 'metering',
     'metering_label_rules': 'metering',
     'firewall_rules': 'fw',
@@ -46,7 +49,9 @@ hyphen_exceptions = ["health_monitors", "firewall_rules", "firewall_policies"]
 resource_plural_map = {
     'security_groups': 'security_groups',
     'security_group_rules': 'security_group_rules',
+    'ipsecpolicy': 'ipsecpolicies',
     'ikepolicy': 'ikepolicies',
+    'ipsecpolicy': 'ipsecpolicies',
     'quotas': 'quotas',
     'firewall_policy': 'firewall_policies'
 }
@@ -104,9 +109,10 @@ class NetworkClientBase(object):
         def _list(**filters):
             uri = self.get_uri(plural_name)
             if filters:
-                uri += '?' + urllib.urlencode(filters)
+                uri += '?' + urllib.urlencode(filters, doseq=1)
             resp, body = self.get(uri)
             result = {plural_name: self.deserialize_list(body)}
+            self.rest_client.expected_success(200, resp.status)
             return resp, result
 
         return _list
@@ -115,21 +121,24 @@ class NetworkClientBase(object):
         def _delete(resource_id):
             plural = self.pluralize(resource_name)
             uri = '%s/%s' % (self.get_uri(plural), resource_id)
-            return self.delete(uri)
+            resp, body = self.delete(uri)
+            self.rest_client.expected_success(204, resp.status)
+            return resp, body
 
         return _delete
 
     def _shower(self, resource_name):
-        def _show(resource_id, field_list=[]):
-            # field_list is a sequence of two-element tuples, with the
-            # first element being 'fields'. An example:
-            # [('fields', 'id'), ('fields', 'name')]
+        def _show(resource_id, **fields):
+            # fields is a dict which key is 'fields' and value is a
+            # list of field's name. An example:
+            # {'fields': ['id', 'name']}
             plural = self.pluralize(resource_name)
             uri = '%s/%s' % (self.get_uri(plural), resource_id)
-            if field_list:
-                uri += '?' + urllib.urlencode(field_list)
+            if fields:
+                uri += '?' + urllib.urlencode(fields, doseq=1)
             resp, body = self.get(uri)
             body = self.deserialize_single(body)
+            self.rest_client.expected_success(200, resp.status)
             return resp, body
 
         return _show
@@ -141,6 +150,7 @@ class NetworkClientBase(object):
             post_data = self.serialize({resource_name: kwargs})
             resp, body = self.post(uri, post_data)
             body = self.deserialize_single(body)
+            self.rest_client.expected_success(201, resp.status)
             return resp, body
 
         return _create
@@ -152,6 +162,7 @@ class NetworkClientBase(object):
             post_data = self.serialize({resource_name: kwargs})
             resp, body = self.put(uri, post_data)
             body = self.deserialize_single(body)
+            self.rest_client.expected_success(200, resp.status)
             return resp, body
 
         return _update
@@ -170,15 +181,14 @@ class NetworkClientBase(object):
         raise AttributeError(name)
 
     # Common methods that are hard to automate
-    def create_bulk_network(self, count, names):
-        network_list = list()
-        for i in range(count):
-            network_list.append({'name': names[i]})
+    def create_bulk_network(self, names):
+        network_list = [{'name': name} for name in names]
         post_data = {'networks': network_list}
         body = self.serialize_list(post_data, "networks", "network")
         uri = self.get_uri("networks")
         resp, body = self.post(uri, body)
         body = {'networks': self.deserialize_list(body)}
+        self.rest_client.expected_success(201, resp.status)
         return resp, body
 
     def create_bulk_subnet(self, subnet_list):
@@ -187,6 +197,7 @@ class NetworkClientBase(object):
         uri = self.get_uri('subnets')
         resp, body = self.post(uri, body)
         body = {'subnets': self.deserialize_list(body)}
+        self.rest_client.expected_success(201, resp.status)
         return resp, body
 
     def create_bulk_port(self, port_list):
@@ -195,6 +206,7 @@ class NetworkClientBase(object):
         uri = self.get_uri('ports')
         resp, body = self.post(uri, body)
         body = {'ports': self.deserialize_list(body)}
+        self.rest_client.expected_success(201, resp.status)
         return resp, body
 
     def wait_for_resource_deletion(self, resource_type, id):
@@ -216,3 +228,39 @@ class NetworkClientBase(object):
         except exceptions.NotFound:
             return True
         return False
+
+    def wait_for_resource_status(self, fetch, status, interval=None,
+                                 timeout=None):
+        """
+        @summary: Waits for a network resource to reach a status
+        @param fetch: the callable to be used to query the resource status
+        @type fecth: callable that takes no parameters and returns the resource
+        @param status: the status that the resource has to reach
+        @type status: String
+        @param interval: the number of seconds to wait between each status
+          query
+        @type interval: Integer
+        @param timeout: the maximum number of seconds to wait for the resource
+          to reach the desired status
+        @type timeout: Integer
+        """
+        if not interval:
+            interval = self.build_interval
+        if not timeout:
+            timeout = self.build_timeout
+        start_time = time.time()
+
+        while time.time() - start_time <= timeout:
+            resource = fetch()
+            if resource['status'] == status:
+                return
+            time.sleep(interval)
+
+        # At this point, the wait has timed out
+        message = 'Resource %s' % (str(resource))
+        message += ' failed to reach status %s' % status
+        message += ' within the required time %s' % timeout
+        caller = misc.find_test_caller()
+        if caller:
+            message = '(%s) %s' % (caller, message)
+        raise exceptions.TimeoutException(message)

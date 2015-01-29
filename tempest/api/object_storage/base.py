@@ -28,40 +28,20 @@ CONF = config.CONF
 class BaseObjectTest(tempest.test.BaseTestCase):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         cls.set_network_resources()
-        super(BaseObjectTest, cls).setUpClass()
+        super(BaseObjectTest, cls).resource_setup()
         if not CONF.service_available.swift:
             skip_msg = ("%s skipped as swift is not available" % cls.__name__)
             raise cls.skipException(skip_msg)
         cls.isolated_creds = isolated_creds.IsolatedCreds(
             cls.__name__, network_resources=cls.network_resources)
-        if CONF.compute.allow_tenant_isolation:
-            # Get isolated creds for normal user
-            creds = cls.isolated_creds.get_primary_creds()
-            username, tenant_name, password = creds
-            cls.os = clients.Manager(username=username,
-                                     password=password,
-                                     tenant_name=tenant_name)
-            # Get isolated creds for admin user
-            admin_creds = cls.isolated_creds.get_admin_creds()
-            admin_username, admin_tenant_name, admin_password = admin_creds
-            cls.os_admin = clients.Manager(username=admin_username,
-                                           password=admin_password,
-                                           tenant_name=admin_tenant_name)
-            # Get isolated creds for alt user
-            alt_creds = cls.isolated_creds.get_alt_creds()
-            alt_username, alt_tenant, alt_password = alt_creds
-            cls.os_alt = clients.Manager(username=alt_username,
-                                         password=alt_password,
-                                         tenant_name=alt_tenant)
-            # Add isolated users to operator role so that they can create a
-            # container in swift.
-            cls._assign_member_role()
-        else:
-            cls.os = clients.Manager()
-            cls.os_admin = clients.AdminManager()
-            cls.os_alt = clients.AltManager()
+        # Get isolated creds for normal user
+        cls.os = clients.Manager(cls.isolated_creds.get_primary_creds())
+        # Get isolated creds for admin user
+        cls.os_admin = clients.Manager(cls.isolated_creds.get_admin_creds())
+        # Get isolated creds for alt user
+        cls.os_alt = clients.Manager(cls.isolated_creds.get_alt_creds())
 
         cls.object_client = cls.os.object_client
         cls.container_client = cls.os.container_client
@@ -83,28 +63,13 @@ class BaseObjectTest(tempest.test.BaseTestCase):
         cls.object_client_alt.auth_provider.clear_auth()
         cls.container_client_alt.auth_provider.clear_auth()
 
-        cls.data = base.DataGenerator(cls.identity_admin_client)
+        cls.data = SwiftDataGenerator(cls.identity_admin_client)
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
+        cls.data.teardown_all()
         cls.isolated_creds.clear_isolated_creds()
-        super(BaseObjectTest, cls).tearDownClass()
-
-    @classmethod
-    def _assign_member_role(cls):
-        primary_user = cls.isolated_creds.get_primary_user()
-        alt_user = cls.isolated_creds.get_alt_user()
-        swift_role = CONF.object_storage.operator_role
-        try:
-            resp, roles = cls.os_admin.identity_client.list_roles()
-            role = next(r for r in roles if r['name'] == swift_role)
-        except StopIteration:
-            msg = "No role named %s found" % swift_role
-            raise exceptions.NotFound(msg)
-        for user in [primary_user, alt_user]:
-            cls.os_admin.identity_client.assign_user_role(user['tenantId'],
-                                                          user['id'],
-                                                          role['id'])
+        super(BaseObjectTest, cls).resource_cleanup()
 
     @classmethod
     def delete_containers(cls, containers, container_client=None,
@@ -146,3 +111,28 @@ class BaseObjectTest(tempest.test.BaseTestCase):
         self.assertThat(resp, custom_matchers.ExistsAllResponseHeaders(
                         target, method))
         self.assertThat(resp, custom_matchers.AreAllWellFormatted())
+
+
+class SwiftDataGenerator(base.DataGenerator):
+
+    def setup_test_user(self, reseller=False):
+        super(SwiftDataGenerator, self).setup_test_user()
+        if reseller:
+            role_name = CONF.object_storage.reseller_admin_role
+        else:
+            role_name = CONF.object_storage.operator_role
+        role_id = self._get_role_id(role_name)
+        self._assign_role(role_id)
+
+    def _get_role_id(self, role_name):
+        try:
+            _, roles = self.client.list_roles()
+            return next(r['id'] for r in roles if r['name'] == role_name)
+        except StopIteration:
+            msg = "Role name '%s' is not found" % role_name
+            raise exceptions.NotFound(msg)
+
+    def _assign_role(self, role_id):
+        self.client.assign_user_role(self.tenant['id'],
+                                     self.user['id'],
+                                     role_id)

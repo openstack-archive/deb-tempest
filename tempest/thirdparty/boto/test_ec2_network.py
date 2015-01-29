@@ -20,13 +20,12 @@ from tempest.thirdparty.boto import test as boto_test
 class EC2NetworkTest(boto_test.BotoTestCase):
 
     @classmethod
-    def setUpClass(cls):
-        super(EC2NetworkTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(EC2NetworkTest, cls).resource_setup()
         cls.client = cls.os.ec2api_client
 
     # Note(afazekas): these tests for things duable without an instance
     @test.skip_because(bug="1080406")
-    @test.attr(type='smoke')
     def test_disassociate_not_associated_floating_ip(self):
         # EC2 disassociate not associated floating ip
         ec2_codes = self.ec2_error_code

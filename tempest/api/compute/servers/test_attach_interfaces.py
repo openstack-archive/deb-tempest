@@ -26,12 +26,14 @@ CONF = config.CONF
 class AttachInterfacesTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         if not CONF.service_available.neutron:
             raise cls.skipException("Neutron is required")
+        if not CONF.compute_feature_enabled.interface_attach:
+            raise cls.skipException("Interface attachment is not available.")
         # This test class requires network and subnet
         cls.set_network_resources(network=True, subnet=True)
-        super(AttachInterfacesTestJSON, cls).setUpClass()
+        super(AttachInterfacesTestJSON, cls).resource_setup()
         cls.client = cls.os.interfaces_client
 
     def _check_interface(self, iface, port_id=None, network_id=None,
@@ -107,6 +109,7 @@ class AttachInterfacesTestJSON(base.BaseV2ComputeTest):
         self.assertEqual(sorted(list1), sorted(list2))
 
     @test.attr(type='smoke')
+    @test.services('network')
     def test_create_list_show_delete_interfaces(self):
         server, ifs = self._create_server_get_interfaces()
         interface_count = len(ifs)
@@ -128,6 +131,7 @@ class AttachInterfacesTestJSON(base.BaseV2ComputeTest):
         self.assertEqual(len(ifs) - 1, len(_ifs))
 
     @test.attr(type='smoke')
+    @test.services('network')
     def test_add_remove_fixed_ip(self):
         # Add and Remove the fixed IP to server.
         server, ifs = self._create_server_get_interfaces()

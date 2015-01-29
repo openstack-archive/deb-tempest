@@ -23,15 +23,14 @@ class QuotasAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
     force_tenant_isolation = True
 
     @classmethod
-    def setUpClass(cls):
-        super(QuotasAdminNegativeV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(QuotasAdminNegativeV3Test, cls).resource_setup()
         cls.client = cls.quotas_client
         cls.adm_client = cls.quotas_admin_client
 
         # NOTE(afazekas): these test cases should always create and use a new
         # tenant most of them should be skipped if we can't do that
-        cls.demo_tenant_id = cls.isolated_creds.get_primary_user().get(
-            'tenantId')
+        cls.demo_tenant_id = cls.isolated_creds.get_primary_creds().tenant_id
 
     # TODO(afazekas): Add dedicated tenant to the skiped quota tests
     # it can be moved into the setUpClass as well
@@ -48,7 +47,8 @@ class QuotasAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
 
         self.addCleanup(self.adm_client.update_quota_set, self.demo_tenant_id,
                         cores=default_vcpu_quota)
-        self.assertRaises(exceptions.OverLimit, self.create_test_server)
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+                          self.create_test_server)
 
     @test.attr(type=['negative', 'gate'])
     def test_create_server_when_memory_quota_is_full(self):
@@ -63,7 +63,8 @@ class QuotasAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
 
         self.addCleanup(self.adm_client.update_quota_set, self.demo_tenant_id,
                         ram=default_mem_quota)
-        self.assertRaises(exceptions.OverLimit, self.create_test_server)
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+                          self.create_test_server)
 
     @test.attr(type=['negative', 'gate'])
     def test_update_quota_normal_user(self):
@@ -84,4 +85,5 @@ class QuotasAdminNegativeV3Test(base.BaseV3ComputeAdminTest):
                                          instances=instances_quota)
         self.addCleanup(self.adm_client.update_quota_set, self.demo_tenant_id,
                         instances=default_instances_quota)
-        self.assertRaises(exceptions.OverLimit, self.create_test_server)
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+                          self.create_test_server)

@@ -318,6 +318,7 @@ class ServersClientXML(rest_client.RestClient):
         min_count: Count of minimum number of instances to launch.
         max_count: Count of maximum number of instances to launch.
         disk_config: Determines if user or admin controls disk configuration.
+        block_device_mapping: Block device mapping for the server.
         """
         server = xml_utils.Element("server",
                                    xmlns=xml_utils.XMLNS_11,
@@ -327,7 +328,8 @@ class ServersClientXML(rest_client.RestClient):
 
         for attr in ["adminPass", "accessIPv4", "accessIPv6", "key_name",
                      "user_data", "availability_zone", "min_count",
-                     "max_count", "return_reservation_id"]:
+                     "max_count", "return_reservation_id",
+                     "block_device_mapping"]:
             if attr in kwargs:
                 server.add_attr(attr, kwargs[attr])
 
@@ -347,8 +349,11 @@ class ServersClientXML(rest_client.RestClient):
             networks = xml_utils.Element("networks")
             server.append(networks)
             for network in kwargs['networks']:
-                s = xml_utils.Element("network", uuid=network['uuid'],
-                                      fixed_ip=network['fixed_ip'])
+                if 'fixed_ip' in network:
+                    s = xml_utils.Element("network", uuid=network['uuid'],
+                                          fixed_ip=network['fixed_ip'])
+                else:
+                    s = xml_utils.Element("network", uuid=network['uuid'])
                 networks.append(s)
 
         if 'meta' in kwargs:
@@ -592,8 +597,9 @@ class ServersClientXML(rest_client.RestClient):
         return resp, body
 
     def get_console_output(self, server_id, length):
+        kwargs = {'length': length} if length else {}
         return self.action(server_id, 'os-getConsoleOutput', 'output',
-                           length=length)
+                           **kwargs)
 
     def list_virtual_interfaces(self, server_id):
         """

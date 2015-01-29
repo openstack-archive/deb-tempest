@@ -24,11 +24,17 @@ CONF = config.CONF
 class ImagesNegativeTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(ImagesNegativeTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(ImagesNegativeTestJSON, cls).resource_setup()
         if not CONF.service_available.glance:
             skip_msg = ("%s skipped as glance is not available" % cls.__name__)
             raise cls.skipException(skip_msg)
+
+        if not CONF.compute_feature_enabled.snapshot:
+            skip_msg = ("%s skipped as instance snapshotting is not supported"
+                        % cls.__name__)
+            raise cls.skipException(skip_msg)
+
         cls.client = cls.images_client
         cls.servers_client = cls.servers_client
 
@@ -40,7 +46,7 @@ class ImagesNegativeTestJSON(base.BaseV2ComputeTest):
         # Delete server before trying to create server
         self.servers_client.delete_server(server['id'])
         self.servers_client.wait_for_server_termination(server['id'])
-       # Create a new image after server is deleted
+        # Create a new image after server is deleted
         name = data_utils.rand_name('image')
         meta = {'image_type': 'test'}
         self.assertRaises(exceptions.NotFound,

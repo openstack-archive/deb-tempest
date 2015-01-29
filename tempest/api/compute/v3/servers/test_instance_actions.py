@@ -20,14 +20,13 @@ from tempest import test
 class InstanceActionsV3Test(base.BaseV3ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(InstanceActionsV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(InstanceActionsV3Test, cls).resource_setup()
         cls.client = cls.servers_client
         resp, server = cls.create_test_server(wait_until='ACTIVE')
         cls.resp = resp
         cls.server_id = server['id']
 
-    @test.skip_because(bug="1206032")
     @test.attr(type='gate')
     def test_list_server_actions(self):
         # List actions of the provided server
@@ -40,12 +39,10 @@ class InstanceActionsV3Test(base.BaseV3ComputeTest):
         self.assertTrue(any([i for i in body if i['action'] == 'create']))
         self.assertTrue(any([i for i in body if i['action'] == 'reboot']))
 
-    @test.skip_because(bug="1206032")
     @test.attr(type='gate')
-    @test.skip_because(bug="1281915")
     def test_get_server_action(self):
         # Get the action details of the provided server
-        request_id = self.resp['x-compute-request-id']
+        request_id = self.resp['x-openstack-request-id']
         resp, body = self.client.get_server_action(self.server_id,
                                                    request_id)
         self.assertEqual(200, resp.status)

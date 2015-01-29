@@ -25,18 +25,20 @@ class BaseDatabaseTest(tempest.test.BaseTestCase):
     """Base test case class for all Database API tests."""
 
     _interface = 'json'
-    force_tenant_isolation = False
 
     @classmethod
-    def setUpClass(cls):
-        super(BaseDatabaseTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(BaseDatabaseTest, cls).resource_setup()
         if not CONF.service_available.trove:
             skip_msg = ("%s skipped as trove is not available" % cls.__name__)
             raise cls.skipException(skip_msg)
 
         cls.catalog_type = CONF.database.catalog_type
         cls.db_flavor_ref = CONF.database.db_flavor_ref
+        cls.db_current_version = CONF.database.db_current_version
 
         os = cls.get_client_manager()
         cls.os = os
         cls.database_flavors_client = cls.os.database_flavors_client
+        cls.os_flavors_client = cls.os.flavors_client
+        cls.database_versions_client = cls.os.database_versions_client

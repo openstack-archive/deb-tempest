@@ -16,6 +16,7 @@
 import uuid
 
 from tempest.api.compute import base
+from tempest.api_schema.request.compute.v2 import flavors
 from tempest.common.utils import data_utils
 from tempest import exceptions
 from tempest import test
@@ -30,10 +31,10 @@ class FlavorsAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(FlavorsAdminNegativeTestJSON, cls).setUpClass()
-        if not test.is_extension_enabled('FlavorExtraData', 'compute'):
-            msg = "FlavorExtraData extension not enabled."
+    def resource_setup(cls):
+        super(FlavorsAdminNegativeTestJSON, cls).resource_setup()
+        if not test.is_extension_enabled('OS-FLV-EXT-DATA', 'compute'):
+            msg = "OS-FLV-EXT-DATA extension not enabled."
             raise cls.skipException(msg)
 
         cls.client = cls.os_adm.flavors_client
@@ -106,4 +107,4 @@ class FlavorCreateNegativeTestJSON(base.BaseV2ComputeAdminTest,
                                    test.NegativeAutoTest):
     _interface = 'json'
     _service = 'compute'
-    _schema_file = 'compute/admin/flavor_create.json'
+    _schema = flavors.flavor_create

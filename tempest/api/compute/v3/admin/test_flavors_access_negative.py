@@ -29,17 +29,11 @@ class FlavorsAccessNegativeV3Test(base.BaseV3ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(FlavorsAccessNegativeV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(FlavorsAccessNegativeV3Test, cls).resource_setup()
 
         cls.client = cls.flavors_admin_client
-        admin_client = cls._get_identity_admin_client()
-        cls.tenant = admin_client.get_tenant_by_name(cls.flavors_client.
-                                                     tenant_name)
-        cls.tenant_id = cls.tenant['id']
-        cls.adm_tenant = admin_client.get_tenant_by_name(
-            cls.flavors_admin_client.tenant_name)
-        cls.adm_tenant_id = cls.adm_tenant['id']
+        cls.tenant_id = cls.client.tenant_id
         cls.flavor_name_prefix = 'test_flavor_access_'
         cls.ram = 512
         cls.vcpus = 1
@@ -61,7 +55,6 @@ class FlavorsAccessNegativeV3Test(base.BaseV3ComputeAdminTest):
                           self.client.list_flavor_access,
                           new_flavor_id)
 
-    @test.skip_because(bug='1265416')
     @test.attr(type=['negative', 'gate'])
     def test_flavor_non_admin_add(self):
         # Test to add flavor access as a user without admin privileges.
@@ -78,7 +71,6 @@ class FlavorsAccessNegativeV3Test(base.BaseV3ComputeAdminTest):
                           new_flavor['id'],
                           self.tenant_id)
 
-    @test.skip_because(bug='1265416')
     @test.attr(type=['negative', 'gate'])
     def test_flavor_non_admin_remove(self):
         # Test to remove flavor access as a user without admin privileges.
@@ -99,7 +91,6 @@ class FlavorsAccessNegativeV3Test(base.BaseV3ComputeAdminTest):
                           new_flavor['id'],
                           self.tenant_id)
 
-    @test.skip_because(bug='1265416')
     @test.attr(type=['negative', 'gate'])
     def test_add_flavor_access_duplicate(self):
         # Create a new flavor.
@@ -124,7 +115,6 @@ class FlavorsAccessNegativeV3Test(base.BaseV3ComputeAdminTest):
                           new_flavor['id'],
                           self.tenant_id)
 
-    @test.skip_because(bug='1265416')
     @test.attr(type=['negative', 'gate'])
     def test_remove_flavor_access_not_found(self):
         # Create a new flavor.

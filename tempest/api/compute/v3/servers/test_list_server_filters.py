@@ -26,10 +26,9 @@ CONF = config.CONF
 class ListServerFiltersV3Test(base.BaseV3ComputeTest):
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
+    def resource_setup(cls):
         cls.set_network_resources(network=True, subnet=True, dhcp=True)
-        super(ListServerFiltersV3Test, cls).setUpClass()
+        super(ListServerFiltersV3Test, cls).resource_setup()
         cls.client = cls.servers_client
 
         # Check to see if the alternate image ref actually exists...
@@ -71,12 +70,11 @@ class ListServerFiltersV3Test(base.BaseV3ComputeTest):
                                               flavor=cls.flavor_ref_alt,
                                               wait_until='ACTIVE')
 
-        if (CONF.service_available.neutron and
-                CONF.compute.allow_tenant_isolation):
-            network = cls.isolated_creds.get_primary_network()
-            cls.fixed_network_name = network['name']
-        else:
-            cls.fixed_network_name = CONF.compute.fixed_network_name
+        cls.fixed_network_name = CONF.compute.fixed_network_name
+        if CONF.service_available.neutron:
+            if hasattr(cls.isolated_creds, 'get_primary_network'):
+                network = cls.isolated_creds.get_primary_network()
+                cls.fixed_network_name = network['name']
 
     @utils.skip_unless_attr('multiple_images', 'Only one image found')
     @test.attr(type='gate')

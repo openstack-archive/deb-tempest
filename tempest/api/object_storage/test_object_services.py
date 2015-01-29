@@ -13,11 +13,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import cStringIO as StringIO
 import hashlib
 import random
 import re
-from six import moves
 import time
+import zlib
+
+import six
 
 from tempest.api.object_storage import base
 from tempest.common import custom_matchers
@@ -27,16 +30,16 @@ from tempest import test
 
 class ObjectTest(base.BaseObjectTest):
     @classmethod
-    def setUpClass(cls):
-        super(ObjectTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(ObjectTest, cls).resource_setup()
         cls.container_name = data_utils.rand_name(name='TestContainer')
         cls.container_client.create_container(cls.container_name)
         cls.containers = [cls.container_name]
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         cls.delete_containers(cls.containers)
-        super(ObjectTest, cls).tearDownClass()
+        super(ObjectTest, cls).resource_cleanup()
 
     def _create_object(self, metadata=None):
         # setup object
@@ -52,16 +55,37 @@ class ObjectTest(base.BaseObjectTest):
         object_name = data_utils.rand_name(name='LObject')
         data = data_utils.arbitrary_string()
         segments = 10
-        data_segments = [data + str(i) for i in moves.xrange(segments)]
+        data_segments = [data + str(i) for i in six.moves.xrange(segments)]
         # uploading segments
-        for i in moves.xrange(segments):
+        for i in six.moves.xrange(segments):
             resp, _ = self.object_client.create_object_segments(
                 self.container_name, object_name, i, data_segments[i])
             self.assertEqual(resp['status'], '201')
 
         return object_name, data_segments
 
-    @test.attr(type='smoke')
+    def _copy_object_2d(self, src_object_name, metadata=None):
+        dst_object_name = data_utils.rand_name(name='TestObject')
+        resp, _ = self.object_client.copy_object_2d_way(self.container_name,
+                                                        src_object_name,
+                                                        dst_object_name,
+                                                        metadata=metadata)
+        return dst_object_name, resp
+
+    def _check_copied_obj(self, dst_object_name, src_body,
+                          in_meta=None, not_in_meta=None):
+        resp, dest_body = self.object_client.get_object(self.container_name,
+                                                        dst_object_name)
+
+        self.assertEqual(src_body, dest_body)
+        if in_meta:
+            for meta_key in in_meta:
+                self.assertIn('x-object-meta-' + meta_key, resp)
+        if not_in_meta:
+            for meta_key in not_in_meta:
+                self.assertNotIn('x-object-meta-' + meta_key, resp)
+
+    @test.attr(type='gate')
     def test_create_object(self):
         # create object
         object_name = data_utils.rand_name(name='TestObject')
@@ -76,7 +100,242 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
-    @test.attr(type='smoke')
+        # check uploaded content
+        _, body = self.object_client.get_object(self.container_name,
+                                                object_name)
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_content_disposition(self):
+        # create object with content_disposition
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        metadata = {}
+        metadata['content-disposition'] = 'inline'
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        resp, body = self.object_client.get_object(
+            self.container_name,
+            object_name,
+            metadata=None)
+        self.assertIn('content-disposition', resp)
+        self.assertEqual(resp['content-disposition'], 'inline')
+        self.assertEqual(body, data)
+
+    @test.attr(type='gate')
+    def test_create_object_with_content_encoding(self):
+        # create object with content_encoding
+        object_name = data_utils.rand_name(name='TestObject')
+
+        # put compressed string
+        data_before = 'x' * 2000
+        data = zlib.compress(data_before)
+        metadata = {}
+        metadata['content-encoding'] = 'deflate'
+
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        # download compressed object
+        metadata = {}
+        metadata['accept-encoding'] = 'deflate'
+        resp, body = self.object_client.get_object(
+            self.container_name,
+            object_name,
+            metadata=metadata)
+        self.assertEqual(body, data_before)
+
+    @test.attr(type='gate')
+    def test_create_object_with_etag(self):
+        # create object with etag
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        md5 = hashlib.md5(data).hexdigest()
+        metadata = {'Etag': md5}
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        # check uploaded content
+        _, body = self.object_client.get_object(self.container_name,
+                                                object_name)
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_expect_continue(self):
+        # create object with expect_continue
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        metadata = {'Expect': '100-continue'}
+        resp = self.custom_object_client.create_object_continue(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata)
+
+        self.assertIn('status', resp)
+        self.assertEqual(resp['status'], '100')
+
+        self.custom_object_client.create_object_continue(
+            self.container_name,
+            object_name,
+            data,
+            metadata=None)
+
+        # check uploaded content
+        _, body = self.object_client.get_object(self.container_name,
+                                                object_name)
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_transfer_encoding(self):
+        # create object with transfer_encoding
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string(1024)
+        status, _, resp_headers = self.object_client.put_object_with_chunk(
+            container=self.container_name,
+            name=object_name,
+            contents=StringIO.StringIO(data),
+            chunk_size=512)
+        self.assertEqual(status, 201)
+        self.assertHeaders(resp_headers, 'Object', 'PUT')
+
+        # check uploaded content
+        _, body = self.object_client.get_object(self.container_name,
+                                                object_name)
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_x_fresh_metadata(self):
+        # create object with x_fresh_metadata
+        object_name_base = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        metadata_1 = {'X-Object-Meta-test-meta': 'Meta'}
+        self.object_client.create_object(self.container_name,
+                                         object_name_base,
+                                         data,
+                                         metadata=metadata_1)
+        object_name = data_utils.rand_name(name='TestObject')
+        metadata_2 = {'X-Copy-From': '%s/%s' % (self.container_name,
+                                                object_name_base),
+                      'X-Fresh-Metadata': 'true'}
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            '',
+            metadata=metadata_2)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        resp, body = self.object_client.get_object(self.container_name,
+                                                   object_name)
+        self.assertNotIn('x-object-meta-test-meta', resp)
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_x_object_meta(self):
+        # create object with object_meta
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        metadata = {'X-Object-Meta-test-meta': 'Meta'}
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        resp, body = self.object_client.get_object(self.container_name,
+                                                   object_name)
+        self.assertIn('x-object-meta-test-meta', resp)
+        self.assertEqual(resp['x-object-meta-test-meta'], 'Meta')
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_x_object_metakey(self):
+        # create object with the blank value of metadata
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        metadata = {'X-Object-Meta-test-meta': ''}
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        resp, body = self.object_client.get_object(self.container_name,
+                                                   object_name)
+        self.assertIn('x-object-meta-test-meta', resp)
+        self.assertEqual(resp['x-object-meta-test-meta'], '')
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_x_remove_object_meta(self):
+        # create object with x_remove_object_meta
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        metadata_add = {'X-Object-Meta-test-meta': 'Meta'}
+        self.object_client.create_object(self.container_name,
+                                         object_name,
+                                         data,
+                                         metadata=metadata_add)
+        metadata_remove = {'X-Remove-Object-Meta-test-meta': 'Meta'}
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata_remove)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        resp, body = self.object_client.get_object(self.container_name,
+                                                   object_name)
+        self.assertNotIn('x-object-meta-test-meta', resp)
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
+    def test_create_object_with_x_remove_object_metakey(self):
+        # create object with the blank value of remove metadata
+        object_name = data_utils.rand_name(name='TestObject')
+        data = data_utils.arbitrary_string()
+        metadata_add = {'X-Object-Meta-test-meta': 'Meta'}
+        self.object_client.create_object(self.container_name,
+                                         object_name,
+                                         data,
+                                         metadata=metadata_add)
+        metadata_remove = {'X-Remove-Object-Meta-test-meta': ''}
+        resp, _ = self.object_client.create_object(
+            self.container_name,
+            object_name,
+            data,
+            metadata=metadata_remove)
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'PUT')
+
+        resp, body = self.object_client.get_object(self.container_name,
+                                                   object_name)
+        self.assertNotIn('x-object-meta-test-meta', resp)
+        self.assertEqual(data, body)
+
+    @test.attr(type='gate')
     def test_delete_object(self):
         # create object
         object_name = data_utils.rand_name(name='TestObject')
@@ -528,10 +787,7 @@ class ObjectTest(base.BaseObjectTest):
         # change the content type of an existing object
 
         # create object
-        object_name = data_utils.rand_name(name='TestObject')
-        data = data_utils.arbitrary_string()
-        self.object_client.create_object(self.container_name,
-                                         object_name, data)
+        object_name, data = self._create_object()
         # get the old content type
         resp_tmp, _ = self.object_client.list_object_metadata(
             self.container_name, object_name)
@@ -568,20 +824,12 @@ class ObjectTest(base.BaseObjectTest):
                                                         dst_object_name)
         self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'COPY')
-
-        self.assertIn('last-modified', resp)
-        self.assertIn('x-copied-from', resp)
-        self.assertIn('x-copied-from-last-modified', resp)
-        self.assertNotEqual(len(resp['last-modified']), 0)
         self.assertEqual(
             resp['x-copied-from'],
             self.container_name + "/" + src_object_name)
-        self.assertNotEqual(len(resp['x-copied-from-last-modified']), 0)
 
         # check data
-        resp, body = self.object_client.get_object(self.container_name,
-                                                   dst_object_name)
-        self.assertEqual(body, src_data)
+        self._check_copied_obj(dst_object_name, src_data)
 
     @test.attr(type='smoke')
     def test_copy_object_across_containers(self):
@@ -625,15 +873,82 @@ class ObjectTest(base.BaseObjectTest):
         self.assertIn(actual_meta_key, resp)
         self.assertEqual(resp[actual_meta_key], meta_value)
 
+    @test.attr(type='smoke')
+    def test_copy_object_with_x_fresh_metadata(self):
+        # create source object
+        metadata = {'x-object-meta-src': 'src_value'}
+        src_object_name, data = self._create_object(metadata)
+
+        # copy source object with x_fresh_metadata header
+        metadata = {'X-Fresh-Metadata': 'true'}
+        dst_object_name, resp = self._copy_object_2d(src_object_name,
+                                                     metadata)
+
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'COPY')
+
+        self.assertNotIn('x-object-meta-src', resp)
+        self.assertEqual(resp['x-copied-from'],
+                         self.container_name + "/" + src_object_name)
+
+        # check that destination object does NOT have any object-meta
+        self._check_copied_obj(dst_object_name, data, not_in_meta=["src"])
+
+    @test.attr(type='smoke')
+    def test_copy_object_with_x_object_metakey(self):
+        # create source object
+        metadata = {'x-object-meta-src': 'src_value'}
+        src_obj_name, data = self._create_object(metadata)
+
+        # copy source object to destination with x-object-meta-key
+        metadata = {'x-object-meta-test': ''}
+        dst_obj_name, resp = self._copy_object_2d(src_obj_name, metadata)
+
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'COPY')
+
+        expected = {'x-object-meta-test': '',
+                    'x-object-meta-src': 'src_value',
+                    'x-copied-from': self.container_name + "/" + src_obj_name}
+        for key, value in six.iteritems(expected):
+            self.assertIn(key, resp)
+            self.assertEqual(value, resp[key])
+
+        # check destination object
+        self._check_copied_obj(dst_obj_name, data, in_meta=["test", "src"])
+
+    @test.attr(type='smoke')
+    def test_copy_object_with_x_object_meta(self):
+        # create source object
+        metadata = {'x-object-meta-src': 'src_value'}
+        src_obj_name, data = self._create_object(metadata)
+
+        # copy source object to destination with object metadata
+        metadata = {'x-object-meta-test': 'value'}
+        dst_obj_name, resp = self._copy_object_2d(src_obj_name, metadata)
+
+        self.assertEqual(resp['status'], '201')
+        self.assertHeaders(resp, 'Object', 'COPY')
+
+        expected = {'x-object-meta-test': 'value',
+                    'x-object-meta-src': 'src_value',
+                    'x-copied-from': self.container_name + "/" + src_obj_name}
+        for key, value in six.iteritems(expected):
+            self.assertIn(key, resp)
+            self.assertEqual(value, resp[key])
+
+        # check destination object
+        self._check_copied_obj(dst_obj_name, data, in_meta=["test", "src"])
+
     @test.attr(type='gate')
     def test_object_upload_in_segments(self):
         # create object
         object_name = data_utils.rand_name(name='LObject')
         data = data_utils.arbitrary_string()
         segments = 10
-        data_segments = [data + str(i) for i in moves.xrange(segments)]
+        data_segments = [data + str(i) for i in six.moves.xrange(segments)]
         # uploading segments
-        for i in moves.xrange(segments):
+        for i in six.moves.xrange(segments):
             resp, _ = self.object_client.create_object_segments(
                 self.container_name, object_name, i, data_segments[i])
             self.assertEqual(resp['status'], '201')

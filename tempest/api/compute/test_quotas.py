@@ -14,22 +14,23 @@
 #    under the License.
 
 from tempest.api.compute import base
+from tempest.common import tempest_fixtures as fixtures
 from tempest import test
 
 
 class QuotasTestJSON(base.BaseV2ComputeTest):
 
+    def setUp(self):
+        # NOTE(mriedem): Avoid conflicts with os-quota-class-sets tests.
+        self.useFixture(fixtures.LockFixture('compute_quotas'))
+        super(QuotasTestJSON, self).setUp()
+
     @classmethod
-    def setUpClass(cls):
-        super(QuotasTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(QuotasTestJSON, cls).resource_setup()
         cls.client = cls.quotas_client
-        cls.admin_client = cls._get_identity_admin_client()
-        resp, tenants = cls.admin_client.list_tenants()
-        cls.tenant_id = [tnt['id'] for tnt in tenants if tnt['name'] ==
-                         cls.client.tenant_name][0]
-        resp, users = cls.admin_client.list_users_for_tenant(cls.tenant_id)
-        cls.user_id = [user['id'] for user in users if user['name'] ==
-                       cls.client.user][0]
+        cls.tenant_id = cls.client.tenant_id
+        cls.user_id = cls.client.user_id
         cls.default_quota_set = set(('injected_file_content_bytes',
                                      'metadata_items', 'injected_files',
                                      'ram', 'floating_ips',
@@ -44,17 +45,17 @@ class QuotasTestJSON(base.BaseV2ComputeTest):
         expected_quota_set = self.default_quota_set | set(['id'])
         resp, quota_set = self.client.get_quota_set(self.tenant_id)
         self.assertEqual(200, resp.status)
-        self.assertEqual(sorted(expected_quota_set),
-                         sorted(quota_set.keys()))
         self.assertEqual(quota_set['id'], self.tenant_id)
+        for quota in expected_quota_set:
+            self.assertIn(quota, quota_set.keys())
 
         # get the quota set using user id
         resp, quota_set = self.client.get_quota_set(self.tenant_id,
                                                     self.user_id)
         self.assertEqual(200, resp.status)
-        self.assertEqual(sorted(expected_quota_set),
-                         sorted(quota_set.keys()))
         self.assertEqual(quota_set['id'], self.tenant_id)
+        for quota in expected_quota_set:
+            self.assertIn(quota, quota_set.keys())
 
     @test.attr(type='smoke')
     def test_get_default_quotas(self):
@@ -62,9 +63,9 @@ class QuotasTestJSON(base.BaseV2ComputeTest):
         expected_quota_set = self.default_quota_set | set(['id'])
         resp, quota_set = self.client.get_default_quota_set(self.tenant_id)
         self.assertEqual(200, resp.status)
-        self.assertEqual(sorted(expected_quota_set),
-                         sorted(quota_set.keys()))
         self.assertEqual(quota_set['id'], self.tenant_id)
+        for quota in expected_quota_set:
+            self.assertIn(quota, quota_set.keys())
 
     @test.attr(type='smoke')
     def test_compare_tenant_quotas_with_default_quotas(self):

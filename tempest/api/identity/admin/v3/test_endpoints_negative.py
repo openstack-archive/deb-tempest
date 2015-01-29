@@ -18,48 +18,48 @@
 from tempest.api.identity import base
 from tempest.common.utils import data_utils
 from tempest import exceptions
-from tempest.test import attr
+from tempest import test
 
 
 class EndpointsNegativeTestJSON(base.BaseIdentityV3AdminTest):
     _interface = 'json'
 
     @classmethod
-    def setUpClass(cls):
-        super(EndpointsNegativeTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(EndpointsNegativeTestJSON, cls).resource_setup()
         cls.identity_client = cls.client
         cls.client = cls.endpoints_client
         cls.service_ids = list()
         s_name = data_utils.rand_name('service-')
         s_type = data_utils.rand_name('type--')
         s_description = data_utils.rand_name('description-')
-        resp, cls.service_data = (
+        _, cls.service_data = (
             cls.service_client.create_service(s_name, s_type,
                                               description=s_description))
         cls.service_id = cls.service_data['id']
         cls.service_ids.append(cls.service_id)
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         for s in cls.service_ids:
             cls.service_client.delete_service(s)
-        super(EndpointsNegativeTestJSON, cls).tearDownClass()
+        super(EndpointsNegativeTestJSON, cls).resource_cleanup()
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_create_with_enabled_False(self):
         # Enabled should be a boolean, not a string like 'False'
         interface = 'public'
-        url = data_utils.rand_name('url')
+        url = data_utils.rand_url()
         region = data_utils.rand_name('region')
         self.assertRaises(exceptions.BadRequest, self.client.create_endpoint,
                           self.service_id, interface, url, region=region,
                           force_enabled='False')
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_create_with_enabled_True(self):
         # Enabled should be a boolean, not a string like 'True'
         interface = 'public'
-        url = data_utils.rand_name('url')
+        url = data_utils.rand_url()
         region = data_utils.rand_name('region')
         self.assertRaises(exceptions.BadRequest, self.client.create_endpoint,
                           self.service_id, interface, url, region=region,
@@ -69,7 +69,7 @@ class EndpointsNegativeTestJSON(base.BaseIdentityV3AdminTest):
 
         # Create an endpoint
         region1 = data_utils.rand_name('region')
-        url1 = data_utils.rand_name('url')
+        url1 = data_utils.rand_url()
         interface1 = 'public'
         resp, endpoint_for_update = (
             self.client.create_endpoint(self.service_id, interface1,
@@ -79,12 +79,12 @@ class EndpointsNegativeTestJSON(base.BaseIdentityV3AdminTest):
         self.assertRaises(exceptions.BadRequest, self.client.update_endpoint,
                           endpoint_for_update['id'], force_enabled=enabled)
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_update_with_enabled_False(self):
         # Enabled should be a boolean, not a string like 'False'
         self._assert_update_raises_bad_request('False')
 
-    @attr(type=['negative', 'gate'])
+    @test.attr(type=['negative', 'gate'])
     def test_update_with_enabled_True(self):
         # Enabled should be a boolean, not a string like 'True'
         self._assert_update_raises_bad_request('True')

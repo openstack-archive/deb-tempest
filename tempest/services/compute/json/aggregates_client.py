@@ -15,7 +15,8 @@
 
 import json
 
-from tempest.api_schema.compute import aggregates as schema
+from tempest.api_schema.response.compute import aggregates as schema
+from tempest.api_schema.response.compute.v2 import aggregates as v2_schema
 from tempest.common import rest_client
 from tempest import config
 from tempest import exceptions
@@ -49,6 +50,7 @@ class AggregatesClientJSON(rest_client.RestClient):
         resp, body = self.post('os-aggregates', post_body)
 
         body = json.loads(body)
+        self.validate_response(v2_schema.create_aggregate, resp, body)
         return resp, body['aggregate']
 
     def update_aggregate(self, aggregate_id, name, availability_zone=None):
@@ -66,7 +68,9 @@ class AggregatesClientJSON(rest_client.RestClient):
 
     def delete_aggregate(self, aggregate_id):
         """Deletes the given aggregate."""
-        return self.delete("os-aggregates/%s" % str(aggregate_id))
+        resp, body = self.delete("os-aggregates/%s" % str(aggregate_id))
+        self.validate_response(v2_schema.delete_aggregate, resp, body)
+        return resp, body
 
     def is_resource_deleted(self, id):
         try:
@@ -74,6 +78,11 @@ class AggregatesClientJSON(rest_client.RestClient):
         except exceptions.NotFound:
             return True
         return False
+
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'aggregate'
 
     def add_host(self, aggregate_id, host):
         """Adds a host to the given aggregate."""
@@ -84,6 +93,7 @@ class AggregatesClientJSON(rest_client.RestClient):
         resp, body = self.post('os-aggregates/%s/action' % aggregate_id,
                                post_body)
         body = json.loads(body)
+        self.validate_response(schema.aggregate_add_remove_host, resp, body)
         return resp, body['aggregate']
 
     def remove_host(self, aggregate_id, host):
@@ -95,6 +105,7 @@ class AggregatesClientJSON(rest_client.RestClient):
         resp, body = self.post('os-aggregates/%s/action' % aggregate_id,
                                post_body)
         body = json.loads(body)
+        self.validate_response(schema.aggregate_add_remove_host, resp, body)
         return resp, body['aggregate']
 
     def set_metadata(self, aggregate_id, meta):

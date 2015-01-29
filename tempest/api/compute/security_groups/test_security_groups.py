@@ -22,43 +22,47 @@ from tempest import test
 class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(SecurityGroupsTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(SecurityGroupsTestJSON, cls).resource_setup()
         cls.client = cls.security_groups_client
 
     @test.attr(type='smoke')
+    @test.services('network')
     def test_security_groups_create_list_delete(self):
         # Positive test:Should return the list of Security Groups
         # Create 3 Security Groups
+        security_group_list = []
         for i in range(3):
-            resp, securitygroup = self.create_security_group()
+            resp, body = self.create_security_group()
             self.assertEqual(200, resp.status)
+            security_group_list.append(body)
         # Fetch all Security Groups and verify the list
         # has all created Security Groups
         resp, fetched_list = self.client.list_security_groups()
         self.assertEqual(200, resp.status)
         # Now check if all the created Security Groups are in fetched list
         missing_sgs = \
-            [sg for sg in self.security_groups if sg not in fetched_list]
+            [sg for sg in security_group_list if sg not in fetched_list]
         self.assertFalse(missing_sgs,
                          "Failed to find Security Group %s in fetched "
                          "list" % ', '.join(m_group['name']
                                             for m_group in missing_sgs))
         # Delete all security groups
-        for sg in self.security_groups:
+        for sg in security_group_list:
             resp, _ = self.client.delete_security_group(sg['id'])
             self.assertEqual(202, resp.status)
             self.client.wait_for_resource_deletion(sg['id'])
         # Now check if all the created Security Groups are deleted
         resp, fetched_list = self.client.list_security_groups()
         deleted_sgs = \
-            [sg for sg in self.security_groups if sg in fetched_list]
+            [sg for sg in security_group_list if sg in fetched_list]
         self.assertFalse(deleted_sgs,
                          "Failed to delete Security Group %s "
                          "list" % ', '.join(m_group['name']
                                             for m_group in deleted_sgs))
 
     @test.attr(type='smoke')
+    @test.services('network')
     def test_security_group_create_get_delete(self):
         # Security Group should be created, fetched and deleted
         # with char space between name along with
@@ -78,8 +82,12 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
         self.assertEqual(securitygroup, fetched_group,
                          "The fetched Security Group is different "
                          "from the created Group")
+        resp, _ = self.client.delete_security_group(securitygroup['id'])
+        self.assertEqual(202, resp.status)
+        self.client.wait_for_resource_deletion(securitygroup['id'])
 
     @test.attr(type='smoke')
+    @test.services('network')
     def test_server_security_groups(self):
         # Checks that security groups may be added and linked to a server
         # and not deleted if the server is active.
@@ -120,12 +128,13 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
         self.servers_client.delete_server(server_id)
         self.servers_client.wait_for_server_termination(server_id)
 
-        self.client.delete_security_group(sg['id'])
+        resp, _ = self.client.delete_security_group(sg['id'])
         self.assertEqual(202, resp.status)
-        self.client.delete_security_group(sg2['id'])
+        resp, _ = self.client.delete_security_group(sg2['id'])
         self.assertEqual(202, resp.status)
 
     @test.attr(type='smoke')
+    @test.services('network')
     def test_update_security_groups(self):
         # Update security group name and description
         # Create a security group

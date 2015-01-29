@@ -25,16 +25,15 @@ class QuotasAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
     force_tenant_isolation = True
 
     @classmethod
-    def setUpClass(cls):
-        super(QuotasAdminNegativeTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(QuotasAdminNegativeTestJSON, cls).resource_setup()
         cls.client = cls.os.quotas_client
         cls.adm_client = cls.os_adm.quotas_client
         cls.sg_client = cls.security_groups_client
 
         # NOTE(afazekas): these test cases should always create and use a new
         # tenant most of them should be skipped if we can't do that
-        cls.demo_tenant_id = cls.isolated_creds.get_primary_user().get(
-            'tenantId')
+        cls.demo_tenant_id = cls.client.tenant_id
 
     @test.attr(type=['negative', 'gate'])
     def test_update_quota_normal_user(self):
@@ -58,7 +57,8 @@ class QuotasAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
 
         self.addCleanup(self.adm_client.update_quota_set, self.demo_tenant_id,
                         cores=default_vcpu_quota)
-        self.assertRaises(exceptions.OverLimit, self.create_test_server)
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+                          self.create_test_server)
 
     @test.attr(type=['negative', 'gate'])
     def test_create_server_when_memory_quota_is_full(self):
@@ -73,7 +73,8 @@ class QuotasAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
 
         self.addCleanup(self.adm_client.update_quota_set, self.demo_tenant_id,
                         ram=default_mem_quota)
-        self.assertRaises(exceptions.OverLimit, self.create_test_server)
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+                          self.create_test_server)
 
     @test.attr(type=['negative', 'gate'])
     def test_create_server_when_instances_quota_is_full(self):
@@ -87,11 +88,13 @@ class QuotasAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
                                          instances=instances_quota)
         self.addCleanup(self.adm_client.update_quota_set, self.demo_tenant_id,
                         instances=default_instances_quota)
-        self.assertRaises(exceptions.OverLimit, self.create_test_server)
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+                          self.create_test_server)
 
     @test.skip_because(bug="1186354",
                        condition=CONF.service_available.neutron)
     @test.attr(type='gate')
+    @test.services('network')
     def test_security_groups_exceed_limit(self):
         # Negative test: Creation Security Groups over limit should FAIL
 
@@ -109,13 +112,16 @@ class QuotasAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
                         security_groups=default_sg_quota)
 
         # Check we cannot create anymore
-        self.assertRaises(exceptions.OverLimit,
+        # A 403 Forbidden or 413 Overlimit (old behaviour) exception
+        # will be raised when out of quota
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
                           self.sg_client.create_security_group,
                           "sg-overlimit", "sg-desc")
 
     @test.skip_because(bug="1186354",
                        condition=CONF.service_available.neutron)
     @test.attr(type=['negative', 'gate'])
+    @test.services('network')
     def test_security_groups_rules_exceed_limit(self):
         # Negative test: Creation of Security Group Rules should FAIL
         # when we reach limit maxSecurityGroupRules
@@ -145,7 +151,9 @@ class QuotasAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
         ip_protocol = 'tcp'
 
         # Check we cannot create SG rule anymore
-        self.assertRaises(exceptions.OverLimit,
+        # A 403 Forbidden or 413 Overlimit (old behaviour) exception
+        # will be raised when out of quota
+        self.assertRaises((exceptions.OverLimit, exceptions.Unauthorized),
                           self.sg_client.create_security_group_rule,
                           secgroup_id, ip_protocol, 1025, 1025)
 

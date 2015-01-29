@@ -15,6 +15,7 @@
 #    under the License.
 
 from tempest.api.volume import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 QUOTA_KEYS = ['gigabytes', 'snapshots', 'volumes']
@@ -26,38 +27,35 @@ class VolumeQuotasAdminTestJSON(base.BaseVolumeV1AdminTest):
     force_tenant_isolation = True
 
     @classmethod
-    def setUpClass(cls):
-        super(VolumeQuotasAdminTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(VolumeQuotasAdminTestJSON, cls).resource_setup()
         cls.admin_volume_client = cls.os_adm.volumes_client
-        cls.demo_tenant_id = cls.isolated_creds.get_primary_user().get(
-            'tenantId')
+        cls.demo_tenant_id = cls.isolated_creds.get_primary_creds().tenant_id
 
     @test.attr(type='gate')
     def test_list_quotas(self):
-        resp, quotas = self.quotas_client.get_quota_set(self.demo_tenant_id)
-        self.assertEqual(200, resp.status)
+        _, quotas = self.quotas_client.get_quota_set(self.demo_tenant_id)
         for key in QUOTA_KEYS:
             self.assertIn(key, quotas)
 
     @test.attr(type='gate')
     def test_list_default_quotas(self):
-        resp, quotas = self.quotas_client.get_default_quota_set(
+        _, quotas = self.quotas_client.get_default_quota_set(
             self.demo_tenant_id)
-        self.assertEqual(200, resp.status)
         for key in QUOTA_KEYS:
             self.assertIn(key, quotas)
 
     @test.attr(type='gate')
     def test_update_all_quota_resources_for_tenant(self):
         # Admin can update all the resource quota limits for a tenant
-        resp, default_quota_set = self.quotas_client.get_default_quota_set(
+        _, default_quota_set = self.quotas_client.get_default_quota_set(
             self.demo_tenant_id)
         new_quota_set = {'gigabytes': 1009,
                          'volumes': 11,
                          'snapshots': 11}
 
         # Update limits for all quota resources
-        resp, quota_set = self.quotas_client.update_quota_set(
+        _, quota_set = self.quotas_client.update_quota_set(
             self.demo_tenant_id,
             **new_quota_set)
 
@@ -66,7 +64,6 @@ class VolumeQuotasAdminTestJSON(base.BaseVolumeV1AdminTest):
             if k in QUOTA_KEYS)
         self.addCleanup(self.quotas_client.update_quota_set,
                         self.demo_tenant_id, **cleanup_quota_set)
-        self.assertEqual(200, resp.status)
         # test that the specific values we set are actually in
         # the final result. There is nothing here that ensures there
         # would be no other values in there.
@@ -74,8 +71,8 @@ class VolumeQuotasAdminTestJSON(base.BaseVolumeV1AdminTest):
 
     @test.attr(type='gate')
     def test_show_quota_usage(self):
-        resp, quota_usage = self.quotas_client.get_quota_usage(self.adm_tenant)
-        self.assertEqual(200, resp.status)
+        _, quota_usage = self.quotas_client.get_quota_usage(
+            self.os_adm.credentials.tenant_name)
         for key in QUOTA_KEYS:
             self.assertIn(key, quota_usage)
             for usage_key in QUOTA_USAGE_KEYS:
@@ -83,22 +80,40 @@ class VolumeQuotasAdminTestJSON(base.BaseVolumeV1AdminTest):
 
     @test.attr(type='gate')
     def test_quota_usage(self):
-        resp, quota_usage = self.quotas_client.get_quota_usage(
+        _, quota_usage = self.quotas_client.get_quota_usage(
             self.demo_tenant_id)
 
         volume = self.create_volume(size=1)
         self.addCleanup(self.admin_volume_client.delete_volume,
                         volume['id'])
 
-        resp, new_quota_usage = self.quotas_client.get_quota_usage(
+        _, new_quota_usage = self.quotas_client.get_quota_usage(
             self.demo_tenant_id)
 
-        self.assertEqual(200, resp.status)
         self.assertEqual(quota_usage['volumes']['in_use'] + 1,
                          new_quota_usage['volumes']['in_use'])
 
         self.assertEqual(quota_usage['gigabytes']['in_use'] + 1,
                          new_quota_usage['gigabytes']['in_use'])
+
+    @test.attr(type='gate')
+    def test_delete_quota(self):
+        # Admin can delete the resource quota set for a tenant
+        tenant_name = data_utils.rand_name('quota_tenant_')
+        identity_client = self.os_adm.identity_client
+        tenant = identity_client.create_tenant(tenant_name)[1]
+        tenant_id = tenant['id']
+        self.addCleanup(identity_client.delete_tenant, tenant_id)
+        _, quota_set_default = self.quotas_client.get_default_quota_set(
+            tenant_id)
+        volume_default = quota_set_default['volumes']
+
+        self.quotas_client.update_quota_set(tenant_id,
+                                            volumes=(int(volume_default) + 5))
+
+        self.quotas_client.delete_quota_set(tenant_id)
+        _, quota_set_new = self.quotas_client.get_quota_set(tenant_id)
+        self.assertEqual(volume_default, quota_set_new['volumes'])
 
 
 class VolumeQuotasAdminTestXML(VolumeQuotasAdminTestJSON):

@@ -27,9 +27,9 @@ class BaremetalClientV1(base.BaremetalClient):
         self.uri_prefix = 'v%s' % self.version
 
     @base.handle_errors
-    def list_nodes(self):
+    def list_nodes(self, **kwargs):
         """List all existing nodes."""
-        return self._list_request('nodes')
+        return self._list_request('nodes', **kwargs)
 
     @base.handle_errors
     def list_chassis(self):
@@ -37,9 +37,19 @@ class BaremetalClientV1(base.BaremetalClient):
         return self._list_request('chassis')
 
     @base.handle_errors
+    def list_chassis_nodes(self, chassis_uuid):
+        """List all nodes associated with a chassis."""
+        return self._list_request('/chassis/%s/nodes' % chassis_uuid)
+
+    @base.handle_errors
     def list_ports(self, **kwargs):
         """List all existing ports."""
         return self._list_request('ports', **kwargs)
+
+    @base.handle_errors
+    def list_node_ports(self, uuid):
+        """List all ports associated with the node."""
+        return self._list_request('/nodes/%s/ports' % uuid)
 
     @base.handle_errors
     def list_nodestates(self, uuid):
@@ -47,9 +57,9 @@ class BaremetalClientV1(base.BaremetalClient):
         return self._list_request('/nodes/%s/states' % uuid)
 
     @base.handle_errors
-    def list_ports_detail(self):
+    def list_ports_detail(self, **kwargs):
         """Details list all existing ports."""
-        return self._list_request('/ports/detail')
+        return self._list_request('/ports/detail', **kwargs)
 
     @base.handle_errors
     def list_drivers(self):
@@ -66,6 +76,21 @@ class BaremetalClientV1(base.BaremetalClient):
 
         """
         return self._show_request('nodes', uuid)
+
+    @base.handle_errors
+    def show_node_by_instance_uuid(self, instance_uuid):
+        """
+        Gets a node associated with given instance uuid.
+
+        :param uuid: Unique identifier of the node in UUID format.
+        :return: Serialized node as a dictionary.
+
+        """
+        uri = '/nodes/detail?instance_uuid=%s' % instance_uuid
+
+        return self._show_request('nodes',
+                                  uuid=None,
+                                  uri=uri)
 
     @base.handle_errors
     def show_chassis(self, uuid):
@@ -88,6 +113,15 @@ class BaremetalClientV1(base.BaremetalClient):
 
         """
         return self._show_request('ports', uuid)
+
+    def show_driver(self, driver_name):
+        """
+        Gets a specific driver.
+
+        :param driver_name: Name of driver.
+        :return: Serialized driver as a dictionary.
+        """
+        return self._show_request('drivers', driver_name)
 
     @base.handle_errors
     def create_node(self, chassis_id, **kwargs):
@@ -194,7 +228,8 @@ class BaremetalClientV1(base.BaremetalClient):
                            'properties/cpu_num',
                            'properties/storage',
                            'properties/memory',
-                           'driver')
+                           'driver',
+                           'instance_uuid')
 
         patch = self._make_patch(node_attributes, **kwargs)
 
@@ -226,3 +261,106 @@ class BaremetalClientV1(base.BaremetalClient):
         """
 
         return self._patch_request('ports', uuid, patch)
+
+    @base.handle_errors
+    def set_node_power_state(self, node_uuid, state):
+        """
+        Set power state of the specified node.
+
+        :param node_uuid: The unique identifier of the node.
+        :state: desired state to set (on/off/reboot).
+
+        """
+        target = {'target': state}
+        return self._put_request('nodes/%s/states/power' % node_uuid,
+                                 target)
+
+    @base.handle_errors
+    def validate_driver_interface(self, node_uuid):
+        """
+        Get all driver interfaces of a specific node.
+
+        :param uuid: Unique identifier of the node in UUID format.
+
+        """
+
+        uri = '{pref}/{res}/{uuid}/{postf}'.format(pref=self.uri_prefix,
+                                                   res='nodes',
+                                                   uuid=node_uuid,
+                                                   postf='validate')
+
+        return self._show_request('nodes', node_uuid, uri=uri)
+
+    @base.handle_errors
+    def set_node_boot_device(self, node_uuid, boot_device, persistent=False):
+        """
+        Set the boot device of the specified node.
+
+        :param node_uuid: The unique identifier of the node.
+        :param boot_device: The boot device name.
+        :param persistent: Boolean value. True if the boot device will
+                           persist to all future boots, False if not.
+                           Default: False.
+
+        """
+        request = {'boot_device': boot_device, 'persistent': persistent}
+        resp, body = self._put_request('nodes/%s/management/boot_device' %
+                                       node_uuid, request)
+        self.expected_success(204, resp.status)
+        return body
+
+    @base.handle_errors
+    def get_node_boot_device(self, node_uuid):
+        """
+        Get the current boot device of the specified node.
+
+        :param node_uuid: The unique identifier of the node.
+
+        """
+        path = 'nodes/%s/management/boot_device' % node_uuid
+        resp, body = self._list_request(path)
+        self.expected_success(200, resp.status)
+        return body
+
+    @base.handle_errors
+    def get_node_supported_boot_devices(self, node_uuid):
+        """
+        Get the supported boot devices of the specified node.
+
+        :param node_uuid: The unique identifier of the node.
+
+        """
+        path = 'nodes/%s/management/boot_device/supported' % node_uuid
+        resp, body = self._list_request(path)
+        self.expected_success(200, resp.status)
+        return body
+
+    @base.handle_errors
+    def get_console(self, node_uuid):
+        """
+        Get connection information about the console.
+
+        :param node_uuid: Unique identifier of the node in UUID format.
+
+        """
+
+        resp, body = self._show_request('nodes/states/console', node_uuid)
+        self.expected_success(200, resp.status)
+        return resp, body
+
+    @base.handle_errors
+    def set_console_mode(self, node_uuid, enabled):
+        """
+        Start and stop the node console.
+
+        :param node_uuid: Unique identifier of the node in UUID format.
+        :param enabled: Boolean value; whether to enable or disable the
+                        console.
+
+        """
+
+        enabled = {'enabled': enabled}
+        resp, body = self._put_request('nodes/%s/states/console' % node_uuid,
+                                       enabled)
+        self.expected_success(202, resp.status)
+        return resp, body

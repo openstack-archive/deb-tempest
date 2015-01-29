@@ -34,6 +34,11 @@ def rand_name(name=''):
         return randbits
 
 
+def rand_url():
+    randbits = str(random.randint(1, 0x7fffffff))
+    return 'https://url-' + randbits + '.com'
+
+
 def rand_int_id(start=0, end=0x7fffffff):
     return random.randint(start, end)
 
@@ -66,3 +71,11 @@ def arbitrary_string(size=4, base_text=None):
     if not base_text:
         base_text = 'test'
     return ''.join(itertools.islice(itertools.cycle(base_text), size))
+
+
+def random_bytes(size=1024):
+    """
+    Return size randomly selected bytes as a string.
+    """
+    return ''.join([chr(random.randint(0, 255))
+                    for i in range(size)])

@@ -14,8 +14,9 @@
 #    under the License.
 
 import abc
-import six
 import urllib
+
+import six
 
 from tempest import config
 
@@ -73,7 +74,10 @@ class TelemetryClientBase(object):
         return resp, body
 
     def put(self, uri, body):
-        return self.rest_client.put(uri, body)
+        body = self.serialize(body)
+        resp, body = self.rest_client.put(uri, body)
+        body = self.deserialize(body)
+        return resp, body
 
     def get(self, uri):
         resp, body = self.rest_client.get(uri)
@@ -98,17 +102,17 @@ class TelemetryClientBase(object):
             uri += "?%s" % urllib.urlencode(uri_dict)
         return self.get(uri)
 
-    def list_resources(self):
+    def list_resources(self, query=None):
         uri = '%s/resources' % self.uri_prefix
-        return self.get(uri)
+        return self.helper_list(uri, query)
 
-    def list_meters(self):
+    def list_meters(self, query=None):
         uri = '%s/meters' % self.uri_prefix
-        return self.get(uri)
+        return self.helper_list(uri, query)
 
-    def list_alarms(self):
+    def list_alarms(self, query=None):
         uri = '%s/alarms' % self.uri_prefix
-        return self.get(uri)
+        return self.helper_list(uri, query)
 
     def list_statistics(self, meter, period=None, query=None):
         uri = "%s/meters/%s/statistics" % (self.uri_prefix, meter)
@@ -133,3 +137,15 @@ class TelemetryClientBase(object):
     def create_alarm(self, **kwargs):
         uri = "%s/alarms" % self.uri_prefix
         return self.post(uri, kwargs)
+
+    def update_alarm(self, alarm_id, **kwargs):
+        uri = "%s/alarms/%s" % (self.uri_prefix, alarm_id)
+        return self.put(uri, kwargs)
+
+    def alarm_get_state(self, alarm_id):
+        uri = "%s/alarms/%s/state" % (self.uri_prefix, alarm_id)
+        return self.get(uri)
+
+    def alarm_set_state(self, alarm_id, state):
+        uri = "%s/alarms/%s/state" % (self.uri_prefix, alarm_id)
+        return self.put(uri, state)

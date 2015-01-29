@@ -21,8 +21,8 @@ from tempest import test
 class AbsoluteLimitsNegativeTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(AbsoluteLimitsNegativeTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(AbsoluteLimitsNegativeTestJSON, cls).resource_setup()
         cls.client = cls.limits_client
         cls.server_client = cls.servers_client
 
@@ -39,7 +39,9 @@ class AbsoluteLimitsNegativeTestJSON(base.BaseV2ComputeTest):
         for xx in range(max_meta_data):
             meta_data[str(xx)] = str(xx)
 
-        self.assertRaises(exceptions.OverLimit,
+        # A 403 Forbidden or 413 Overlimit (old behaviour) exception
+        # will be raised when out of quota
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
                           self.server_client.create_server,
                           name='test', meta=meta_data,
                           flavor_ref=self.flavor_ref,

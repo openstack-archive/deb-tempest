@@ -27,9 +27,8 @@ class VolumesBackupsTest(base.BaseVolumeV1AdminTest):
     _interface = "json"
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
-        super(VolumesBackupsTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(VolumesBackupsTest, cls).resource_setup()
 
         if not CONF.volume_feature_enabled.backup:
             raise cls.skipException("Cinder backup feature disabled")
@@ -43,9 +42,8 @@ class VolumesBackupsTest(base.BaseVolumeV1AdminTest):
         # Create backup
         backup_name = data_utils.rand_name('Backup')
         create_backup = self.backups_adm_client.create_backup
-        resp, backup = create_backup(self.volume['id'],
-                                     name=backup_name)
-        self.assertEqual(202, resp.status)
+        _, backup = create_backup(self.volume['id'],
+                                  name=backup_name)
         self.addCleanup(self.backups_adm_client.delete_backup,
                         backup['id'])
         self.assertEqual(backup_name, backup['name'])
@@ -55,19 +53,16 @@ class VolumesBackupsTest(base.BaseVolumeV1AdminTest):
                                                        'available')
 
         # Get a given backup
-        resp, backup = self.backups_adm_client.get_backup(backup['id'])
-        self.assertEqual(200, resp.status)
+        _, backup = self.backups_adm_client.get_backup(backup['id'])
         self.assertEqual(backup_name, backup['name'])
 
         # Get all backups with detail
-        resp, backups = self.backups_adm_client.list_backups_with_detail()
-        self.assertEqual(200, resp.status)
+        _, backups = self.backups_adm_client.list_backups_with_detail()
         self.assertIn((backup['name'], backup['id']),
                       [(m['name'], m['id']) for m in backups])
 
         # Restore backup
-        resp, restore = self.backups_adm_client.restore_backup(backup['id'])
-        self.assertEqual(202, resp.status)
+        _, restore = self.backups_adm_client.restore_backup(backup['id'])
 
         # Delete backup
         self.addCleanup(self.volumes_adm_client.delete_volume,

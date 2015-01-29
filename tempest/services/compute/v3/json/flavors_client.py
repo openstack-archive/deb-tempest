@@ -16,11 +16,11 @@
 import json
 import urllib
 
-from tempest.api_schema.compute import flavors as common_schema
-from tempest.api_schema.compute import flavors_access as schema_access
-from tempest.api_schema.compute import flavors_extra_specs \
+from tempest.api_schema.response.compute import flavors as common_schema
+from tempest.api_schema.response.compute import flavors_access as schema_access
+from tempest.api_schema.response.compute import flavors_extra_specs \
     as schema_extra_specs
-from tempest.api_schema.compute.v3 import flavors as v3schema
+from tempest.api_schema.response.compute.v3 import flavors as v3schema
 from tempest.common import rest_client
 from tempest import config
 
@@ -56,6 +56,7 @@ class FlavorsV3ClientJSON(rest_client.RestClient):
     def get_flavor_details(self, flavor_id):
         resp, body = self.get("flavors/%s" % str(flavor_id))
         body = json.loads(body)
+        self.validate_response(v3schema.get_flavor_details, resp, body)
         return resp, body['flavor']
 
     def create_flavor(self, name, ram, vcpus, disk, flavor_id, **kwargs):
@@ -79,11 +80,14 @@ class FlavorsV3ClientJSON(rest_client.RestClient):
         resp, body = self.post('flavors', post_body)
 
         body = json.loads(body)
+        self.validate_response(v3schema.create_flavor_details, resp, body)
         return resp, body['flavor']
 
     def delete_flavor(self, flavor_id):
         """Deletes the given flavor."""
-        return self.delete("flavors/%s" % str(flavor_id))
+        resp, body = self.delete("flavors/{0}".format(flavor_id))
+        self.validate_response(v3schema.delete_flavor, resp, body)
+        return resp, body
 
     def is_resource_deleted(self, id):
         # Did not use get_flavor_details(id) for verification as it gives
@@ -94,6 +98,11 @@ class FlavorsV3ClientJSON(rest_client.RestClient):
             if flavor['id'] == id:
                 return False
         return True
+
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'flavor'
 
     def set_flavor_extra_spec(self, flavor_id, specs):
         """Sets extra Specs to the mentioned flavor."""

@@ -30,10 +30,8 @@ class FloatingStress(stressaction.StressAction):
         proc = subprocess.Popen(cmd,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
-        proc.wait()
+        proc.communicate()
         success = proc.returncode == 0
-        self.logger.info("%s(%s): %s", self.server_id, self.floating['ip'],
-                         "pong!" if success else "no pong :(")
         return success
 
     def tcp_connect_scan(self, addr, port):
@@ -58,11 +56,17 @@ class FloatingStress(stressaction.StressAction):
             raise RuntimeError("Cannot connect to the ssh port.")
 
     def check_icmp_echo(self):
+        self.logger.info("%s(%s): Pinging..",
+                         self.server_id, self.floating['ip'])
+
         def func():
             return self.ping_ip_address(self.floating['ip'])
         if not tempest.test.call_until_true(func, self.check_timeout,
                                             self.check_interval):
-            raise RuntimeError("Cannot ping the machine.")
+            raise RuntimeError("%s(%s): Cannot ping the machine.",
+                               self.server_id, self.floating['ip'])
+        self.logger.info("%s(%s): pong :)",
+                         self.server_id, self.floating['ip'])
 
     def _create_vm(self):
         self.name = name = data_utils.rand_name("instance")
@@ -70,19 +74,17 @@ class FloatingStress(stressaction.StressAction):
         self.logger.info("creating %s" % name)
         vm_args = self.vm_extra_args.copy()
         vm_args['security_groups'] = [self.sec_grp]
-        resp, server = servers_client.create_server(name, self.image,
-                                                    self.flavor,
-                                                    **vm_args)
+        _, server = servers_client.create_server(name, self.image,
+                                                 self.flavor,
+                                                 **vm_args)
         self.server_id = server['id']
-        assert(resp.status == 202)
         if self.wait_after_vm_create:
             self.manager.servers_client.wait_for_server_status(self.server_id,
                                                                'ACTIVE')
 
     def _destroy_vm(self):
         self.logger.info("deleting %s" % self.server_id)
-        resp, _ = self.manager.servers_client.delete_server(self.server_id)
-        assert(resp.status == 204)  # It cannot be 204 if I had to wait..
+        self.manager.servers_client.delete_server(self.server_id)
         self.manager.servers_client.wait_for_server_termination(self.server_id)
         self.logger.info("deleted %s" % self.server_id)
 
@@ -170,6 +172,8 @@ class FloatingStress(stressaction.StressAction):
             self._create_vm()
         if self.reboot:
             self.manager.servers_client.reboot(self.server_id, 'HARD')
+            self.manager.servers_client.wait_for_server_status(self.server_id,
+                                                               'ACTIVE')
 
         self.run_core()
 

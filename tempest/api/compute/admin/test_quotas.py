@@ -13,23 +13,34 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import six
+from testtools import matchers
+
 from tempest.api.compute import base
+from tempest.common import tempest_fixtures as fixtures
 from tempest.common.utils import data_utils
+from tempest.openstack.common import log as logging
 from tempest import test
+
+LOG = logging.getLogger(__name__)
 
 
 class QuotasAdminTestJSON(base.BaseV2ComputeAdminTest):
     force_tenant_isolation = True
 
+    def setUp(self):
+        # NOTE(mriedem): Avoid conflicts with os-quota-class-sets tests.
+        self.useFixture(fixtures.LockFixture('compute_quotas'))
+        super(QuotasAdminTestJSON, self).setUp()
+
     @classmethod
-    def setUpClass(cls):
-        super(QuotasAdminTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(QuotasAdminTestJSON, cls).resource_setup()
         cls.adm_client = cls.os_adm.quotas_client
 
         # NOTE(afazekas): these test cases should always create and use a new
         # tenant most of them should be skipped if we can't do that
-        cls.demo_tenant_id = cls.isolated_creds.get_primary_user().get(
-            'tenantId')
+        cls.demo_tenant_id = cls.quotas_client.tenant_id
 
         cls.default_quota_set = set(('injected_file_content_bytes',
                                      'metadata_items', 'injected_files',
@@ -46,9 +57,9 @@ class QuotasAdminTestJSON(base.BaseV2ComputeAdminTest):
         resp, quota_set = self.adm_client.get_default_quota_set(
             self.demo_tenant_id)
         self.assertEqual(200, resp.status)
-        self.assertEqual(sorted(expected_quota_set),
-                         sorted(quota_set.keys()))
         self.assertEqual(quota_set['id'], self.demo_tenant_id)
+        for quota in expected_quota_set:
+            self.assertIn(quota, quota_set.keys())
 
     @test.attr(type='gate')
     def test_update_all_quota_resources_for_tenant(self):
@@ -68,10 +79,18 @@ class QuotasAdminTestJSON(base.BaseV2ComputeAdminTest):
             **new_quota_set)
 
         default_quota_set.pop('id')
+        # NOTE(PhilDay) The following is safe as we're not updating these
+        # two quota values yet.  Once the Nova change to add these is merged
+        # and the client updated to support them this can be removed
+        if 'server_groups' in default_quota_set:
+            default_quota_set.pop('server_groups')
+        if 'server_group_members' in default_quota_set:
+            default_quota_set.pop('server_group_members')
         self.addCleanup(self.adm_client.update_quota_set,
                         self.demo_tenant_id, **default_quota_set)
         self.assertEqual(200, resp.status)
-        self.assertEqual(new_quota_set, quota_set)
+        for quota in new_quota_set:
+            self.assertIn(quota, quota_set.keys())
 
     # TODO(afazekas): merge these test cases
     @test.attr(type='gate')
@@ -134,4 +153,56 @@ class QuotasAdminTestJSON(base.BaseV2ComputeAdminTest):
 
 
 class QuotasAdminTestXML(QuotasAdminTestJSON):
+    _interface = 'xml'
+
+
+class QuotaClassesAdminTestJSON(base.BaseV2ComputeAdminTest):
+    """Tests the os-quota-class-sets API to update default quotas.
+    """
+
+    def setUp(self):
+        # All test cases in this class need to externally lock on doing
+        # anything with default quota values.
+        self.useFixture(fixtures.LockFixture('compute_quotas'))
+        super(QuotaClassesAdminTestJSON, self).setUp()
+
+    @classmethod
+    def resource_setup(cls):
+        super(QuotaClassesAdminTestJSON, cls).resource_setup()
+        cls.adm_client = cls.os_adm.quota_classes_client
+
+    def _restore_default_quotas(self, original_defaults):
+        LOG.debug("restoring quota class defaults")
+        resp, body = self.adm_client.update_quota_class_set(
+            'default', **original_defaults)
+        self.assertEqual(200, resp.status)
+
+    # NOTE(sdague): this test is problematic as it changes
+    # global state, and possibly needs to be part of a set of
+    # tests that get run all by themselves at the end under a
+    # 'danger' flag.
+    def test_update_default_quotas(self):
+        LOG.debug("get the current 'default' quota class values")
+        resp, body = self.adm_client.get_quota_class_set('default')
+        self.assertEqual(200, resp.status)
+        self.assertIn('id', body)
+        self.assertEqual('default', body.pop('id'))
+        # restore the defaults when the test is done
+        self.addCleanup(self._restore_default_quotas, body.copy())
+        # increment all of the values for updating the default quota class
+        for quota, default in six.iteritems(body):
+            # NOTE(sdague): we need to increment a lot, otherwise
+            # there is a real chance that we go from -1 (unlimitted)
+            # to a very small number which causes issues.
+            body[quota] = default + 100
+        LOG.debug("update limits for the default quota class set")
+        resp, update_body = self.adm_client.update_quota_class_set('default',
+                                                                   **body)
+        self.assertEqual(200, resp.status)
+        LOG.debug("assert that the response has all of the changed values")
+        self.assertThat(update_body.items(),
+                        matchers.ContainsAll(body.items()))
+
+
+class QuotaClassesAdminTestXML(QuotaClassesAdminTestJSON):
     _interface = 'xml'

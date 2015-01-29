@@ -24,7 +24,7 @@ from tempest import test
 CONF = config.CONF
 
 
-class TestDashboardBasicOps(manager.OfficialClientTest):
+class TestDashboardBasicOps(manager.ScenarioTest):
 
     """
     This is a basic scenario test:
@@ -34,9 +34,9 @@ class TestDashboardBasicOps(manager.OfficialClientTest):
     """
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         cls.set_network_resources()
-        super(TestDashboardBasicOps, cls).setUpClass()
+        super(TestDashboardBasicOps, cls).resource_setup()
 
         if not CONF.service_available.horizon:
             raise cls.skipException("Horizon support is required")

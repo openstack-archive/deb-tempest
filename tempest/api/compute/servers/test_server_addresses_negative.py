@@ -21,20 +21,22 @@ from tempest import test
 class ServerAddressesNegativeTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         cls.set_network_resources(network=True, subnet=True)
-        super(ServerAddressesNegativeTestJSON, cls).setUpClass()
+        super(ServerAddressesNegativeTestJSON, cls).resource_setup()
         cls.client = cls.servers_client
 
         resp, cls.server = cls.create_test_server(wait_until='ACTIVE')
 
     @test.attr(type=['negative', 'gate'])
+    @test.services('network')
     def test_list_server_addresses_invalid_server_id(self):
         # List addresses request should fail if server id not in system
         self.assertRaises(exceptions.NotFound, self.client.list_addresses,
                           '999')
 
     @test.attr(type=['negative', 'gate'])
+    @test.services('network')
     def test_list_server_addresses_by_network_neg(self):
         # List addresses by network should fail if network name not valid
         self.assertRaises(exceptions.NotFound,

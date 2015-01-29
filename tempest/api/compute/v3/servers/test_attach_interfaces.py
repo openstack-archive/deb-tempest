@@ -16,7 +16,7 @@
 from tempest.api.compute import base
 from tempest import config
 from tempest import exceptions
-from tempest.test import attr
+from tempest import test
 
 import time
 
@@ -26,12 +26,14 @@ CONF = config.CONF
 class AttachInterfacesV3Test(base.BaseV3ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         if not CONF.service_available.neutron:
             raise cls.skipException("Neutron is required")
+        if not CONF.compute_feature_enabled.interface_attach:
+            raise cls.skipException("Interface attachment is not available.")
         # This test class requires network and subnet
         cls.set_network_resources(network=True, subnet=True)
-        super(AttachInterfacesV3Test, cls).setUpClass()
+        super(AttachInterfacesV3Test, cls).resource_setup()
         cls.client = cls.interfaces_client
 
     def _check_interface(self, iface, port_id=None, network_id=None,
@@ -106,7 +108,7 @@ class AttachInterfacesV3Test(base.BaseV3ComputeTest):
 
         self.assertEqual(sorted(list1), sorted(list2))
 
-    @attr(type='smoke')
+    @test.attr(type='smoke')
     def test_create_list_show_delete_interfaces(self):
         server, ifs = self._create_server_get_interfaces()
         interface_count = len(ifs)
@@ -127,7 +129,7 @@ class AttachInterfacesV3Test(base.BaseV3ComputeTest):
         _ifs = self._test_delete_interface(server, ifs)
         self.assertEqual(len(ifs) - 1, len(_ifs))
 
-    @attr(type='smoke')
+    @test.attr(type='smoke')
     def test_add_remove_fixed_ip(self):
         # Add and Remove the fixed IP to server.
         server, ifs = self._create_server_get_interfaces()

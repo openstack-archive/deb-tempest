@@ -13,6 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import StringIO
+
 from tempest.api.compute import base
 from tempest import clients
 from tempest.common.utils import data_utils
@@ -27,29 +29,24 @@ LOG = logging.getLogger(__name__)
 
 
 class AuthorizationTestJSON(base.BaseV2ComputeTest):
-
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
+        if not CONF.service_available.glance:
+            raise cls.skipException('Glance is not available.')
         # No network resources required for this test
         cls.set_network_resources()
-        super(AuthorizationTestJSON, cls).setUpClass()
+        super(AuthorizationTestJSON, cls).resource_setup()
         if not cls.multi_user:
             msg = "Need >1 user"
             raise cls.skipException(msg)
         cls.client = cls.os.servers_client
         cls.images_client = cls.os.images_client
+        cls.glance_client = cls.os.image_client
         cls.keypairs_client = cls.os.keypairs_client
         cls.security_client = cls.os.security_groups_client
 
-        if CONF.compute.allow_tenant_isolation:
-            creds = cls.isolated_creds.get_alt_creds()
-            username, tenant_name, password = creds
-            cls.alt_manager = clients.Manager(username=username,
-                                              password=password,
-                                              tenant_name=tenant_name)
-        else:
-            # Use the alt_XXX credentials in the config file
-            cls.alt_manager = clients.AltManager()
+        creds = cls.isolated_creds.get_alt_creds()
+        cls.alt_manager = clients.Manager(credentials=creds)
 
         cls.alt_client = cls.alt_manager.servers_client
         cls.alt_images_client = cls.alt_manager.images_client
@@ -60,9 +57,14 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
         resp, cls.server = cls.client.get_server(server['id'])
 
         name = data_utils.rand_name('image')
-        resp, body = cls.images_client.create_image(server['id'], name)
-        image_id = data_utils.parse_image_id(resp['location'])
-        cls.images_client.wait_for_image_status(image_id, 'ACTIVE')
+        resp, body = cls.glance_client.create_image(name=name,
+                                                    container_format='bare',
+                                                    disk_format='raw',
+                                                    is_public=False)
+        image_id = body['id']
+        image_file = StringIO.StringIO(('*' * 1024))
+        resp, body = cls.glance_client.update_image(image_id, data=image_file)
+        cls.glance_client.wait_for_image_status(image_id, 'active')
         resp, cls.image = cls.images_client.get_image(image_id)
 
         cls.keypairname = data_utils.rand_name('keypair')
@@ -82,12 +84,12 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
             parent_group_id, ip_protocol, from_port, to_port)
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         if cls.multi_user:
             cls.images_client.delete_image(cls.image['id'])
             cls.keypairs_client.delete_keypair(cls.keypairname)
             cls.security_client.delete_security_group(cls.security_group['id'])
-        super(AuthorizationTestJSON, cls).tearDownClass()
+        super(AuthorizationTestJSON, cls).resource_cleanup()
 
     @test.attr(type='gate')
     def test_get_server_for_alt_account_fails(self):

@@ -25,47 +25,70 @@ CONF = config.CONF
 LOG = logging.getLogger(__name__)
 
 
-class TestLargeOpsScenario(manager.NetworkScenarioTest):
+class TestLargeOpsScenario(manager.ScenarioTest):
 
     """
     Test large operations.
 
     This test below:
-    * Spin up multiple instances in one nova call
+    * Spin up multiple instances in one nova call, and repeat three times
     * as a regular user
     * TODO: same thing for cinder
 
     """
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
+        if CONF.scenario.large_ops_number < 1:
+            raise cls.skipException("large_ops_number not set to multiple "
+                                    "instances")
         cls.set_network_resources()
-        super(TestLargeOpsScenario, cls).setUpClass()
+        super(TestLargeOpsScenario, cls).resource_setup()
 
     def _wait_for_server_status(self, status):
         for server in self.servers:
-            self.status_timeout(
-                self.compute_client.servers, server.id, status)
+            self.servers_client.wait_for_server_status(server['id'], status)
 
     def nova_boot(self):
         name = data_utils.rand_name('scenario-server-')
-        client = self.compute_client
         flavor_id = CONF.compute.flavor_ref
-        secgroup = self._create_security_group_nova()
-        self.servers = client.servers.create(
-            name=name, image=self.image,
-            flavor=flavor_id,
+        secgroup = self._create_security_group()
+        self.servers_client.create_server(
+            name,
+            self.image,
+            flavor_id,
             min_count=CONF.scenario.large_ops_number,
-            security_groups=[secgroup.name])
+            security_groups=[secgroup])
         # needed because of bug 1199788
-        self.servers = [x for x in client.servers.list() if name in x.name]
+        params = {'name': name}
+        _, server_list = self.servers_client.list_servers(params)
+        self.servers = server_list['servers']
         for server in self.servers:
-            self.set_resource(server.name, server)
+            # after deleting all servers - wait for all servers to clear
+            # before cleanup continues
+            self.addCleanup(self.servers_client.wait_for_server_termination,
+                            server['id'])
+        for server in self.servers:
+            self.addCleanup_with_wait(
+                waiter_callable=(self.servers_client.
+                                 wait_for_server_termination),
+                thing_id=server['id'], thing_id_param='server_id',
+                cleanup_callable=self.delete_wrapper,
+                cleanup_args=[self.servers_client.delete_server, server['id']])
         self._wait_for_server_status('ACTIVE')
 
-    @test.services('compute', 'image')
-    def test_large_ops_scenario(self):
-        if CONF.scenario.large_ops_number < 1:
-            return
+    def _large_ops_scenario(self):
         self.glance_image_create()
         self.nova_boot()
+
+    @test.services('compute', 'image')
+    def test_large_ops_scenario_1(self):
+        self._large_ops_scenario()
+
+    @test.services('compute', 'image')
+    def test_large_ops_scenario_2(self):
+        self._large_ops_scenario()
+
+    @test.services('compute', 'image')
+    def test_large_ops_scenario_3(self):
+        self._large_ops_scenario()

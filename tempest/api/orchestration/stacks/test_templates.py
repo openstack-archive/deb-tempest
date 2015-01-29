@@ -26,9 +26,8 @@ Resources:
 """
 
     @classmethod
-    @test.safe_setup
-    def setUpClass(cls):
-        super(TemplateYAMLTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(TemplateYAMLTestJSON, cls).resource_setup()
         cls.stack_name = data_utils.rand_name('heat')
         cls.stack_identifier = cls.create_stack(cls.stack_name, cls.template)
         cls.client.wait_for_stack_status(cls.stack_identifier,
@@ -39,15 +38,13 @@ Resources:
     @test.attr(type='gate')
     def test_show_template(self):
         """Getting template used to create the stack."""
-        resp, template = self.client.show_template(self.stack_identifier)
-        self.assertEqual('200', resp['status'])
+        _, template = self.client.show_template(self.stack_identifier)
 
     @test.attr(type='gate')
     def test_validate_template(self):
         """Validating template passing it content."""
-        resp, parameters = self.client.validate_template(self.template,
-                                                         self.parameters)
-        self.assertEqual('200', resp['status'])
+        _, parameters = self.client.validate_template(self.template,
+                                                      self.parameters)
 
 
 class TemplateAWSTestJSON(TemplateYAMLTestJSON):

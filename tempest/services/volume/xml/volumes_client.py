@@ -15,9 +15,9 @@
 
 import time
 import urllib
+from xml.sax import saxutils
 
 from lxml import etree
-from xml.sax import saxutils
 
 from tempest.common import rest_client
 from tempest.common import xml_utils as common
@@ -26,18 +26,41 @@ from tempest import exceptions
 
 CONF = config.CONF
 
+VOLUME_NS_BASE = 'http://docs.openstack.org/volume/ext/'
+VOLUME_HOST_NS = VOLUME_NS_BASE + 'volume_host_attribute/api/v1'
+VOLUME_MIG_STATUS_NS = VOLUME_NS_BASE + 'volume_mig_status_attribute/api/v1'
+VOLUMES_TENANT_NS = VOLUME_NS_BASE + 'volume_tenant_attribute/api/v1'
 
-class VolumesClientXML(rest_client.RestClient):
+
+class BaseVolumesClientXML(rest_client.RestClient):
     """
-    Client class to send CRUD Volume API requests to a Cinder endpoint
+    Base client class to send CRUD Volume API requests to a Cinder endpoint
     """
     TYPE = "xml"
 
     def __init__(self, auth_provider):
-        super(VolumesClientXML, self).__init__(auth_provider)
+        super(BaseVolumesClientXML, self).__init__(auth_provider)
         self.service = CONF.volume.catalog_type
         self.build_interval = CONF.compute.build_interval
         self.build_timeout = CONF.compute.build_timeout
+        self.create_resp = 200
+
+    def _translate_attributes_to_json(self, volume):
+        volume_host_attr = '{' + VOLUME_HOST_NS + '}host'
+        volume_mig_stat_attr = '{' + VOLUME_MIG_STATUS_NS + '}migstat'
+        volume_mig_name_attr = '{' + VOLUME_MIG_STATUS_NS + '}name_id'
+        volume_tenant_id_attr = '{' + VOLUMES_TENANT_NS + '}tenant_id'
+        if volume_host_attr in volume:
+            volume['os-vol-host-attr:host'] = volume.pop(volume_host_attr)
+        if volume_mig_stat_attr in volume:
+            volume['os-vol-mig-status-attr:migstat'] = volume.pop(
+                volume_mig_stat_attr)
+        if volume_mig_name_attr in volume:
+            volume['os-vol-mig-status-attr:name_id'] = volume.pop(
+                volume_mig_name_attr)
+        if volume_tenant_id_attr in volume:
+            volume['os-vol-tenant-attr:tenant_id'] = volume.pop(
+                volume_tenant_id_attr)
 
     def _parse_volume(self, body):
         vol = dict((attr, body.get(attr)) for attr in body.keys())
@@ -52,6 +75,8 @@ class VolumesClientXML(rest_client.RestClient):
                                        child.getchildren())
             else:
                 vol[tag] = common.xml_to_json(child)
+        self._translate_attributes_to_json(vol)
+        self._check_if_bootable(vol)
         return vol
 
     def get_attachment_from_volume(self, volume):
@@ -90,8 +115,7 @@ class VolumesClientXML(rest_client.RestClient):
         volumes = []
         if body is not None:
             volumes += [self._parse_volume(vol) for vol in list(body)]
-        for v in volumes:
-            v = self._check_if_bootable(v)
+        self.expected_success(200, resp.status)
         return resp, volumes
 
     def list_volumes_with_detail(self, params=None):
@@ -106,8 +130,7 @@ class VolumesClientXML(rest_client.RestClient):
         volumes = []
         if body is not None:
             volumes += [self._parse_volume(vol) for vol in list(body)]
-        for v in volumes:
-            v = self._check_if_bootable(v)
+        self.expected_success(200, resp.status)
         return resp, volumes
 
     def get_volume(self, volume_id):
@@ -115,13 +138,15 @@ class VolumesClientXML(rest_client.RestClient):
         url = "volumes/%s" % str(volume_id)
         resp, body = self.get(url)
         body = self._parse_volume(etree.fromstring(body))
-        body = self._check_if_bootable(body)
+        self.expected_success(200, resp.status)
         return resp, body
 
     def create_volume(self, size=None, **kwargs):
         """Creates a new Volume.
 
         :param size: Size of volume in GB.
+        :param display_name: Optional Volume Name(only for V1).
+        :param name: Optional Volume Name(only for V2).
         :param display_name: Optional Volume Name.
         :param metadata: An optional dictionary of values for metadata.
         :param volume_type: Optional Name of volume_type for the volume
@@ -155,6 +180,7 @@ class VolumesClientXML(rest_client.RestClient):
 
         resp, body = self.post('volumes', str(common.Document(volume)))
         body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(self.create_resp, resp.status)
         return resp, body
 
     def update_volume(self, volume_id, **kwargs):
@@ -164,11 +190,14 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.put('volumes/%s' % volume_id,
                               str(common.Document(put_body)))
         body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(200, resp.status)
         return resp, body
 
     def delete_volume(self, volume_id):
         """Deletes the Specified Volume."""
-        return self.delete("volumes/%s" % str(volume_id))
+        resp, body = self.delete("volumes/%s" % str(volume_id))
+        self.expected_success(202, resp.status)
+        return resp, body
 
     def wait_for_volume_status(self, volume_id, status):
         """Waits for a Volume to reach a given status."""
@@ -197,6 +226,11 @@ class VolumesClientXML(rest_client.RestClient):
             return True
         return False
 
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'volume'
+
     def attach_volume(self, volume_id, instance_uuid, mountpoint):
         """Attaches a volume to a given instance on a given mountpoint."""
         post_body = common.Element("os-attach",
@@ -207,6 +241,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def detach_volume(self, volume_id):
@@ -216,6 +251,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def upload_volume(self, volume_id, image_name, disk_format):
@@ -226,6 +262,7 @@ class VolumesClientXML(rest_client.RestClient):
         url = 'volumes/%s/action' % str(volume_id)
         resp, body = self.post(url, str(common.Document(post_body)))
         volume = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, volume
 
     def extend_volume(self, volume_id, extend_size):
@@ -236,6 +273,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def reset_volume_status(self, volume_id, status):
@@ -247,6 +285,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def volume_begin_detaching(self, volume_id):
@@ -274,6 +313,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def unreserve_volume(self, volume_id):
@@ -283,6 +323,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def create_volume_transfer(self, vol_id, display_name=None):
@@ -294,6 +335,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post('os-volume-transfer',
                                str(common.Document(post_body)))
         volume = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, volume
 
     def get_volume_transfer(self, transfer_id):
@@ -301,6 +343,7 @@ class VolumesClientXML(rest_client.RestClient):
         url = "os-volume-transfer/%s" % str(transfer_id)
         resp, body = self.get(url)
         volume = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(200, resp.status)
         return resp, volume
 
     def list_volume_transfers(self, params=None):
@@ -314,6 +357,7 @@ class VolumesClientXML(rest_client.RestClient):
         volumes = []
         if body is not None:
             volumes += [self._parse_volume_transfer(vol) for vol in list(body)]
+        self.expected_success(200, resp.status)
         return resp, volumes
 
     def _parse_volume_transfer(self, body):
@@ -327,7 +371,9 @@ class VolumesClientXML(rest_client.RestClient):
 
     def delete_volume_transfer(self, transfer_id):
         """Delete a volume transfer."""
-        return self.delete("os-volume-transfer/%s" % str(transfer_id))
+        resp, body = self.delete("os-volume-transfer/%s" % str(transfer_id))
+        self.expected_success(202, resp.status)
+        return resp, body
 
     def accept_volume_transfer(self, transfer_id, transfer_auth_key):
         """Accept a volume transfer."""
@@ -335,6 +381,7 @@ class VolumesClientXML(rest_client.RestClient):
         url = 'os-volume-transfer/%s/accept' % transfer_id
         resp, body = self.post(url, str(common.Document(post_body)))
         volume = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, volume
 
     def update_volume_readonly(self, volume_id, readonly):
@@ -345,6 +392,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def force_delete_volume(self, volume_id):
@@ -354,6 +402,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post(url, str(common.Document(post_body)))
         if body:
             body = common.xml_to_json(etree.fromstring(body))
+        self.expected_success(202, resp.status)
         return resp, body
 
     def _metadata_body(self, meta):
@@ -378,6 +427,7 @@ class VolumesClientXML(rest_client.RestClient):
         resp, body = self.post('volumes/%s/metadata' % volume_id,
                                str(common.Document(post_body)))
         body = self._parse_key_value(etree.fromstring(body))
+        self.expected_success(200, resp.status)
         return resp, body
 
     def get_volume_metadata(self, volume_id):
@@ -385,6 +435,7 @@ class VolumesClientXML(rest_client.RestClient):
         url = "volumes/%s/metadata" % str(volume_id)
         resp, body = self.get(url)
         body = self._parse_key_value(etree.fromstring(body))
+        self.expected_success(200, resp.status)
         return resp, body
 
     def update_volume_metadata(self, volume_id, metadata):
@@ -393,6 +444,7 @@ class VolumesClientXML(rest_client.RestClient):
         url = "volumes/%s/metadata" % str(volume_id)
         resp, body = self.put(url, str(common.Document(put_body)))
         body = self._parse_key_value(etree.fromstring(body))
+        self.expected_success(200, resp.status)
         return resp, body
 
     def update_volume_metadata_item(self, volume_id, id, meta_item):
@@ -402,10 +454,19 @@ class VolumesClientXML(rest_client.RestClient):
             put_body.append(common.Text(v))
         url = "volumes/%s/metadata/%s" % (str(volume_id), str(id))
         resp, body = self.put(url, str(common.Document(put_body)))
+        self.expected_success(200, resp.status)
         body = common.xml_to_json(etree.fromstring(body))
         return resp, body
 
     def delete_volume_metadata_item(self, volume_id, id):
         """Delete metadata item for the volume."""
         url = "volumes/%s/metadata/%s" % (str(volume_id), str(id))
-        return self.delete(url)
+        resp, body = self.delete(url)
+        self.expected_success(200, resp.status)
+        return resp, body
+
+
+class VolumesClientXML(BaseVolumesClientXML):
+    """
+    Client class to send CRUD Volume API V1 requests to a Cinder endpoint
+    """

@@ -17,7 +17,6 @@ import os
 
 from tempest.common.utils import data_utils
 from tempest import config
-from tempest import test
 from tempest.thirdparty.boto import test as boto_test
 from tempest.thirdparty.boto.utils import s3
 
@@ -27,8 +26,8 @@ CONF = config.CONF
 class S3ImagesTest(boto_test.BotoTestCase):
 
     @classmethod
-    def setUpClass(cls):
-        super(S3ImagesTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(S3ImagesTest, cls).resource_setup()
         if not cls.conclusion['A_I_IMAGES_READY']:
             raise cls.skipException("".join(("EC2 ", cls.__name__,
                                     ": requires ami/aki/ari manifest")))
@@ -48,7 +47,6 @@ class S3ImagesTest(boto_test.BotoTestCase):
                                cls.bucket_name)
         s3.s3_upload_dir(bucket, cls.materials_path)
 
-    @test.attr(type='smoke')
     def test_register_get_deregister_ami_image(self):
         # Register and deregister ami image
         image = {"name": data_utils.rand_name("ami-name-"),

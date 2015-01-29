@@ -23,13 +23,14 @@ from tempest import test
 class VirtualInterfacesNegativeTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
+    def resource_setup(cls):
         # For this test no network resources are needed
         cls.set_network_resources()
-        super(VirtualInterfacesNegativeTestJSON, cls).setUpClass()
+        super(VirtualInterfacesNegativeTestJSON, cls).resource_setup()
         cls.client = cls.servers_client
 
     @test.attr(type=['negative', 'gate'])
+    @test.services('network')
     def test_list_virtual_interfaces_invalid_server_id(self):
         # Negative test: Should not be able to GET virtual interfaces
         # for an invalid server_id

@@ -15,7 +15,6 @@
 
 from tempest import config
 from tempest.openstack.common import log as logging
-from tempest import test
 from tempest.thirdparty.boto import test as boto_test
 
 CONF = config.CONF
@@ -30,8 +29,8 @@ def compare_volumes(a, b):
 class EC2VolumesTest(boto_test.BotoTestCase):
 
     @classmethod
-    def setUpClass(cls):
-        super(EC2VolumesTest, cls).setUpClass()
+    def resource_setup(cls):
+        super(EC2VolumesTest, cls).resource_setup()
 
         if not CONF.service_available.cinder:
             skip_msg = ("%s skipped as Cinder is not available" % cls.__name__)
@@ -40,7 +39,6 @@ class EC2VolumesTest(boto_test.BotoTestCase):
         cls.client = cls.os.ec2api_client
         cls.zone = CONF.boto.aws_zone
 
-    @test.attr(type='smoke')
     def test_create_get_delete(self):
         # EC2 Create, get, delete Volume
         volume = self.client.create_volume(1, self.zone)
@@ -53,7 +51,6 @@ class EC2VolumesTest(boto_test.BotoTestCase):
         self.client.delete_volume(volume.id)
         self.cancelResourceCleanUp(cuk)
 
-    @test.attr(type='smoke')
     def test_create_volume_from_snapshot(self):
         # EC2 Create volume from snapshot
         volume = self.client.create_volume(1, self.zone)

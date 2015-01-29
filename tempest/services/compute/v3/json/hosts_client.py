@@ -15,8 +15,8 @@
 import json
 import urllib
 
-from tempest.api_schema.compute import hosts as schema
-from tempest.api_schema.compute.v3 import hosts as v3_schema
+from tempest.api_schema.response.compute import hosts as schema
+from tempest.api_schema.response.compute.v3 import hosts as v3_schema
 from tempest.common import rest_client
 from tempest import config
 
@@ -61,6 +61,7 @@ class HostsV3ClientJSON(rest_client.RestClient):
 
         resp, body = self.put("os-hosts/%s" % str(hostname), request_body)
         body = json.loads(body)
+        self.validate_response(v3_schema.update_host, resp, body)
         return resp, body
 
     def startup_host(self, hostname):

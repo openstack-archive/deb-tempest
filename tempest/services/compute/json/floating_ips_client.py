@@ -16,7 +16,7 @@
 import json
 import urllib
 
-from tempest.api_schema.compute.v2 import floating_ips as schema
+from tempest.api_schema.response.compute.v2 import floating_ips as schema
 from tempest.common import rest_client
 from tempest import config
 from tempest import exceptions
@@ -102,6 +102,11 @@ class FloatingIPsClientJSON(rest_client.RestClient):
             return True
         return False
 
+    @property
+    def resource_type(self):
+        """Returns the primary type of resource this client works with."""
+        return 'floating_ip'
+
     def list_floating_ip_pools(self, params=None):
         """Returns a list of all floating IP Pools."""
         url = 'os-floating-ip-pools'
@@ -112,3 +117,31 @@ class FloatingIPsClientJSON(rest_client.RestClient):
         body = json.loads(body)
         self.validate_response(schema.floating_ip_pools, resp, body)
         return resp, body['floating_ip_pools']
+
+    def create_floating_ips_bulk(self, ip_range, pool, interface):
+        """Allocate floating IPs in bulk."""
+        post_body = {
+            'ip_range': ip_range,
+            'pool': pool,
+            'interface': interface
+        }
+        post_body = json.dumps({'floating_ips_bulk_create': post_body})
+        resp, body = self.post('os-floating-ips-bulk', post_body)
+        body = json.loads(body)
+        self.validate_response(schema.create_floating_ips_bulk, resp, body)
+        return resp, body['floating_ips_bulk_create']
+
+    def list_floating_ips_bulk(self):
+        """Returns a list of all floating IPs bulk."""
+        resp, body = self.get('os-floating-ips-bulk')
+        body = json.loads(body)
+        self.validate_response(schema.list_floating_ips_bulk, resp, body)
+        return resp, body['floating_ip_info']
+
+    def delete_floating_ips_bulk(self, ip_range):
+        """Deletes the provided floating IPs bulk."""
+        post_body = json.dumps({'ip_range': ip_range})
+        resp, body = self.put('os-floating-ips-bulk/delete', post_body)
+        body = json.loads(body)
+        self.validate_response(schema.delete_floating_ips_bulk, resp, body)
+        return resp, body['floating_ips_bulk_delete']

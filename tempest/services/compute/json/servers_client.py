@@ -18,8 +18,8 @@ import json
 import time
 import urllib
 
-from tempest.api_schema.compute import servers as common_schema
-from tempest.api_schema.compute.v2 import servers as schema
+from tempest.api_schema.response.compute import servers as common_schema
+from tempest.api_schema.response.compute.v2 import servers as schema
 from tempest.common import rest_client
 from tempest.common import waiters
 from tempest import config
@@ -57,6 +57,8 @@ class ServersClientJSON(rest_client.RestClient):
         max_count: Count of maximum number of instances to launch.
         disk_config: Determines if user or admin controls disk configuration.
         return_reservation_id: Enable/Disable the return of reservation id
+        block_device_mapping: Block device mapping for the server.
+        block_device_mapping_v2: Block device mapping V2 for the server.
         """
         post_body = {
             'name': name,
@@ -69,7 +71,8 @@ class ServersClientJSON(rest_client.RestClient):
                        'availability_zone', 'accessIPv4', 'accessIPv6',
                        'min_count', 'max_count', ('metadata', 'meta'),
                        ('OS-DCF:diskConfig', 'disk_config'),
-                       'return_reservation_id']:
+                       'return_reservation_id', 'block_device_mapping',
+                       'block_device_mapping_v2']:
             if isinstance(option, tuple):
                 post_param = option[0]
                 key = option[1]
@@ -79,6 +82,7 @@ class ServersClientJSON(rest_client.RestClient):
             value = kwargs.get(key)
             if value is not None:
                 post_body[post_param] = value
+
         post_body = {'server': post_body}
 
         if 'sched_hints' in kwargs:
@@ -92,7 +96,11 @@ class ServersClientJSON(rest_client.RestClient):
         # with return reservation id set True
         if 'reservation_id' in body:
             return resp, body
-        self.validate_response(schema.create_server, resp, body)
+        if CONF.compute_feature_enabled.enable_instance_password:
+            create_schema = schema.create_server_with_admin_pass
+        else:
+            create_schema = schema.create_server
+        self.validate_response(create_schema, resp, body)
         return resp, body['server']
 
     def update_server(self, server_id, name=None, meta=None, accessIPv4=None,
@@ -126,12 +134,14 @@ class ServersClientJSON(rest_client.RestClient):
         post_body = json.dumps({'server': post_body})
         resp, body = self.put("servers/%s" % str(server_id), post_body)
         body = json.loads(body)
+        self.validate_response(schema.update_server, resp, body)
         return resp, body['server']
 
     def get_server(self, server_id):
         """Returns the details of an existing server."""
         resp, body = self.get("servers/%s" % str(server_id))
         body = json.loads(body)
+        self.validate_response(schema.get_server, resp, body)
         return resp, body['server']
 
     def delete_server(self, server_id):
@@ -149,6 +159,7 @@ class ServersClientJSON(rest_client.RestClient):
 
         resp, body = self.get(url)
         body = json.loads(body)
+        self.validate_response(common_schema.list_servers, resp, body)
         return resp, body
 
     def list_servers_with_detail(self, params=None):
@@ -160,14 +171,16 @@ class ServersClientJSON(rest_client.RestClient):
 
         resp, body = self.get(url)
         body = json.loads(body)
+        self.validate_response(schema.list_servers_detail, resp, body)
         return resp, body
 
     def wait_for_server_status(self, server_id, status, extra_timeout=0,
-                               raise_on_error=True):
+                               raise_on_error=True, ready_wait=True):
         """Waits for a server to reach a given status."""
         return waiters.wait_for_server_status(self, server_id, status,
                                               extra_timeout=extra_timeout,
-                                              raise_on_error=raise_on_error)
+                                              raise_on_error=raise_on_error,
+                                              ready_wait=ready_wait)
 
     def wait_for_server_termination(self, server_id, ignore_error=False):
         """Waits for server to reach termination."""
@@ -191,6 +204,7 @@ class ServersClientJSON(rest_client.RestClient):
         """Lists all addresses for a server."""
         resp, body = self.get("servers/%s/ips" % str(server_id))
         body = json.loads(body)
+        self.validate_response(schema.list_addresses, resp, body)
         return resp, body['addresses']
 
     def list_addresses_by_network(self, server_id, network_id):
@@ -198,23 +212,28 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.get("servers/%s/ips/%s" %
                               (str(server_id), network_id))
         body = json.loads(body)
+        self.validate_response(schema.list_addresses_by_network, resp, body)
         return resp, body
 
     def action(self, server_id, action_name, response_key,
-               schema=None, **kwargs):
+               schema=common_schema.server_actions_common_schema, **kwargs):
         post_body = json.dumps({action_name: kwargs})
         resp, body = self.post('servers/%s/action' % str(server_id),
                                post_body)
         if response_key is not None:
             body = json.loads(body)
-            # Check for Schema as 'None' because if we donot have any server
+            # Check for Schema as 'None' because if we do not have any server
             # action schema implemented yet then they can pass 'None' to skip
             # the validation.Once all server action has their schema
             # implemented then, this check can be removed if every actions are
             # supposed to validate their response.
+            # TODO(GMann): Remove the below 'if' check once all server actions
+            # schema are implemented.
             if schema is not None:
                 self.validate_response(schema, resp, body)
             body = body[response_key]
+        else:
+            self.validate_response(schema, resp, body)
         return resp, body
 
     def create_backup(self, server_id, backup_type, rotation, name):
@@ -242,8 +261,11 @@ class ServersClientJSON(rest_client.RestClient):
         Note that this does not actually change the instance server
         password.
         """
-        return self.delete("servers/%s/os-server-password" %
-                           str(server_id))
+        resp, body = self.delete("servers/%s/os-server-password" %
+                                 str(server_id))
+        self.validate_response(common_schema.server_actions_delete_password,
+                               resp, body)
+        return resp, body
 
     def reboot(self, server_id, reboot_type):
         """Reboots a server."""
@@ -255,7 +277,12 @@ class ServersClientJSON(rest_client.RestClient):
         if 'disk_config' in kwargs:
             kwargs['OS-DCF:diskConfig'] = kwargs['disk_config']
             del kwargs['disk_config']
-        return self.action(server_id, 'rebuild', 'server', **kwargs)
+        if CONF.compute_feature_enabled.enable_instance_password:
+            rebuild_schema = schema.rebuild_server_with_admin_pass
+        else:
+            rebuild_schema = schema.rebuild_server
+        return self.action(server_id, 'rebuild', 'server',
+                           rebuild_schema, **kwargs)
 
     def resize(self, server_id, flavor_ref, **kwargs):
         """Changes the flavor of a server."""
@@ -267,7 +294,9 @@ class ServersClientJSON(rest_client.RestClient):
 
     def confirm_resize(self, server_id, **kwargs):
         """Confirms the flavor change for a server."""
-        return self.action(server_id, 'confirmResize', None, **kwargs)
+        return self.action(server_id, 'confirmResize',
+                           None, schema.server_actions_confirm_resize,
+                           **kwargs)
 
     def revert_resize(self, server_id, **kwargs):
         """Reverts a server back to its original flavor."""
@@ -276,6 +305,7 @@ class ServersClientJSON(rest_client.RestClient):
     def list_server_metadata(self, server_id):
         resp, body = self.get("servers/%s/metadata" % str(server_id))
         body = json.loads(body)
+        self.validate_response(common_schema.list_server_metadata, resp, body)
         return resp, body['metadata']
 
     def set_server_metadata(self, server_id, meta, no_metadata_field=False):
@@ -286,6 +316,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.put('servers/%s/metadata' % str(server_id),
                               post_body)
         body = json.loads(body)
+        self.validate_response(common_schema.set_server_metadata, resp, body)
         return resp, body['metadata']
 
     def update_server_metadata(self, server_id, meta):
@@ -293,11 +324,15 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.post('servers/%s/metadata' % str(server_id),
                                post_body)
         body = json.loads(body)
+        self.validate_response(common_schema.update_server_metadata,
+                               resp, body)
         return resp, body['metadata']
 
     def get_server_metadata_item(self, server_id, key):
         resp, body = self.get("servers/%s/metadata/%s" % (str(server_id), key))
         body = json.loads(body)
+        self.validate_response(schema.set_get_server_metadata_item,
+                               resp, body)
         return resp, body['meta']
 
     def set_server_metadata_item(self, server_id, key, meta):
@@ -305,11 +340,15 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.put('servers/%s/metadata/%s' % (str(server_id), key),
                               post_body)
         body = json.loads(body)
+        self.validate_response(schema.set_get_server_metadata_item,
+                               resp, body)
         return resp, body['meta']
 
     def delete_server_metadata_item(self, server_id, key):
         resp, body = self.delete("servers/%s/metadata/%s" %
                                  (str(server_id), key))
+        self.validate_response(common_schema.delete_server_metadata_item,
+                               resp, body)
         return resp, body
 
     def stop(self, server_id, **kwargs):
@@ -359,6 +398,8 @@ class ServersClientJSON(rest_client.RestClient):
         req_body = json.dumps({'os-migrateLive': migrate_params})
 
         resp, body = self.post("servers/%s/action" % str(server_id), req_body)
+        self.validate_response(common_schema.server_actions_common_schema,
+                               resp, body)
         return resp, body
 
     def migrate_server(self, server_id, **kwargs):
@@ -406,8 +447,9 @@ class ServersClientJSON(rest_client.RestClient):
         return self.action(server_id, 'shelveOffload', None, **kwargs)
 
     def get_console_output(self, server_id, length):
+        kwargs = {'length': length} if length else {}
         return self.action(server_id, 'os-getConsoleOutput', 'output',
-                           length=length)
+                           common_schema.get_console_output, **kwargs)
 
     def list_virtual_interfaces(self, server_id):
         """
@@ -421,7 +463,8 @@ class ServersClientJSON(rest_client.RestClient):
 
     def rescue_server(self, server_id, **kwargs):
         """Rescue the provided server."""
-        return self.action(server_id, 'rescue', None, **kwargs)
+        return self.action(server_id, 'rescue', 'adminPass',
+                           schema.rescue_server, **kwargs)
 
     def unrescue_server(self, server_id):
         """Unrescue the provided server."""
@@ -437,6 +480,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.get("servers/%s/os-instance-actions" %
                               str(server_id))
         body = json.loads(body)
+        self.validate_response(schema.list_instance_actions, resp, body)
         return resp, body['instanceActions']
 
     def get_instance_action(self, server_id, request_id):
@@ -444,6 +488,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.get("servers/%s/os-instance-actions/%s" %
                               (str(server_id), str(request_id)))
         body = json.loads(body)
+        self.validate_response(schema.get_instance_action, resp, body)
         return resp, body['instanceAction']
 
     def force_delete_server(self, server_id, **kwargs):
@@ -467,3 +512,41 @@ class ServersClientJSON(rest_client.RestClient):
         return self.action(server_id, "os-getVNCConsole",
                            "console", common_schema.get_vnc_console,
                            type=console_type)
+
+    def create_server_group(self, name, policies):
+        """
+        Create the server group
+        name : Name of the server-group
+        policies : List of the policies - affinity/anti-affinity)
+        """
+        post_body = {
+            'name': name,
+            'policies': policies,
+        }
+
+        post_body = json.dumps({'server_group': post_body})
+        resp, body = self.post('os-server-groups', post_body)
+
+        body = json.loads(body)
+        self.validate_response(schema.create_get_server_group, resp, body)
+        return resp, body['server_group']
+
+    def delete_server_group(self, server_group_id):
+        """Delete the given server-group."""
+        resp, body = self.delete("os-server-groups/%s" % str(server_group_id))
+        self.validate_response(schema.delete_server_group, resp, body)
+        return resp, body
+
+    def list_server_groups(self):
+        """List the server-groups."""
+        resp, body = self.get("os-server-groups")
+        body = json.loads(body)
+        self.validate_response(schema.list_server_groups, resp, body)
+        return resp, body['server_groups']
+
+    def get_server_group(self, server_group_id):
+        """Get the details of given server_group."""
+        resp, body = self.get("os-server-groups/%s" % str(server_group_id))
+        body = json.loads(body)
+        self.validate_response(schema.create_get_server_group, resp, body)
+        return resp, body['server_group']

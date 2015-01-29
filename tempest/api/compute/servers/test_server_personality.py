@@ -23,8 +23,8 @@ from tempest import test
 class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(ServerPersonalityTestJSON, cls).setUpClass()
+    def resource_setup(cls):
+        super(ServerPersonalityTestJSON, cls).resource_setup()
         cls.client = cls.servers_client
         cls.user_client = cls.limits_client
 
@@ -40,8 +40,10 @@ class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
             path = 'etc/test' + str(i) + '.txt'
             personality.append({'path': path,
                                 'contents': base64.b64encode(file_contents)})
-        self.assertRaises(exceptions.OverLimit, self.create_test_server,
-                          personality=personality)
+        # A 403 Forbidden or 413 Overlimit (old behaviour) exception
+        # will be raised when out of quota
+        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+                          self.create_test_server, personality=personality)
 
     @test.attr(type='gate')
     def test_can_create_server_with_max_number_personality_files(self):
@@ -58,25 +60,6 @@ class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
                 'contents': base64.b64encode(file_contents),
             })
         resp, server = self.create_test_server(personality=person)
-        self.assertEqual('202', resp['status'])
-
-    @test.attr(type='gate')
-    def test_create_server_with_existent_personality_file(self):
-        # Any existing file that match specified file will be renamed to
-        # include the bak extension appended with a time stamp
-
-        # TODO(zhikunliu): will add validations when ssh instance validation
-        # re-factor is ready
-        file_contents = 'This is a test file.'
-        personality = [{'path': '/test.txt',
-                       'contents': base64.b64encode(file_contents)}]
-        resp, server = self.create_test_server(personality=personality,
-                                               wait_until="ACTIVE")
-        resp, image = self.create_image_from_server(server['id'],
-                                                    wait_until="ACTIVE")
-        resp, server = self.create_test_server(image_id=image['id'],
-                                               personality=personality,
-                                               wait_until="ACTIVE")
         self.assertEqual('202', resp['status'])
 
 

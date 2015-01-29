@@ -20,16 +20,11 @@ from tempest import test
 class ServerMetadataV3Test(base.BaseV3ComputeTest):
 
     @classmethod
-    def setUpClass(cls):
-        super(ServerMetadataV3Test, cls).setUpClass()
+    def resource_setup(cls):
+        super(ServerMetadataV3Test, cls).resource_setup()
         cls.client = cls.servers_client
         cls.quotas = cls.quotas_client
-        cls.admin_client = cls._get_identity_admin_client()
-        resp, tenants = cls.admin_client.list_tenants()
-        cls.tenant_id = [tnt['id'] for tnt in tenants if tnt['name'] ==
-                         cls.client.tenant_name][0]
         resp, server = cls.create_test_server(meta={}, wait_until='ACTIVE')
-
         cls.server_id = server['id']
 
     def setUp(self):

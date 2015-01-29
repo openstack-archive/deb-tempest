@@ -28,10 +28,10 @@ class FlavorsExtraSpecsNegativeTestJSON(base.BaseV2ComputeAdminTest):
     """
 
     @classmethod
-    def setUpClass(cls):
-        super(FlavorsExtraSpecsNegativeTestJSON, cls).setUpClass()
-        if not test.is_extension_enabled('FlavorExtraData', 'compute'):
-            msg = "FlavorExtraData extension not enabled."
+    def resource_setup(cls):
+        super(FlavorsExtraSpecsNegativeTestJSON, cls).resource_setup()
+        if not test.is_extension_enabled('OS-FLV-EXT-DATA', 'compute'):
+            msg = "OS-FLV-EXT-DATA extension not enabled."
             raise cls.skipException(msg)
 
         cls.client = cls.os_adm.flavors_client
@@ -52,10 +52,10 @@ class FlavorsExtraSpecsNegativeTestJSON(base.BaseV2ComputeAdminTest):
                                                     swap=swap, rxtx=rxtx)
 
     @classmethod
-    def tearDownClass(cls):
+    def resource_cleanup(cls):
         resp, body = cls.client.delete_flavor(cls.flavor['id'])
         cls.client.wait_for_resource_deletion(cls.flavor['id'])
-        super(FlavorsExtraSpecsNegativeTestJSON, cls).tearDownClass()
+        super(FlavorsExtraSpecsNegativeTestJSON, cls).resource_cleanup()
 
     @test.attr(type=['negative', 'gate'])
     def test_flavor_non_admin_set_keys(self):
