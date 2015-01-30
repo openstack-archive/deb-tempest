@@ -26,7 +26,7 @@ override_dh_auto_install:
 	sed -i 's/^[ \t#]*lock_path[ \t]*=.*/#lock_path=\/var\/lock/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^[ \t#]*username[ \t]*=.*/username=admin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^[ \t#]*tenant_name[ \t]*=,*/tenant_name=admin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^[ \t#]*cli_dir=.*/cli_dir=\/usr\/bin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
+	sed -i 's/^[ \t#]*cli_dir[ \t]*=.*/cli_dir=\/usr\/bin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	#sed -i 's/^[ \t#]*allow_tenant_isolation[ \t]*=.*/allow_tenant_isolation=true/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^[ \t#]*image_ssh_user=.*/image_ssh_user=debian/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 
