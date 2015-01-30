@@ -8,4 +8,4 @@ if [ ! -d .testrepository ] ; then
 	testr init
 fi
 
-testr run --parallel --subunit $@ | subunit-2to1 | python /usr/lib/python2.7/dist-packages/tempest/colorizer.py
+testr run --parallel --subunit $@ | subunit-trace
