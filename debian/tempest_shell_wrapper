@@ -2,10 +2,28 @@
 
 set -e
 
+EXCLUDE_FILE=/etc/tempest/exclude.conf
+TMP_EXCLUDE=`mktemp -t nose-exclude-XXXXXX`
+if [ -r "${EXCLUDE_FILE}" ] ; then
+	for i in `grep -v -e '^#' -e '^[ \t]*$' ${EXCLUDE_FILE}` ; do
+		if [ -n "${A}" ] ; then
+			A="${A}|${i}"
+		else
+			A=${i}
+		fi
+	done
+fi
+
 cd /var/lib/tempest
 
 if [ ! -d .testrepository ] ; then
 	testr init
+fi
+
+if [ -z "${1}" ] && [ -n ${A} ] ; then
+	testr run --parallel --subunit '(?!.*('"${A}"'))' $@ | subunit-trace
+else
+	testr run --parallel --subunit $@ | subunit-trace
 fi
 
 testr run --parallel --subunit $@ | subunit-trace
