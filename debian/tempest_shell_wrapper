@@ -7,9 +7,9 @@ TMP_EXCLUDE=`mktemp -t nose-exclude-XXXXXX`
 if [ -r "${EXCLUDE_FILE}" ] ; then
 	for i in `grep -v -e '^#' -e '^[ \t]*$' ${EXCLUDE_FILE}` ; do
 		if [ -n "${A}" ] ; then
-			A="${A}|${i}"'.*'
+			A="${A}|"'tempest\.'"${i}"'.*'
 		else
-			A=${i}'.*'
+			A='tempest\.'${i}'.*'
 		fi
 	done
 fi
@@ -21,7 +21,7 @@ if [ ! -d .testrepository ] ; then
 fi
 
 if [ -z "${1}" ] && [ -n ${A} ] ; then
-	testr run --parallel --subunit 'tempest\.(?!.*('"${A}"'))' $@ | subunit-trace
+	testr run --parallel --subunit '^(?!('"${A}"'))' $@ | subunit-trace
 else
 	testr run --parallel --subunit $@ | subunit-trace
 fi
