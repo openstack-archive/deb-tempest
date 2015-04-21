@@ -1,6 +1,7 @@
 tempest (3+git20150421+30ab7d9596-1) unstable; urgency=medium
 
   * Packaging commit ID 30ab7d95963 from 2015-04-21.
+  * Fixed (build-)depends for this release.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 21 Apr 2015 22:48:55 +0200
 
