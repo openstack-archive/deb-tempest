@@ -12,10 +12,12 @@
 
 import functools
 
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
+
 from tempest import clients
-from tempest.common.utils import data_utils
+from tempest.common import credentials
 from tempest import config
-from tempest import exceptions as exc
 from tempest import test
 
 CONF = config.CONF
@@ -53,9 +55,8 @@ class BaseBaremetalTest(test.BaseTestCase):
     """Base class for Baremetal API tests."""
 
     @classmethod
-    def resource_setup(cls):
-        super(BaseBaremetalTest, cls).resource_setup()
-
+    def skip_checks(cls):
+        super(BaseBaremetalTest, cls).skip_checks()
         if not CONF.service_available.ironic:
             skip_msg = ('%s skipped as Ironic is not available' % cls.__name__)
             raise cls.skipException(skip_msg)
@@ -65,10 +66,26 @@ class BaseBaremetalTest(test.BaseTestCase):
                         'testing.' %
                         (cls.__name__, CONF.baremetal.driver))
             raise cls.skipException(skip_msg)
-        cls.driver = CONF.baremetal.driver
 
-        mgr = clients.AdminManager()
-        cls.client = mgr.baremetal_client
+    @classmethod
+    def setup_credentials(cls):
+        super(BaseBaremetalTest, cls).setup_credentials()
+        if (not hasattr(cls, 'isolated_creds') or
+            not cls.isolated_creds.name == cls.__name__):
+            cls.isolated_creds = credentials.get_isolated_credentials(
+                name=cls.__name__, network_resources=cls.network_resources)
+        cls.mgr = clients.Manager(cls.isolated_creds.get_admin_creds())
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseBaremetalTest, cls).setup_clients()
+        cls.client = cls.mgr.baremetal_client
+
+    @classmethod
+    def resource_setup(cls):
+        super(BaseBaremetalTest, cls).resource_setup()
+
+        cls.driver = CONF.baremetal.driver
         cls.power_timeout = CONF.baremetal.power_timeout
         cls.created_objects = {}
         for resource in RESOURCE_TYPES:
@@ -83,7 +100,7 @@ class BaseBaremetalTest(test.BaseTestCase):
                 uuids = cls.created_objects[resource]
                 delete_method = getattr(cls.client, 'delete_%s' % resource)
                 for u in uuids:
-                    delete_method(u, ignore_errors=exc.NotFound)
+                    delete_method(u, ignore_errors=lib_exc.NotFound)
         finally:
             super(BaseBaremetalTest, cls).resource_cleanup()
 
@@ -98,27 +115,28 @@ class BaseBaremetalTest(test.BaseTestCase):
         :return: Created chassis.
 
         """
-        description = description or data_utils.rand_name('test-chassis-')
+        description = description or data_utils.rand_name('test-chassis')
         resp, body = cls.client.create_chassis(description=description)
         return resp, body
 
     @classmethod
     @creates('node')
-    def create_node(cls, chassis_id, cpu_arch='x86', cpu_num=8, storage=1024,
-                    memory=4096):
+    def create_node(cls, chassis_id, cpu_arch='x86', cpus=8, local_gb=10,
+                    memory_mb=4096):
         """
         Wrapper utility for creating test baremetal nodes.
 
         :param cpu_arch: CPU architecture of the node. Default: x86.
-        :param cpu_num: Number of CPUs. Default: 8.
-        :param storage: Disk size. Default: 1024.
-        :param memory: Available RAM. Default: 4096.
+        :param cpus: Number of CPUs. Default: 8.
+        :param local_gb: Disk size. Default: 10.
+        :param memory_mb: Available RAM. Default: 4096.
         :return: Created node.
 
         """
         resp, body = cls.client.create_node(chassis_id, cpu_arch=cpu_arch,
-                                            cpu_num=cpu_num, storage=storage,
-                                            memory=memory, driver=cls.driver)
+                                            cpus=cpus, local_gb=local_gb,
+                                            memory_mb=memory_mb,
+                                            driver=cls.driver)
 
         return resp, body
 

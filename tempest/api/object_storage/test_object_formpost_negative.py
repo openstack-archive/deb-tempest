@@ -1,5 +1,4 @@
 # Copyright (C) 2013 eNovance SAS <licensing@enovance.com>
-# Author: Joe H. Rahme <joe.hakim.rahme@enovance.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -18,9 +17,10 @@ import hmac
 import time
 import urlparse
 
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
+
 from tempest.api.object_storage import base
-from tempest.common.utils import data_utils
-from tempest import exceptions
 from tempest import test
 
 
@@ -106,6 +106,7 @@ class ObjectFormPostNegativeTest(base.BaseObjectTest):
         content_type = 'multipart/form-data; boundary=%s' % boundary
         return body, content_type
 
+    @test.idempotent_id('d3fb3c4d-e627-48ce-9379-a1631f21336d')
     @test.requires_ext(extension='formpost', service='object')
     @test.attr(type=['gate', 'negative'])
     def test_post_object_using_form_expired(self):
@@ -117,11 +118,12 @@ class ObjectFormPostNegativeTest(base.BaseObjectTest):
 
         url = "%s/%s" % (self.container_name, self.object_name)
         exc = self.assertRaises(
-            exceptions.Unauthorized,
+            lib_exc.Unauthorized,
             self.object_client.post,
             url, body, headers=headers)
         self.assertIn('FormPost: Form Expired', str(exc))
 
+    @test.idempotent_id('b277257f-113c-4499-b8d1-5fead79f7360')
     @test.requires_ext(extension='formpost', service='object')
     @test.attr(type='gate')
     def test_post_object_using_form_invalid_signature(self):
@@ -133,7 +135,7 @@ class ObjectFormPostNegativeTest(base.BaseObjectTest):
 
         url = "%s/%s" % (self.container_name, self.object_name)
         exc = self.assertRaises(
-            exceptions.Unauthorized,
+            lib_exc.Unauthorized,
             self.object_client.post,
             url, body, headers=headers)
         self.assertIn('FormPost: Invalid Signature', str(exc))

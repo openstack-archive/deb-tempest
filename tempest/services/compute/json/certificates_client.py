@@ -15,31 +15,23 @@
 
 import json
 
-from tempest.api_schema.response.compute import certificates as schema
-from tempest.api_schema.response.compute.v2 import certificates as v2schema
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.api_schema.response.compute.v2_1 import certificates as schema
+from tempest.common import service_client
 
 
-class CertificatesClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(CertificatesClientJSON, self).__init__(auth_provider)
-        self.service = CONF.compute.catalog_type
+class CertificatesClientJSON(service_client.ServiceClient):
 
     def get_certificate(self, id):
         url = "os-certificates/%s" % (id)
         resp, body = self.get(url)
         body = json.loads(body)
         self.validate_response(schema.get_certificate, resp, body)
-        return resp, body['certificate']
+        return service_client.ResponseBody(resp, body['certificate'])
 
     def create_certificate(self):
         """create certificates."""
         url = "os-certificates"
         resp, body = self.post(url, None)
         body = json.loads(body)
-        self.validate_response(v2schema.create_certificate, resp, body)
-        return resp, body['certificate']
+        self.validate_response(schema.create_certificate, resp, body)
+        return service_client.ResponseBody(resp, body['certificate'])

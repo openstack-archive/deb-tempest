@@ -17,20 +17,10 @@ import json
 import urllib
 from xml.etree import ElementTree as etree
 
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
-class ContainerClient(rest_client.RestClient):
-    def __init__(self, auth_provider):
-        super(ContainerClient, self).__init__(auth_provider)
-
-        # Overwrites json-specific header encoding in rest_client.RestClient
-        self.headers = {}
-        self.service = CONF.object_storage.catalog_type
-        self.format = 'json'
+class ContainerClient(service_client.ServiceClient):
 
     def create_container(
             self, container_name,
@@ -53,12 +43,14 @@ class ContainerClient(rest_client.RestClient):
                 headers[remove_metadata_prefix + key] = remove_metadata[key]
 
         resp, body = self.put(url, body=None, headers=headers)
+        self.expected_success([201, 202], resp.status)
         return resp, body
 
     def delete_container(self, container_name):
         """Deletes the container (if it's empty)."""
         url = str(container_name)
         resp, body = self.delete(url)
+        self.expected_success(204, resp.status)
         return resp, body
 
     def update_container_metadata(
@@ -79,6 +71,7 @@ class ContainerClient(rest_client.RestClient):
                 headers[remove_metadata_prefix + key] = remove_metadata[key]
 
         resp, body = self.post(url, body=None, headers=headers)
+        self.expected_success(204, resp.status)
         return resp, body
 
     def delete_container_metadata(self, container_name, metadata,
@@ -92,6 +85,7 @@ class ContainerClient(rest_client.RestClient):
                 headers[metadata_prefix + item] = metadata[item]
 
         resp, body = self.post(url, body=None, headers=headers)
+        self.expected_success(204, resp.status)
         return resp, body
 
     def list_container_metadata(self, container_name):
@@ -100,6 +94,7 @@ class ContainerClient(rest_client.RestClient):
         """
         url = str(container_name)
         resp, body = self.head(url)
+        self.expected_success(204, resp.status)
         return resp, body
 
     def list_all_container_objects(self, container, params=None):
@@ -121,6 +116,7 @@ class ContainerClient(rest_client.RestClient):
         resp, objlist = self.list_container_contents(
             container,
             params={'limit': limit, 'format': 'json'})
+        self.expected_success(200, resp.status)
         return objlist
         """tmp = []
         for obj in objlist:
@@ -186,4 +182,5 @@ class ContainerClient(rest_client.RestClient):
             body = json.loads(body)
         elif params and params.get('format') == 'xml':
             body = etree.fromstring(body)
+        self.expected_success([200, 204], resp.status)
         return resp, body

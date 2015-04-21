@@ -31,9 +31,13 @@ class VolumesV2ListTestJSON(base.BaseVolumeTest):
     """
 
     @classmethod
+    def setup_clients(cls):
+        super(VolumesV2ListTestJSON, cls).setup_clients()
+        cls.client = cls.volumes_client
+
+    @classmethod
     def resource_setup(cls):
         super(VolumesV2ListTestJSON, cls).resource_setup()
-        cls.client = cls.volumes_client
 
         # Create 3 test volumes
         cls.volume_list = []
@@ -41,7 +45,7 @@ class VolumesV2ListTestJSON(base.BaseVolumeTest):
         cls.metadata = {'Type': 'work'}
         for i in range(3):
             volume = cls.create_volume(metadata=cls.metadata)
-            _, volume = cls.client.get_volume(volume['id'])
+            volume = cls.client.show_volume(volume['id'])
             cls.volume_list.append(volume)
             cls.volume_id_list.append(volume['id'])
 
@@ -54,6 +58,7 @@ class VolumesV2ListTestJSON(base.BaseVolumeTest):
         super(VolumesV2ListTestJSON, cls).resource_cleanup()
 
     @test.attr(type='gate')
+    @test.idempotent_id('2a7064eb-b9c3-429b-b888-33928fc5edd3')
     def test_volume_list_details_with_multiple_params(self):
         # List volumes detail using combined condition
         def _list_details_with_multiple_params(limit=2,
@@ -65,7 +70,8 @@ class VolumesV2ListTestJSON(base.BaseVolumeTest):
                       'sort_dir': sort_dir,
                       'sort_key': sort_key
                       }
-            _, fetched_volume = self.client.list_volumes_with_detail(params)
+            fetched_volume = self.client.list_volumes(detail=True,
+                                                      params=params)
             self.assertEqual(limit, len(fetched_volume),
                              "The count of volumes is %s, expected:%s " %
                              (len(fetched_volume), limit))
@@ -82,7 +88,3 @@ class VolumesV2ListTestJSON(base.BaseVolumeTest):
 
         _list_details_with_multiple_params()
         _list_details_with_multiple_params(sort_dir='desc')
-
-
-class VolumesV2ListTestXML(VolumesV2ListTestJSON):
-    _interface = 'xml'

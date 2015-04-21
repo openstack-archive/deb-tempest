@@ -15,19 +15,11 @@
 
 import json
 
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
-class CredentialsClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(CredentialsClientJSON, self).__init__(auth_provider)
-        self.service = CONF.identity.catalog_type
-        self.endpoint_url = 'adminURL'
-        self.api_version = "v3"
+class CredentialsClientJSON(service_client.ServiceClient):
+    api_version = "v3"
 
     def create_credential(self, access_key, secret_key, user_id, project_id):
         """Creates a credential."""
@@ -44,11 +36,11 @@ class CredentialsClientJSON(rest_client.RestClient):
         self.expected_success(201, resp.status)
         body = json.loads(body)
         body['credential']['blob'] = json.loads(body['credential']['blob'])
-        return resp, body['credential']
+        return service_client.ResponseBody(resp, body['credential'])
 
     def update_credential(self, credential_id, **kwargs):
         """Updates a credential."""
-        _, body = self.get_credential(credential_id)
+        body = self.get_credential(credential_id)
         cred_type = kwargs.get('type', body['type'])
         access_key = kwargs.get('access_key', body['blob']['access'])
         secret_key = kwargs.get('secret_key', body['blob']['secret'])
@@ -67,7 +59,7 @@ class CredentialsClientJSON(rest_client.RestClient):
         self.expected_success(200, resp.status)
         body = json.loads(body)
         body['credential']['blob'] = json.loads(body['credential']['blob'])
-        return resp, body['credential']
+        return service_client.ResponseBody(resp, body['credential'])
 
     def get_credential(self, credential_id):
         """To GET Details of a credential."""
@@ -75,17 +67,17 @@ class CredentialsClientJSON(rest_client.RestClient):
         self.expected_success(200, resp.status)
         body = json.loads(body)
         body['credential']['blob'] = json.loads(body['credential']['blob'])
-        return resp, body['credential']
+        return service_client.ResponseBody(resp, body['credential'])
 
     def list_credentials(self):
         """Lists out all the available credentials."""
         resp, body = self.get('credentials')
         self.expected_success(200, resp.status)
         body = json.loads(body)
-        return resp, body['credentials']
+        return service_client.ResponseBodyList(resp, body['credentials'])
 
     def delete_credential(self, credential_id):
         """Deletes a credential."""
         resp, body = self.delete('credentials/%s' % credential_id)
         self.expected_success(204, resp.status)
-        return resp, body
+        return service_client.ResponseBody(resp, body)

@@ -82,8 +82,10 @@ class DeletableSubnet(DeletableResource):
         self._router_ids = set()
 
     def update(self, *args, **kwargs):
-        _, result = self.client.update_subnet(subnet=self.id, *args, **kwargs)
-        super(DeletableSubnet, self).update(**result['subnet'])
+        result = self.client.update_subnet(self.id,
+                                           *args,
+                                           **kwargs)
+        return super(DeletableSubnet, self).update(**result['subnet'])
 
     def add_to_router(self, router_id):
         self._router_ids.add(router_id)
@@ -108,9 +110,9 @@ class DeletableRouter(DeletableResource):
         return self.update(external_gateway_info=dict())
 
     def update(self, *args, **kwargs):
-        _, result = self.client.update_router(self.id,
-                                              *args,
-                                              **kwargs)
+        result = self.client.update_router(self.id,
+                                           *args,
+                                           **kwargs)
         return super(DeletableRouter, self).update(**result['router'])
 
     def delete(self):
@@ -121,15 +123,15 @@ class DeletableRouter(DeletableResource):
 class DeletableFloatingIp(DeletableResource):
 
     def refresh(self, *args, **kwargs):
-        _, result = self.client.show_floatingip(self.id,
-                                                *args,
-                                                **kwargs)
+        result = self.client.show_floatingip(self.id,
+                                             *args,
+                                             **kwargs)
         super(DeletableFloatingIp, self).update(**result['floatingip'])
 
     def update(self, *args, **kwargs):
-        _, result = self.client.update_floatingip(self.id,
-                                                  *args,
-                                                  **kwargs)
+        result = self.client.update_floatingip(self.id,
+                                               *args,
+                                               **kwargs)
         super(DeletableFloatingIp, self).update(**result['floatingip'])
 
     def __repr__(self):
@@ -183,5 +185,5 @@ class DeletableVip(DeletableResource):
         self.client.delete_vip(self.id)
 
     def refresh(self):
-        _, result = self.client.show_vip(self.id)
+        result = self.client.show_vip(self.id)
         super(DeletableVip, self).update(**result['vip'])

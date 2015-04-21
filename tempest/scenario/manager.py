@@ -14,22 +14,20 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import logging
-import os
 import subprocess
 
 import netaddr
+from oslo_log import log
 import six
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
 
-from tempest import auth
 from tempest import clients
 from tempest.common import credentials
-from tempest.common import debug
-from tempest.common.utils import data_utils
+from tempest.common import fixed_network
 from tempest.common.utils.linux import remote_client
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common import log
 from tempest.services.network import resources as net_resources
 import tempest.test
 
@@ -37,20 +35,13 @@ CONF = config.CONF
 
 LOG = log.getLogger(__name__)
 
-# NOTE(afazekas): Workaround for the stdout logging
-LOG_nova_client = logging.getLogger('novaclient.client')
-LOG_nova_client.addHandler(log.NullHandler())
-
-LOG_cinder_client = logging.getLogger('cinderclient.client')
-LOG_cinder_client.addHandler(log.NullHandler())
-
 
 class ScenarioTest(tempest.test.BaseTestCase):
     """Base class for scenario tests. Uses tempest own clients. """
 
     @classmethod
-    def resource_setup(cls):
-        super(ScenarioTest, cls).resource_setup()
+    def setup_credentials(cls):
+        super(ScenarioTest, cls).setup_credentials()
         # TODO(andreaf) Some of the code from this resource_setup could be
         # moved into `BaseTestCase`
         cls.isolated_creds = credentials.get_isolated_credentials(
@@ -58,7 +49,10 @@ class ScenarioTest(tempest.test.BaseTestCase):
         cls.manager = clients.Manager(
             credentials=cls.credentials()
         )
-        cls.admin_manager = clients.Manager(cls.admin_credentials())
+
+    @classmethod
+    def setup_clients(cls):
+        super(ScenarioTest, cls).setup_clients()
         # Clients (in alphabetical order)
         cls.flavors_client = cls.manager.flavors_client
         cls.floating_ips_client = cls.manager.floating_ips_client
@@ -67,7 +61,6 @@ class ScenarioTest(tempest.test.BaseTestCase):
         # Compute image client
         cls.images_client = cls.manager.images_client
         cls.keypairs_client = cls.manager.keypairs_client
-        cls.networks_client = cls.admin_manager.networks_client
         # Nova security groups client
         cls.security_groups_client = cls.manager.security_groups_client
         cls.servers_client = cls.manager.servers_client
@@ -119,7 +112,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
             # Tempest clients return dicts, so there is no common delete
             # method available. Using a callable instead
             delete_thing(*args, **kwargs)
-        except exceptions.NotFound:
+        except lib_exc.NotFound:
             # If the resource is already missing, mission accomplished.
             pass
 
@@ -169,7 +162,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
             client = self.keypairs_client
         name = data_utils.rand_name(self.__class__.__name__)
         # We don't need to create a keypair by pubkey in scenario
-        resp, body = client.create_keypair(name)
+        body = client.create_keypair(name)
         self.addCleanup(client.delete_keypair, name)
         return body
 
@@ -192,11 +185,14 @@ class ScenarioTest(tempest.test.BaseTestCase):
             flavor = CONF.compute.flavor_ref
         if create_kwargs is None:
             create_kwargs = {}
+        network = self.get_tenant_network()
+        create_kwargs = fixed_network.set_networks_kwarg(network,
+                                                         create_kwargs)
 
         LOG.debug("Creating a server (name: %s, image: %s, flavor: %s)",
                   name, image, flavor)
-        _, server = self.servers_client.create_server(name, image, flavor,
-                                                      **create_kwargs)
+        server = self.servers_client.create_server(name, image, flavor,
+                                                   **create_kwargs)
         if wait_on_delete:
             self.addCleanup(self.servers_client.wait_for_server_termination,
                             server['id'])
@@ -211,15 +207,15 @@ class ScenarioTest(tempest.test.BaseTestCase):
         # The instance retrieved on creation is missing network
         # details, necessitating retrieval after it becomes active to
         # ensure correct details.
-        _, server = self.servers_client.get_server(server['id'])
+        server = self.servers_client.get_server(server['id'])
         self.assertEqual(server['name'], name)
         return server
 
-    def create_volume(self, size=1, name=None, snapshot_id=None,
+    def create_volume(self, size=None, name=None, snapshot_id=None,
                       imageRef=None, volume_type=None, wait_on_delete=True):
         if name is None:
             name = data_utils.rand_name(self.__class__.__name__)
-        _, volume = self.volumes_client.create_volume(
+        volume = self.volumes_client.create_volume(
             size=size, display_name=name, snapshot_id=snapshot_id,
             imageRef=imageRef, volume_type=volume_type)
 
@@ -239,13 +235,13 @@ class ScenarioTest(tempest.test.BaseTestCase):
         self.volumes_client.wait_for_volume_status(volume['id'], 'available')
         # The volume retrieved on creation has a non-up-to-date status.
         # Retrieval after it becomes active ensures correct details.
-        _, volume = self.volumes_client.get_volume(volume['id'])
+        volume = self.volumes_client.show_volume(volume['id'])
         return volume
 
     def _create_loginable_secgroup_rule(self, secgroup_id=None):
         _client = self.security_groups_client
         if secgroup_id is None:
-            _, sgs = _client.list_security_groups()
+            sgs = _client.list_security_groups()
             for sg in sgs:
                 if sg['name'] == 'default':
                     secgroup_id = sg['id']
@@ -272,8 +268,8 @@ class ScenarioTest(tempest.test.BaseTestCase):
         ]
         rules = list()
         for ruleset in rulesets:
-            _, sg_rule = _client.create_security_group_rule(secgroup_id,
-                                                            **ruleset)
+            sg_rule = _client.create_security_group_rule(secgroup_id,
+                                                         **ruleset)
             self.addCleanup(self.delete_wrapper,
                             _client.delete_security_group_rule,
                             sg_rule['id'])
@@ -284,7 +280,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
         # Create security group
         sg_name = data_utils.rand_name(self.__class__.__name__)
         sg_desc = sg_name + " description"
-        _, secgroup = self.security_groups_client.create_security_group(
+        secgroup = self.security_groups_client.create_security_group(
             sg_name, sg_desc)
         self.assertEqual(secgroup['name'], sg_name)
         self.assertEqual(secgroup['description'], sg_desc)
@@ -297,12 +293,29 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
         return secgroup
 
-    def get_remote_client(self, server_or_ip, username=None, private_key=None):
+    def get_remote_client(self, server_or_ip, username=None, private_key=None,
+                          log_console_of_servers=None):
+        """Get a SSH client to a remote server
+
+        @param server_or_ip a server object as returned by Tempest compute
+            client or an IP address to connect to
+        @param username name of the Linux account on the remote server
+        @param private_key the SSH private key to use
+        @param log_console_of_servers a list of server objects. Each server
+            in the list will have its console printed in the logs in case the
+            SSH connection failed to be established
+        @return a RemoteClient object
+        """
         if isinstance(server_or_ip, six.string_types):
             ip = server_or_ip
         else:
-            addr = server_or_ip['addresses'][CONF.compute.network_for_ssh][0]
-            ip = addr['addr']
+            addrs = server_or_ip['addresses'][CONF.compute.network_for_ssh]
+            try:
+                ip = (addr['addr'] for addr in addrs if
+                      netaddr.valid_ipv4(addr['addr'])).next()
+            except StopIteration:
+                raise lib_exc.NotFound("No IPv4 addresses to use for SSH to "
+                                       "remote server.")
 
         if username is None:
             username = CONF.scenario.ssh_user
@@ -312,9 +325,12 @@ class ScenarioTest(tempest.test.BaseTestCase):
                                                   pkey=private_key)
         try:
             linux_client.validate_authentication()
-        except exceptions.SSHTimeout:
-            LOG.exception('ssh connection to %s failed' % ip)
-            debug.log_net_debug()
+        except Exception:
+            LOG.exception('Initializing SSH connection to %s failed' % ip)
+            # If we don't explicitely set for which servers we want to
+            # log the console output then all the servers will be logged.
+            # See the definition of _log_console_output()
+            self._log_console_output(log_console_of_servers)
             raise
 
         return linux_client
@@ -332,7 +348,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
             'is_public': 'False',
         }
         params.update(properties)
-        _, image = self.image_client.create_image(**params)
+        image = self.image_client.create_image(**params)
         self.addCleanup(self.image_client.delete_image, image['id'])
         self.assertEqual("queued", image['status'])
         self.image_client.update_image(image['id'], data=image_file)
@@ -372,19 +388,18 @@ class ScenarioTest(tempest.test.BaseTestCase):
             LOG.debug('Console output not supported, cannot log')
             return
         if not servers:
-            _, servers = self.servers_client.list_servers()
+            servers = self.servers_client.list_servers()
             servers = servers['servers']
         for server in servers:
             console_output = self.servers_client.get_console_output(
-                server['id'], length=None)
-            LOG.debug('Console output for %s\nhead=%s\nbody=\n%s',
-                      server['id'], console_output[0], console_output[1])
+                server['id'], length=None).data
+            LOG.debug('Console output for %s\nbody=\n%s',
+                      server['id'], console_output)
 
     def _log_net_info(self, exc):
         # network debug is called as part of ssh init
         if not isinstance(exc, exceptions.SSHTimeout):
             LOG.debug('Network information on a devstack host')
-            debug.log_net_debug()
 
     def create_server_snapshot(self, server, name=None):
         # Glance client
@@ -392,17 +407,17 @@ class ScenarioTest(tempest.test.BaseTestCase):
         # Compute client
         _images_client = self.images_client
         if name is None:
-            name = data_utils.rand_name('scenario-snapshot-')
+            name = data_utils.rand_name('scenario-snapshot')
         LOG.debug("Creating a snapshot image for server: %s", server['name'])
-        resp, image = _images_client.create_image(server['id'], name)
-        image_id = resp['location'].split('images/')[1]
+        image = _images_client.create_image(server['id'], name)
+        image_id = image.response['location'].split('images/')[1]
         _image_client.wait_for_image_status(image_id, 'active')
         self.addCleanup_with_wait(
             waiter_callable=_image_client.wait_for_resource_deletion,
             thing_id=image_id, thing_id_param='id',
             cleanup_callable=self.delete_wrapper,
             cleanup_args=[_image_client.delete_image, image_id])
-        _, snapshot_image = _image_client.get_image_meta(image_id)
+        snapshot_image = _image_client.get_image_meta(image_id)
         image_name = snapshot_image['name']
         self.assertEqual(name, image_name)
         LOG.debug("Created snapshot image %s for server %s",
@@ -411,20 +426,19 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
     def nova_volume_attach(self):
         # TODO(andreaf) Device should be here CONF.compute.volume_device_name
-        _, volume_attachment = self.servers_client.attach_volume(
+        volume = self.servers_client.attach_volume(
             self.server['id'], self.volume['id'], '/dev/vdb')
-        volume = volume_attachment['volumeAttachment']
         self.assertEqual(self.volume['id'], volume['id'])
         self.volumes_client.wait_for_volume_status(volume['id'], 'in-use')
         # Refresh the volume after the attachment
-        _, self.volume = self.volumes_client.get_volume(volume['id'])
+        self.volume = self.volumes_client.show_volume(volume['id'])
 
     def nova_volume_detach(self):
         self.servers_client.detach_volume(self.server['id'], self.volume['id'])
         self.volumes_client.wait_for_volume_status(self.volume['id'],
                                                    'available')
 
-        _, volume = self.volumes_client.get_volume(self.volume['id'])
+        volume = self.volumes_client.show_volume(self.volume['id'])
         self.assertEqual('available', volume['status'])
 
     def rebuild_server(self, server_id, image=None,
@@ -457,6 +471,65 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
         return tempest.test.call_until_true(ping, timeout, 1)
 
+    def check_vm_connectivity(self, ip_address,
+                              username=None,
+                              private_key=None,
+                              should_connect=True):
+        """
+        :param ip_address: server to test against
+        :param username: server's ssh username
+        :param private_key: server's ssh private key to be used
+        :param should_connect: True/False indicates positive/negative test
+            positive - attempt ping and ssh
+            negative - attempt ping and fail if succeed
+
+        :raises: AssertError if the result of the connectivity check does
+            not match the value of the should_connect param
+        """
+        if should_connect:
+            msg = "Timed out waiting for %s to become reachable" % ip_address
+        else:
+            msg = "ip address %s is reachable" % ip_address
+        self.assertTrue(self.ping_ip_address(ip_address,
+                                             should_succeed=should_connect),
+                        msg=msg)
+        if should_connect:
+            # no need to check ssh for negative connectivity
+            self.get_remote_client(ip_address, username, private_key)
+
+    def check_public_network_connectivity(self, ip_address, username,
+                                          private_key, should_connect=True,
+                                          msg=None, servers=None):
+        # The target login is assumed to have been configured for
+        # key-based authentication by cloud-init.
+        LOG.debug('checking network connections to IP %s with user: %s' %
+                  (ip_address, username))
+        try:
+            self.check_vm_connectivity(ip_address,
+                                       username,
+                                       private_key,
+                                       should_connect=should_connect)
+        except Exception:
+            ex_msg = 'Public network connectivity check failed'
+            if msg:
+                ex_msg += ": " + msg
+            LOG.exception(ex_msg)
+            self._log_console_output(servers)
+            raise
+
+    def create_floating_ip(self, thing, pool_name=None):
+        """Creates a floating IP and associates to a server using
+        Nova clients
+        """
+
+        floating_ip = self.floating_ips_client.create_floating_ip(pool_name)
+        self.addCleanup(self.delete_wrapper,
+                        self.floating_ips_client.delete_floating_ip,
+                        floating_ip['id'])
+        self.floating_ips_client.associate_floating_ip_to_server(
+            floating_ip['ip'], thing['id'])
+        return floating_ip
+
 
 class NetworkScenarioTest(ScenarioTest):
     """Base class for network scenario tests.
@@ -470,24 +543,32 @@ class NetworkScenarioTest(ScenarioTest):
     """
 
     @classmethod
-    def check_preconditions(cls):
+    def skip_checks(cls):
+        super(NetworkScenarioTest, cls).skip_checks()
         if not CONF.service_available.neutron:
             raise cls.skipException('Neutron not available')
+        if not credentials.is_admin_available():
+            msg = ("Missing Identity Admin API credentials in configuration.")
+            raise cls.skipException(msg)
+
+    @classmethod
+    def setup_credentials(cls):
+        super(NetworkScenarioTest, cls).setup_credentials()
+        cls.admin_manager = clients.Manager(cls.admin_credentials())
 
     @classmethod
     def resource_setup(cls):
         super(NetworkScenarioTest, cls).resource_setup()
         cls.tenant_id = cls.manager.identity_client.tenant_id
-        cls.check_preconditions()
 
     def _create_network(self, client=None, tenant_id=None,
                         namestart='network-smoke-'):
         if not client:
             client = self.network_client
         if not tenant_id:
-            tenant_id = client.rest_client.tenant_id
+            tenant_id = client.tenant_id
         name = data_utils.rand_name(namestart)
-        _, result = client.create_network(name=name, tenant_id=tenant_id)
+        result = client.create_network(name=name, tenant_id=tenant_id)
         network = net_resources.DeletableNetwork(client=client,
                                                  **result['network'])
         self.assertEqual(network.name, name)
@@ -514,7 +595,7 @@ class NetworkScenarioTest(ScenarioTest):
         def temp(*args, **kwargs):
             temp_method = self.admin_manager.network_client.__getattr__(
                 'list_%s' % resource_type)
-            _, resource_list = temp_method(*args, **kwargs)
+            resource_list = temp_method(*args, **kwargs)
             return resource_list[resource_type]
         return temp
 
@@ -535,28 +616,37 @@ class NetworkScenarioTest(ScenarioTest):
             cidr_in_use = self._list_subnets(tenant_id=tenant_id, cidr=cidr)
             return len(cidr_in_use) != 0
 
-        tenant_cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
+        ip_version = kwargs.pop('ip_version', 4)
+
+        if ip_version == 6:
+            tenant_cidr = netaddr.IPNetwork(
+                CONF.network.tenant_network_v6_cidr)
+            num_bits = CONF.network.tenant_network_v6_mask_bits
+        else:
+            tenant_cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
+            num_bits = CONF.network.tenant_network_mask_bits
+
         result = None
+        str_cidr = None
         # Repeatedly attempt subnet creation with sequential cidr
         # blocks until an unallocated block is found.
-        for subnet_cidr in tenant_cidr.subnet(
-                CONF.network.tenant_network_mask_bits):
+        for subnet_cidr in tenant_cidr.subnet(num_bits):
             str_cidr = str(subnet_cidr)
             if cidr_in_use(str_cidr, tenant_id=network.tenant_id):
                 continue
 
             subnet = dict(
                 name=data_utils.rand_name(namestart),
-                ip_version=4,
                 network_id=network.id,
                 tenant_id=network.tenant_id,
                 cidr=str_cidr,
+                ip_version=ip_version,
                 **kwargs
             )
             try:
-                _, result = client.create_subnet(**subnet)
+                result = client.create_subnet(**subnet)
                 break
-            except exceptions.Conflict as e:
+            except lib_exc.Conflict as e:
                 is_overlapping_cidr = 'overlaps with another subnet' in str(e)
                 if not is_overlapping_cidr:
                     raise
@@ -567,41 +657,57 @@ class NetworkScenarioTest(ScenarioTest):
         self.addCleanup(self.delete_wrapper, subnet.delete)
         return subnet
 
-    def _create_port(self, network, client=None, namestart='port-quotatest'):
+    def _create_port(self, network_id, client=None, namestart='port-quotatest',
+                     **kwargs):
         if not client:
             client = self.network_client
         name = data_utils.rand_name(namestart)
-        _, result = client.create_port(
+        result = client.create_port(
             name=name,
-            network_id=network.id,
-            tenant_id=network.tenant_id)
+            network_id=network_id,
+            **kwargs)
         self.assertIsNotNone(result, 'Unable to allocate port')
         port = net_resources.DeletablePort(client=client,
                                            **result['port'])
         self.addCleanup(self.delete_wrapper, port.delete)
         return port
 
-    def _get_server_port_id(self, server, ip_addr=None):
+    def _get_server_port_id_and_ip4(self, server, ip_addr=None):
         ports = self._list_ports(device_id=server['id'],
                                  fixed_ip=ip_addr)
         self.assertEqual(len(ports), 1,
                          "Unable to determine which port to target.")
-        return ports[0]['id']
+        # it might happen here that this port has more then one ip address
+        # as in case of dual stack- when this port is created on 2 subnets
+        for ip46 in ports[0]['fixed_ips']:
+            ip = ip46['ip_address']
+            if netaddr.valid_ipv4(ip):
+                return ports[0]['id'], ip
 
     def _get_network_by_name(self, network_name):
         net = self._list_networks(name=network_name)
+        self.assertNotEqual(len(net), 0,
+                            "Unable to get network by name: %s" % network_name)
         return net_resources.AttributeDict(net[0])
 
-    def _create_floating_ip(self, thing, external_network_id, port_id=None,
-                            client=None):
+    def create_floating_ip(self, thing, external_network_id=None,
+                           port_id=None, client=None):
+        """Creates a floating IP and associates to a resource/port using
+        Neutron client
+        """
+        if not external_network_id:
+            external_network_id = CONF.network.public_network_id
         if not client:
             client = self.network_client
         if not port_id:
-            port_id = self._get_server_port_id(thing)
-        _, result = client.create_floatingip(
+            port_id, ip4 = self._get_server_port_id_and_ip4(thing)
+        else:
+            ip4 = None
+        result = client.create_floatingip(
             floating_network_id=external_network_id,
             port_id=port_id,
-            tenant_id=thing['tenant_id']
+            tenant_id=thing['tenant_id'],
+            fixed_ip_address=ip4
         )
         floating_ip = net_resources.DeletableFloatingIp(
             client=client,
@@ -610,7 +716,7 @@ class NetworkScenarioTest(ScenarioTest):
         return floating_ip
 
     def _associate_floating_ip(self, floating_ip, server):
-        port_id = self._get_server_port_id(server)
+        port_id, _ = self._get_server_port_id_and_ip4(server)
         floating_ip.update(port_id=port_id)
         self.assertEqual(port_id, floating_ip.port_id)
         return floating_ip
@@ -624,14 +730,20 @@ class NetworkScenarioTest(ScenarioTest):
         return floating_ip
 
     def check_floating_ip_status(self, floating_ip, status):
-        """Verifies floatingip has reached given status. without waiting
+        """Verifies floatingip reaches the given status
 
         :param floating_ip: net_resources.DeletableFloatingIp floating IP to
         to check status
         :param status: target status
         :raises: AssertionError if status doesn't match
         """
-        floating_ip.refresh()
+        def refresh():
+            floating_ip.refresh()
+            return status == floating_ip.status
+
+        tempest.test.call_until_true(refresh,
+                                     CONF.network.build_timeout,
+                                     CONF.network.build_interval)
         self.assertEqual(status, floating_ip.status,
                          message="FloatingIP: {fp} is at status: {cst}. "
                                  "failed  to reach status: {st}"
@@ -639,53 +751,6 @@ class NetworkScenarioTest(ScenarioTest):
                                  st=status))
         LOG.info("FloatingIP: {fp} is at status: {st}"
                  .format(fp=floating_ip, st=status))
-
-    def _check_vm_connectivity(self, ip_address,
-                               username=None,
-                               private_key=None,
-                               should_connect=True):
-        """
-        :param ip_address: server to test against
-        :param username: server's ssh username
-        :param private_key: server's ssh private key to be used
-        :param should_connect: True/False indicates positive/negative test
-            positive - attempt ping and ssh
-            negative - attempt ping and fail if succeed
-
-        :raises: AssertError if the result of the connectivity check does
-            not match the value of the should_connect param
-        """
-        if should_connect:
-            msg = "Timed out waiting for %s to become reachable" % ip_address
-        else:
-            msg = "ip address %s is reachable" % ip_address
-        self.assertTrue(self.ping_ip_address(ip_address,
-                                             should_succeed=should_connect),
-                        msg=msg)
-        if should_connect:
-            # no need to check ssh for negative connectivity
-            self.get_remote_client(ip_address, username, private_key)
-
-    def _check_public_network_connectivity(self, ip_address, username,
-                                           private_key, should_connect=True,
-                                           msg=None, servers=None):
-        # The target login is assumed to have been configured for
-        # key-based authentication by cloud-init.
-        LOG.debug('checking network connections to IP %s with user: %s' %
-                  (ip_address, username))
-        try:
-            self._check_vm_connectivity(ip_address,
-                                        username,
-                                        private_key,
-                                        should_connect=should_connect)
-        except Exception as e:
-            ex_msg = 'Public network connectivity check failed'
-            if msg:
-                ex_msg += ": " + msg
-            LOG.exception(ex_msg)
-            self._log_console_output(servers)
-            self._log_net_info(e)
-            raise
 
     def _check_tenant_network_connectivity(self, server,
                                            username,
@@ -699,12 +764,12 @@ class NetworkScenarioTest(ScenarioTest):
         # The target login is assumed to have been configured for
         # key-based authentication by cloud-init.
         try:
-            for net_name, ip_addresses in server['networks'].iteritems():
+            for net_name, ip_addresses in server['addresses'].iteritems():
                 for ip_address in ip_addresses:
-                    self._check_vm_connectivity(ip_address,
-                                                username,
-                                                private_key,
-                                                should_connect=should_connect)
+                    self.check_vm_connectivity(ip_address['addr'],
+                                               username,
+                                               private_key,
+                                               should_connect=should_connect)
         except Exception as e:
             LOG.exception('Tenant network connectivity check failed')
             self._log_console_output(servers_for_debug)
@@ -739,13 +804,14 @@ class NetworkScenarioTest(ScenarioTest):
         if client is None:
             client = self.network_client
         if tenant_id is None:
-            tenant_id = client.rest_client.tenant_id
+            tenant_id = client.tenant_id
         secgroup = self._create_empty_security_group(namestart=namestart,
                                                      client=client,
                                                      tenant_id=tenant_id)
 
         # Add rules to the security group
-        rules = self._create_loginable_secgroup_rule(secgroup=secgroup)
+        rules = self._create_loginable_secgroup_rule(client=client,
+                                                     secgroup=secgroup)
         for rule in rules:
             self.assertEqual(tenant_id, rule.tenant_id)
             self.assertEqual(secgroup.id, rule.security_group_id)
@@ -765,13 +831,13 @@ class NetworkScenarioTest(ScenarioTest):
         if client is None:
             client = self.network_client
         if not tenant_id:
-            tenant_id = client.rest_client.tenant_id
+            tenant_id = client.tenant_id
         sg_name = data_utils.rand_name(namestart)
         sg_desc = sg_name + " description"
         sg_dict = dict(name=sg_name,
                        description=sg_desc)
         sg_dict['tenant_id'] = tenant_id
-        _, result = client.create_security_group(**sg_dict)
+        result = client.create_security_group(**sg_dict)
         secgroup = net_resources.DeletableSecurityGroup(
             client=client,
             **result['security_group']
@@ -790,7 +856,7 @@ class NetworkScenarioTest(ScenarioTest):
         if client is None:
             client = self.network_client
         if not tenant_id:
-            tenant_id = client.rest_client.tenant_id
+            tenant_id = client.tenant_id
         sgs = [
             sg for sg in client.list_security_groups().values()[0]
             if sg['tenant_id'] == tenant_id and sg['name'] == 'default'
@@ -822,7 +888,7 @@ class NetworkScenarioTest(ScenarioTest):
         if client is None:
             client = self.network_client
         if not tenant_id:
-            tenant_id = client.rest_client.tenant_id
+            tenant_id = client.tenant_id
         if secgroup is None:
             secgroup = self._default_security_group(client=client,
                                                     tenant_id=tenant_id)
@@ -831,7 +897,7 @@ class NetworkScenarioTest(ScenarioTest):
                        tenant_id=secgroup.tenant_id)
         ruleset.update(kwargs)
 
-        _, sg_rule = client.create_security_group_rule(**ruleset)
+        sg_rule = client.create_security_group_rule(**ruleset)
         sg_rule = net_resources.DeletableSecurityGroupRule(
             client=client,
             **sg_rule['security_group_rule']
@@ -862,6 +928,11 @@ class NetworkScenarioTest(ScenarioTest):
             dict(
                 # ping
                 protocol='icmp',
+            ),
+            dict(
+                # ipv6-icmp for ping6
+                protocol='icmp',
+                ethertype='IPv6',
             )
         ]
         for ruleset in rulesets:
@@ -870,7 +941,7 @@ class NetworkScenarioTest(ScenarioTest):
                 try:
                     sg_rule = self._create_security_group_rule(
                         client=client, secgroup=secgroup, **ruleset)
-                except exceptions.Conflict as ex:
+                except lib_exc.Conflict as ex:
                     # if rule already exist - skip rule and continue
                     msg = 'Security group rule already exists'
                     if msg not in ex._error_string:
@@ -885,9 +956,9 @@ class NetworkScenarioTest(ScenarioTest):
         """Wrapper utility that returns a test pool."""
         client = self.network_client
         name = data_utils.rand_name('pool')
-        _, resp_pool = client.create_pool(protocol=protocol, name=name,
-                                          subnet_id=subnet_id,
-                                          lb_method=lb_method)
+        resp_pool = client.create_pool(protocol=protocol, name=name,
+                                       subnet_id=subnet_id,
+                                       lb_method=lb_method)
         pool = net_resources.DeletablePool(client=client, **resp_pool['pool'])
         self.assertEqual(pool['name'], name)
         self.addCleanup(self.delete_wrapper, pool.delete)
@@ -896,9 +967,9 @@ class NetworkScenarioTest(ScenarioTest):
     def _create_member(self, address, protocol_port, pool_id):
         """Wrapper utility that returns a test member."""
         client = self.network_client
-        _, resp_member = client.create_member(protocol_port=protocol_port,
-                                              pool_id=pool_id,
-                                              address=address)
+        resp_member = client.create_member(protocol_port=protocol_port,
+                                           pool_id=pool_id,
+                                           address=address)
         member = net_resources.DeletableMember(client=client,
                                                **resp_member['member'])
         self.addCleanup(self.delete_wrapper, member.delete)
@@ -908,9 +979,9 @@ class NetworkScenarioTest(ScenarioTest):
         """Wrapper utility that returns a test vip."""
         client = self.network_client
         name = data_utils.rand_name('vip')
-        _, resp_vip = client.create_vip(protocol=protocol, name=name,
-                                        subnet_id=subnet_id, pool_id=pool_id,
-                                        protocol_port=protocol_port)
+        resp_vip = client.create_vip(protocol=protocol, name=name,
+                                     subnet_id=subnet_id, pool_id=pool_id,
+                                     protocol_port=protocol_port)
         vip = net_resources.DeletableVip(client=client, **resp_vip['vip'])
         self.assertEqual(vip['name'], name)
         self.addCleanup(self.delete_wrapper, vip.delete)
@@ -934,7 +1005,7 @@ class NetworkScenarioTest(ScenarioTest):
         if not client:
             client = self.network_client
         if not tenant_id:
-            tenant_id = client.rest_client.tenant_id
+            tenant_id = client.tenant_id
         router_id = CONF.network.public_router_id
         network_id = CONF.network.public_network_id
         if router_id:
@@ -953,23 +1024,31 @@ class NetworkScenarioTest(ScenarioTest):
         if not client:
             client = self.network_client
         if not tenant_id:
-            tenant_id = client.rest_client.tenant_id
+            tenant_id = client.tenant_id
         name = data_utils.rand_name(namestart)
-        _, result = client.create_router(name=name,
-                                         admin_state_up=True,
-                                         tenant_id=tenant_id)
+        result = client.create_router(name=name,
+                                      admin_state_up=True,
+                                      tenant_id=tenant_id)
         router = net_resources.DeletableRouter(client=client,
                                                **result['router'])
         self.assertEqual(router.name, name)
         self.addCleanup(self.delete_wrapper, router.delete)
         return router
 
-    def create_networks(self, client=None, tenant_id=None):
+    def _update_router_admin_state(self, router, admin_state_up):
+        router.update(admin_state_up=admin_state_up)
+        self.assertEqual(admin_state_up, router.admin_state_up)
+
+    def create_networks(self, client=None, tenant_id=None,
+                        dns_nameservers=None):
         """Create a network with a subnet connected to a router.
 
         The baremetal driver is a special case since all nodes are
         on the same shared network.
 
+        :param client: network client to create resources with.
+        :param tenant_id: id of tenant to create resources in.
+        :param dns_nameservers: list of dns servers to send to subnet.
         :returns: network, subnet, router
         """
         if CONF.baremetal.driver_enabled:
@@ -978,6 +1057,9 @@ class NetworkScenarioTest(ScenarioTest):
             # not (the current baremetal case). Likely can be removed when
             # test account mgmt is reworked:
             # https://blueprints.launchpad.net/tempest/+spec/test-accounts
+            if not CONF.compute.fixed_network_name:
+                m = 'fixed_network_name must be specified in config'
+                raise exceptions.InvalidConfiguration(m)
             network = self._get_network_by_name(
                 CONF.compute.fixed_network_name)
             router = None
@@ -985,9 +1067,74 @@ class NetworkScenarioTest(ScenarioTest):
         else:
             network = self._create_network(client=client, tenant_id=tenant_id)
             router = self._get_router(client=client, tenant_id=tenant_id)
-            subnet = self._create_subnet(network=network, client=client)
+
+            subnet_kwargs = dict(network=network, client=client)
+            # use explicit check because empty list is a valid option
+            if dns_nameservers is not None:
+                subnet_kwargs['dns_nameservers'] = dns_nameservers
+            subnet = self._create_subnet(**subnet_kwargs)
             subnet.add_to_router(router.id)
         return network, subnet, router
+
+    def create_server(self, name=None, image=None, flavor=None,
+                      wait_on_boot=True, wait_on_delete=True,
+                      create_kwargs=None):
+        vnic_type = CONF.network.port_vnic_type
+
+        # If vnic_type is configured create port for
+        # every network
+        if vnic_type:
+            ports = []
+            networks = []
+            create_port_body = {'binding:vnic_type': vnic_type,
+                                'namestart': 'port-smoke'}
+            if create_kwargs:
+                net_client = create_kwargs.get("network_client",
+                                               self.network_client)
+
+                # Convert security group names to security group ids
+                # to pass to create_port
+                if create_kwargs.get('security_groups'):
+                    security_groups = net_client.list_security_groups().get(
+                        'security_groups')
+                    sec_dict = dict([(s['name'], s['id'])
+                                    for s in security_groups])
+
+                    sec_groups_names = [s['name'] for s in create_kwargs[
+                        'security_groups']]
+                    security_groups_ids = [sec_dict[s]
+                                           for s in sec_groups_names]
+
+                    if security_groups_ids:
+                        create_port_body[
+                            'security_groups'] = security_groups_ids
+                networks = create_kwargs.get('networks')
+            else:
+                net_client = self.network_client
+            # If there are no networks passed to us we look up
+            # for the tenant's private networks and create a port
+            # if there is only one private network. The same behaviour
+            # as we would expect when passing the call to the clients
+            # with no networks
+            if not networks:
+                networks = net_client.list_networks(filters={
+                    'router:external': False})
+                self.assertEqual(1, len(networks),
+                                 "There is more than one"
+                                 " network for the tenant")
+            for net in networks:
+                net_id = net['uuid']
+                port = self._create_port(network_id=net_id,
+                                         client=net_client,
+                                         **create_port_body)
+                ports.append({'port': port.id})
+            if ports:
+                create_kwargs['networks'] = ports
+
+        return super(NetworkScenarioTest, self).create_server(
+            name=name, image=image, flavor=flavor,
+            wait_on_boot=wait_on_boot, wait_on_delete=wait_on_delete,
+            create_kwargs=create_kwargs)
 
 
 # power/provision states as of icehouse
@@ -1016,13 +1163,16 @@ class BaremetalProvisionStates(object):
 
 class BaremetalScenarioTest(ScenarioTest):
     @classmethod
-    def resource_setup(cls):
-        super(BaremetalScenarioTest, cls).resource_setup()
-
+    def skip_checks(cls):
+        super(BaremetalScenarioTest, cls).skip_checks()
         if (not CONF.service_available.ironic or
            not CONF.baremetal.driver_enabled):
             msg = 'Ironic not available or Ironic compute driver not enabled'
             raise cls.skipException(msg)
+
+    @classmethod
+    def setup_credentials(cls):
+        super(BaremetalScenarioTest, cls).setup_credentials()
 
         # use an admin client manager for baremetal client
         manager = clients.Manager(
@@ -1030,6 +1180,9 @@ class BaremetalScenarioTest(ScenarioTest):
         )
         cls.baremetal_client = manager.baremetal_client
 
+    @classmethod
+    def resource_setup(cls):
+        super(BaremetalScenarioTest, cls).resource_setup()
         # allow any issues obtaining the node list to raise early
         cls.baremetal_client.list_nodes()
 
@@ -1067,7 +1220,7 @@ class BaremetalScenarioTest(ScenarioTest):
             node = None
             try:
                 node = self.get_node(instance_id=instance_id)
-            except exceptions.NotFound:
+            except lib_exc.NotFound:
                 pass
             return node is not None
 
@@ -1130,7 +1283,7 @@ class BaremetalScenarioTest(ScenarioTest):
         self.servers_client.wait_for_server_status(self.instance['id'],
                                                    'ACTIVE')
         self.node = self.get_node(instance_id=self.instance['id'])
-        _, self.instance = self.servers_client.get_server(self.instance['id'])
+        self.instance = self.servers_client.get_server(self.instance['id'])
 
     def terminate_instance(self):
         self.servers_client.delete_server(self.instance['id'])
@@ -1148,9 +1301,17 @@ class EncryptionScenarioTest(ScenarioTest):
     """
 
     @classmethod
-    def resource_setup(cls):
-        super(EncryptionScenarioTest, cls).resource_setup()
-        cls.admin_volume_types_client = cls.admin_manager.volume_types_client
+    def skip_checks(cls):
+        super(EncryptionScenarioTest, cls).skip_checks()
+        if not credentials.is_admin_available():
+            msg = ("Missing Identity Admin API credentials in configuration.")
+            raise cls.skipException(msg)
+
+    @classmethod
+    def setup_clients(cls):
+        super(EncryptionScenarioTest, cls).setup_clients()
+        admin_manager = clients.Manager(cls.admin_credentials())
+        cls.admin_volume_types_client = admin_manager.volume_types_client
 
     def _wait_for_volume_status(self, status):
         self.status_timeout(
@@ -1167,9 +1328,9 @@ class EncryptionScenarioTest(ScenarioTest):
             client = self.admin_volume_types_client
         if not name:
             name = 'generic'
-        randomized_name = data_utils.rand_name('scenario-type-' + name + '-')
+        randomized_name = data_utils.rand_name('scenario-type-' + name)
         LOG.debug("Creating a volume type: %s", randomized_name)
-        _, body = client.create_volume_type(
+        body = client.create_volume_type(
             randomized_name)
         self.assertIn('id', body)
         self.addCleanup(client.delete_volume_type, body['id'])
@@ -1189,48 +1350,6 @@ class EncryptionScenarioTest(ScenarioTest):
             control_location=control_location)
 
 
-class OrchestrationScenarioTest(ScenarioTest):
-    """
-    Base class for orchestration scenario tests
-    """
-
-    @classmethod
-    def resource_setup(cls):
-        super(OrchestrationScenarioTest, cls).resource_setup()
-        if not CONF.service_available.heat:
-            raise cls.skipException("Heat support is required")
-
-    @classmethod
-    def credentials(cls):
-        admin_creds = auth.get_default_credentials('identity_admin')
-        creds = auth.get_default_credentials('user')
-        admin_creds.tenant_name = creds.tenant_name
-        return admin_creds
-
-    def _load_template(self, base_file, file_name):
-        filepath = os.path.join(os.path.dirname(os.path.realpath(base_file)),
-                                file_name)
-        with open(filepath) as f:
-            return f.read()
-
-    @classmethod
-    def _stack_rand_name(cls):
-        return data_utils.rand_name(cls.__name__ + '-')
-
-    @classmethod
-    def _get_default_network(cls):
-        _, networks = cls.networks_client.list_networks()
-        for net in networks:
-            if net['label'] == CONF.compute.fixed_network_name:
-                return net
-
-    @staticmethod
-    def _stack_output(stack, output_key):
-        """Return a stack output value for a given key."""
-        return next((o['output_value'] for o in stack['outputs']
-                    if o['output_key'] == output_key), None)
-
-
 class SwiftScenarioTest(ScenarioTest):
     """
     Provide harness to do Swift scenario tests.
@@ -1240,17 +1359,35 @@ class SwiftScenarioTest(ScenarioTest):
     """
 
     @classmethod
-    def resource_setup(cls):
-        cls.set_network_resources()
-        super(SwiftScenarioTest, cls).resource_setup()
+    def skip_checks(cls):
+        super(SwiftScenarioTest, cls).skip_checks()
         if not CONF.service_available.swift:
             skip_msg = ("%s skipped as swift is not available" %
                         cls.__name__)
             raise cls.skipException(skip_msg)
+
+    @classmethod
+    def setup_credentials(cls):
+        cls.set_network_resources()
+        super(SwiftScenarioTest, cls).setup_credentials()
+        operator_role = CONF.object_storage.operator_role
+        if not cls.isolated_creds.is_role_available(operator_role):
+            skip_msg = ("%s skipped because the configured credential provider"
+                        " is not able to provide credentials with the %s role "
+                        "assigned." % (cls.__name__, operator_role))
+            raise cls.skipException(skip_msg)
+        else:
+            cls.os_operator = clients.Manager(
+                cls.isolated_creds.get_creds_by_roles(
+                    [operator_role]))
+
+    @classmethod
+    def setup_clients(cls):
+        super(SwiftScenarioTest, cls).setup_clients()
         # Clients for Swift
-        cls.account_client = cls.manager.account_client
-        cls.container_client = cls.manager.container_client
-        cls.object_client = cls.manager.object_client
+        cls.account_client = cls.os_operator.account_client
+        cls.container_client = cls.os_operator.container_client
+        cls.object_client = cls.os_operator.object_client
 
     def get_swift_stat(self):
         """get swift status for our user account."""
@@ -1264,6 +1401,9 @@ class SwiftScenarioTest(ScenarioTest):
         # look for the container to assure it is created
         self.list_and_check_container_objects(name)
         LOG.debug('Container %s created' % (name))
+        self.addCleanup(self.delete_wrapper,
+                        self.container_client.delete_container,
+                        name)
         return name
 
     def delete_container(self, container_name):
@@ -1274,6 +1414,10 @@ class SwiftScenarioTest(ScenarioTest):
         obj_name = obj_name or data_utils.rand_name('swift-scenario-object')
         obj_data = data_utils.arbitrary_string()
         self.object_client.create_object(container_name, obj_name, obj_data)
+        self.addCleanup(self.delete_wrapper,
+                        self.object_client.delete_object,
+                        container_name,
+                        obj_name)
         return obj_name, obj_data
 
     def delete_object(self, container_name, filename):

@@ -16,8 +16,10 @@
 import logging
 import urlparse
 
+from tempest_lib.common.utils import data_utils
+from tempest_lib import decorators
+
 from tempest.api.messaging import base
-from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -27,7 +29,6 @@ CONF = config.CONF
 
 
 class TestClaims(base.BaseMessagingTest):
-    _interface = 'json'
 
     @classmethod
     def resource_setup(cls):
@@ -54,6 +55,7 @@ class TestClaims(base.BaseMessagingTest):
         return resp, body
 
     @test.attr(type='smoke')
+    @test.idempotent_id('936cb1ca-b7af-44dd-a752-805e8c98156f')
     def test_post_claim(self):
         _, body = self._post_and_claim_messages(queue_name=self.queue_name)
         claimed_message_uri = body[0]['href']
@@ -65,8 +67,9 @@ class TestClaims(base.BaseMessagingTest):
         # Delete Claimed message
         self.client.delete_messages(claimed_message_uri)
 
-    @test.skip_because(bug="1331517")
+    @decorators.skip_because(bug="1331517")
     @test.attr(type='smoke')
+    @test.idempotent_id('84e491f4-68c6-451f-9846-b8f868eb27c5')
     def test_query_claim(self):
         # Post a Claim
         resp, body = self._post_and_claim_messages(queue_name=self.queue_name)
@@ -79,8 +82,9 @@ class TestClaims(base.BaseMessagingTest):
         claimed_message_uri = body[0]['href']
         self.delete_messages(claimed_message_uri)
 
-    @test.skip_because(bug="1328111")
+    @decorators.skip_because(bug="1328111")
     @test.attr(type='smoke')
+    @test.idempotent_id('420ef0c5-9bd6-4b82-b06d-d9da330fefd3')
     def test_update_claim(self):
         # Post a Claim
         resp, body = self._post_and_claim_messages(queue_name=self.queue_name)
@@ -104,6 +108,7 @@ class TestClaims(base.BaseMessagingTest):
         self.client.delete_messages(claimed_message_uri)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('fd4c7921-cb3f-4ed8-9ac8-e8f1e74c44aa')
     def test_release_claim(self):
         # Post a Claim
         resp, body = self._post_and_claim_messages(queue_name=self.queue_name)

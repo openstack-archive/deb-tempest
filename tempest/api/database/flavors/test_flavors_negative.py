@@ -13,20 +13,22 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from tempest_lib import exceptions as lib_exc
+
 from tempest.api.database import base
-from tempest import exceptions
 from tempest import test
 
 
 class DatabaseFlavorsNegativeTest(base.BaseDatabaseTest):
 
     @classmethod
-    def resource_setup(cls):
-        super(DatabaseFlavorsNegativeTest, cls).resource_setup()
+    def setup_clients(cls):
+        super(DatabaseFlavorsNegativeTest, cls).setup_clients()
         cls.client = cls.database_flavors_client
 
     @test.attr(type=['negative', 'gate'])
+    @test.idempotent_id('f8e7b721-373f-4a64-8e9c-5327e975af3e')
     def test_get_non_existent_db_flavor(self):
         # flavor details are not returned for non-existent flavors
-        self.assertRaises(exceptions.NotFound,
+        self.assertRaises(lib_exc.NotFound,
                           self.client.get_db_flavor_details, -1)

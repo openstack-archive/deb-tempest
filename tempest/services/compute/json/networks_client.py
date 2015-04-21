@@ -15,26 +15,23 @@
 
 import json
 
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
-class NetworksClientJSON(rest_client.RestClient):
+class NetworksClientJSON(service_client.ServiceClient):
 
-    def __init__(self, auth_provider):
-        super(NetworksClientJSON, self).__init__(auth_provider)
-        self.service = CONF.compute.catalog_type
-
-    def list_networks(self):
+    def list_networks(self, name=None):
         resp, body = self.get("os-networks")
         body = json.loads(body)
         self.expected_success(200, resp.status)
-        return resp, body['networks']
+        if name:
+            networks = [n for n in body['networks'] if n['label'] == name]
+        else:
+            networks = body['networks']
+        return service_client.ResponseBodyList(resp, networks)
 
     def get_network(self, network_id):
         resp, body = self.get("os-networks/%s" % str(network_id))
         body = json.loads(body)
         self.expected_success(200, resp.status)
-        return resp, body['network']
+        return service_client.ResponseBody(resp, body['network'])

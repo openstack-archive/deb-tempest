@@ -17,6 +17,7 @@ import netaddr
 
 from tempest.api.compute import base
 from tempest import config
+from tempest import exceptions
 from tempest import test
 
 CONF = config.CONF
@@ -31,23 +32,27 @@ class FloatingIPsBulkAdminTestJSON(base.BaseV2ComputeAdminTest):
     """
 
     @classmethod
+    def setup_clients(cls):
+        super(FloatingIPsBulkAdminTestJSON, cls).setup_clients()
+        cls.client = cls.os_adm.floating_ips_client
+
+    @classmethod
     def resource_setup(cls):
         super(FloatingIPsBulkAdminTestJSON, cls).resource_setup()
-        cls.client = cls.os_adm.floating_ips_client
         cls.ip_range = CONF.compute.floating_ip_range
         cls.verify_unallocated_floating_ip_range(cls.ip_range)
 
     @classmethod
     def verify_unallocated_floating_ip_range(cls, ip_range):
         # Verify whether configure floating IP range is not already allocated.
-        _, body = cls.client.list_floating_ips_bulk()
+        body = cls.client.list_floating_ips_bulk()
         allocated_ips_list = map(lambda x: x['address'], body)
         for ip_addr in netaddr.IPNetwork(ip_range).iter_hosts():
             if str(ip_addr) in allocated_ips_list:
                 msg = ("Configured unallocated floating IP range is already "
                        "allocated. Configure the correct unallocated range "
                        "as 'floating_ip_range'")
-                raise cls.skipException(msg)
+                raise exceptions.InvalidConfiguration(msg)
         return
 
     def _delete_floating_ips_bulk(self, ip_range):
@@ -57,6 +62,7 @@ class FloatingIPsBulkAdminTestJSON(base.BaseV2ComputeAdminTest):
             pass
 
     @test.attr(type='gate')
+    @test.idempotent_id('2c8f145f-8012-4cb8-ac7e-95a587f0e4ab')
     @test.services('network')
     def test_create_list_delete_floating_ips_bulk(self):
         # Create, List  and delete the Floating IPs Bulk
@@ -65,18 +71,14 @@ class FloatingIPsBulkAdminTestJSON(base.BaseV2ComputeAdminTest):
         # anywhere. Using the below mentioned interface which is not ever
         # expected to be used. Clean Up has been done for created IP range
         interface = 'eth0'
-        resp, body = self.client.create_floating_ips_bulk(self.ip_range,
-                                                          pool,
-                                                          interface)
-
-        self.assertEqual(200, resp.status)
+        body = self.client.create_floating_ips_bulk(self.ip_range,
+                                                    pool,
+                                                    interface)
         self.addCleanup(self._delete_floating_ips_bulk, self.ip_range)
         self.assertEqual(self.ip_range, body['ip_range'])
-        resp, ips_list = self.client.list_floating_ips_bulk()
-        self.assertEqual(200, resp.status)
+        ips_list = self.client.list_floating_ips_bulk()
         self.assertNotEqual(0, len(ips_list))
         for ip in netaddr.IPNetwork(self.ip_range).iter_hosts():
             self.assertIn(str(ip), map(lambda x: x['address'], ips_list))
-        resp, body = self.client.delete_floating_ips_bulk(self.ip_range)
-        self.assertEqual(200, resp.status)
-        self.assertEqual(self.ip_range, body)
+        body = self.client.delete_floating_ips_bulk(self.ip_range)
+        self.assertEqual(self.ip_range, body.data)

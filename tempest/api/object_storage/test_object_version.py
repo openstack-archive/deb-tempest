@@ -15,8 +15,9 @@
 
 import testtools
 
+from tempest_lib.common.utils import data_utils
+
 from tempest.api.object_storage import base
-from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -36,7 +37,6 @@ class ContainerTest(base.BaseObjectTest):
 
     def assertContainer(self, container, count, byte, versioned):
         resp, _ = self.container_client.list_container_metadata(container)
-        self.assertEqual(resp['status'], ('204'))
         self.assertHeaders(resp, 'Container', 'HEAD')
         header_value = resp.get('x-container-object-count', 'Missing Header')
         self.assertEqual(header_value, count)
@@ -46,6 +46,7 @@ class ContainerTest(base.BaseObjectTest):
         self.assertEqual(header_value, versioned)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('a151e158-dcbf-4a1f-a1e7-46cd65895a6f')
     @testtools.skipIf(
         not CONF.object_storage_feature_enabled.object_versioning,
         'Object-versioning is disabled')
@@ -55,7 +56,6 @@ class ContainerTest(base.BaseObjectTest):
         resp, body = self.container_client.create_container(
             vers_container_name)
         self.containers.append(vers_container_name)
-        self.assertIn(resp['status'], ('202', '201'))
         self.assertHeaders(resp, 'Container', 'PUT')
         self.assertContainer(vers_container_name, '0', '0', 'Missing Header')
 
@@ -66,7 +66,6 @@ class ContainerTest(base.BaseObjectTest):
             metadata=headers,
             metadata_prefix='')
         self.containers.append(base_container_name)
-        self.assertIn(resp['status'], ('202', '201'))
         self.assertHeaders(resp, 'Container', 'PUT')
         self.assertContainer(base_container_name, '0', '0',
                              vers_container_name)

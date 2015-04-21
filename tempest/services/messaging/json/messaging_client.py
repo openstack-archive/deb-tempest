@@ -15,25 +15,32 @@
 
 import json
 import urllib
+import uuid
 
 from tempest.api_schema.response.messaging.v1 import queues as queues_schema
-from tempest.common import rest_client
-from tempest.common.utils import data_utils
-from tempest import config
+from tempest.common import service_client
 
 
-CONF = config.CONF
+class MessagingClientJSON(service_client.ServiceClient):
 
+    def __init__(self, auth_provider, service, region,
+                 endpoint_type=None, build_interval=None, build_timeout=None,
+                 disable_ssl_certificate_validation=None, ca_certs=None,
+                 trace_requests=None):
+        dscv = disable_ssl_certificate_validation
+        super(MessagingClientJSON, self).__init__(
+            auth_provider, service, region,
+            endpoint_type=endpoint_type,
+            build_interval=build_interval,
+            build_timeout=build_timeout,
+            disable_ssl_certificate_validation=dscv,
+            ca_certs=ca_certs,
+            trace_requests=trace_requests)
 
-class MessagingClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(MessagingClientJSON, self).__init__(auth_provider)
-        self.service = CONF.messaging.catalog_type
         self.version = '1'
         self.uri_prefix = 'v{0}'.format(self.version)
 
-        client_id = data_utils.rand_uuid_hex()
+        client_id = uuid.uuid4().hex
         self.headers = {'Client-ID': client_id}
 
     def list_queues(self):
@@ -51,7 +58,7 @@ class MessagingClientJSON(rest_client.RestClient):
         self.expected_success(201, resp.status)
         return resp, body
 
-    def get_queue(self, queue_name):
+    def show_queue(self, queue_name):
         uri = '{0}/queues/{1}'.format(self.uri_prefix, queue_name)
         resp, body = self.get(uri)
         self.expected_success(204, resp.status)
@@ -69,14 +76,14 @@ class MessagingClientJSON(rest_client.RestClient):
         self.expected_success(204, resp.status)
         return resp, body
 
-    def get_queue_stats(self, queue_name):
+    def show_queue_stats(self, queue_name):
         uri = '{0}/queues/{1}/stats'.format(self.uri_prefix, queue_name)
         resp, body = self.get(uri)
         body = json.loads(body)
         self.validate_response(queues_schema.queue_stats, resp, body)
         return resp, body
 
-    def get_queue_metadata(self, queue_name):
+    def show_queue_metadata(self, queue_name):
         uri = '{0}/queues/{1}/metadata'.format(self.uri_prefix, queue_name)
         resp, body = self.get(uri)
         self.expected_success(200, resp.status)
@@ -110,7 +117,7 @@ class MessagingClientJSON(rest_client.RestClient):
 
         return resp, body
 
-    def get_single_message(self, message_uri):
+    def show_single_message(self, message_uri):
         resp, body = self.get(message_uri, extra_headers=True,
                               headers=self.headers)
         if resp['status'] != '204':
@@ -119,7 +126,7 @@ class MessagingClientJSON(rest_client.RestClient):
                                    body)
         return resp, body
 
-    def get_multiple_messages(self, message_uri):
+    def show_multiple_messages(self, message_uri):
         resp, body = self.get(message_uri, extra_headers=True,
                               headers=self.headers)
 

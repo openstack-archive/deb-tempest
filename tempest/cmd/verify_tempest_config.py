@@ -24,11 +24,11 @@ import httplib2
 from six import moves
 
 from tempest import clients
+from tempest.common import credentials
 from tempest import config
 
 
 CONF = config.CONF
-RAW_HTTP = httplib2.Http()
 CONF_PARSER = None
 
 
@@ -59,7 +59,7 @@ def print_and_or_update(option, group, value, update):
 
 def verify_glance_api_versions(os, update):
     # Check glance api versions
-    __, versions = os.image_client.get_versions()
+    versions = os.image_client.get_versions()
     if CONF.image_feature_enabled.api_v1 != ('v1.1' in versions or 'v1.0' in
                                              versions):
         print_and_or_update('api_v1', 'image_feature_enabled',
@@ -83,7 +83,11 @@ def _get_api_versions(os, service):
     }
     client_dict[service].skip_path()
     endpoint = _get_unversioned_endpoint(client_dict[service].base_url)
-    __, body = RAW_HTTP.request(endpoint, 'GET')
+    dscv = CONF.identity.disable_ssl_certificate_validation
+    ca_certs = CONF.identity.ca_certificates_file
+    raw_http = httplib2.Http(disable_ssl_certificate_validation=dscv,
+                             ca_certs=ca_certs)
+    __, body = raw_http.request(endpoint, 'GET')
     client_dict[service].reset_path()
     body = json.loads(body)
     if service == 'keystone':
@@ -104,13 +108,6 @@ def verify_keystone_api_versions(os, update):
                             not CONF.identity_feature_enabled.api_v3, update)
 
 
-def verify_nova_api_versions(os, update):
-    versions = _get_api_versions(os, 'nova')
-    if CONF.compute_feature_enabled.api_v3 != ('v3.0' in versions):
-        print_and_or_update('api_v3', 'compute_feature_enabled',
-                            not CONF.compute_feature_enabled.api_v3, update)
-
-
 def verify_cinder_api_versions(os, update):
     # Check cinder api versions
     versions = _get_api_versions(os, 'cinder')
@@ -127,7 +124,6 @@ def verify_api_versions(os, service, update):
         'cinder': verify_cinder_api_versions,
         'glance': verify_glance_api_versions,
         'keystone': verify_keystone_api_versions,
-        'nova': verify_nova_api_versions,
     }
     if service not in verify:
         return
@@ -137,7 +133,6 @@ def verify_api_versions(os, service, update):
 def get_extension_client(os, service):
     extensions_client = {
         'nova': os.extensions_client,
-        'nova_v3': os.extensions_v3_client,
         'cinder': os.volumes_extension_client,
         'neutron': os.network_client,
         'swift': os.account_client,
@@ -151,7 +146,6 @@ def get_extension_client(os, service):
 def get_enabled_extensions(service):
     extensions_options = {
         'nova': CONF.compute_feature_enabled.api_extensions,
-        'nova_v3': CONF.compute_feature_enabled.api_v3_extensions,
         'cinder': CONF.volume_feature_enabled.api_extensions,
         'neutron': CONF.network_feature_enabled.api_extensions,
         'swift': CONF.object_storage_feature_enabled.discoverable_apis,
@@ -164,22 +158,23 @@ def get_enabled_extensions(service):
 
 def verify_extensions(os, service, results):
     extensions_client = get_extension_client(os, service)
-    __, resp = extensions_client.list_extensions()
+    if service != 'swift':
+        resp = extensions_client.list_extensions()
+    else:
+        __, resp = extensions_client.list_extensions()
+    # For Nova, Cinder and Neutron we use the alias name rather than the
+    # 'name' field because the alias is considered to be the canonical
+    # name.
     if isinstance(resp, dict):
-        # For both Nova and Neutron we use the alias name rather than the
-        # 'name' field because the alias is considered to be the canonical
-        # name.
-        if service in ['nova', 'nova_v3', 'neutron']:
-            extensions = map(lambda x: x['alias'], resp['extensions'])
-        elif service == 'swift':
+        if service == 'swift':
             # Remove Swift general information from extensions list
             resp.pop('swift')
             extensions = resp.keys()
         else:
-            extensions = map(lambda x: x['name'], resp['extensions'])
+            extensions = map(lambda x: x['alias'], resp['extensions'])
 
     else:
-        extensions = map(lambda x: x['name'], resp)
+        extensions = map(lambda x: x['alias'], resp)
     if not results.get(service):
         results[service] = {}
     extensions_opt = get_enabled_extensions(service)
@@ -201,7 +196,6 @@ def display_results(results, update, replace):
     update_dict = {
         'swift': 'object-storage-feature-enabled',
         'nova': 'compute-feature-enabled',
-        'nova_v3': 'compute-feature-enabled',
         'cinder': 'volume-feature-enabled',
         'neutron': 'network-feature-enabled',
     }
@@ -236,9 +230,6 @@ def display_results(results, update, replace):
             if service == 'swift':
                 change_option('discoverable_apis', update_dict[service],
                               output_string)
-            elif service == 'nova_v3':
-                change_option('api_v3_extensions', update_dict[service],
-                              output_string)
             else:
                 change_option('api_extensions', update_dict[service],
                               output_string)
@@ -263,10 +254,13 @@ def check_service_availability(os, update):
         'database': 'trove'
     }
     # Get catalog list for endpoints to use for validation
-    __, endpoints = os.endpoints_client.list_endpoints()
-    for endpoint in endpoints:
-        __, service = os.service_client.get_service(endpoint['service_id'])
-        services.append(service['type'])
+    _token, auth_data = os.auth_provider.get_auth()
+    if os.auth_version == 'v2':
+        catalog_key = 'serviceCatalog'
+    else:
+        catalog_key = 'catalog'
+    for entry in auth_data[catalog_key]:
+        services.append(entry['type'])
     # Pull all catalog types from config file and compare against endpoint list
     for cfgname in dir(CONF._config):
         cfg = getattr(CONF, cfgname)
@@ -340,17 +334,16 @@ def main():
         CONF_PARSER = moves.configparser.SafeConfigParser()
         CONF_PARSER.optionxform = str
         CONF_PARSER.readfp(conf_file)
-    os = clients.ComputeAdminManager(interface='json')
+    icreds = credentials.get_isolated_credentials('verify_tempest_config')
+    os = clients.Manager(icreds.get_primary_creds())
     services = check_service_availability(os, update)
     results = {}
-    for service in ['nova', 'nova_v3', 'cinder', 'neutron', 'swift']:
-        if service == 'nova_v3' and 'nova' not in services:
-            continue
-        elif service not in services:
+    for service in ['nova', 'cinder', 'neutron', 'swift']:
+        if service not in services:
             continue
         results = verify_extensions(os, service, results)
 
-    # Verify API verisons of all services in the keystone catalog and keystone
+    # Verify API versions of all services in the keystone catalog and keystone
     # itself.
     services.append('keystone')
     for service in services:

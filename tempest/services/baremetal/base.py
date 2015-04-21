@@ -16,10 +16,7 @@ import urllib
 
 import six
 
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
 def handle_errors(f):
@@ -42,26 +39,23 @@ def handle_errors(f):
     return wrapper
 
 
-class BaremetalClient(rest_client.RestClient):
+class BaremetalClient(service_client.ServiceClient):
     """
     Base Tempest REST client for Ironic API.
 
     """
 
-    def __init__(self, auth_provider):
-        super(BaremetalClient, self).__init__(auth_provider)
-        self.service = CONF.baremetal.catalog_type
-        self.uri_prefix = ''
+    uri_prefix = ''
 
-    def serialize(self, object_type, object_dict):
+    def serialize(self, object_dict):
         """Serialize an Ironic object."""
 
-        raise NotImplementedError
+        return json.dumps(object_dict)
 
     def deserialize(self, object_str):
         """Deserialize an Ironic object."""
 
-        raise NotImplementedError
+        return json.loads(object_str)
 
     def _get_uri(self, resource_name, uuid=None, permanent=False):
         """
@@ -144,7 +138,7 @@ class BaremetalClient(rest_client.RestClient):
 
         return resp, self.deserialize(body)
 
-    def _create_request(self, resource, object_type, object_dict):
+    def _create_request(self, resource, object_dict):
         """
         Create an object of the specified type.
 
@@ -155,7 +149,7 @@ class BaremetalClient(rest_client.RestClient):
                  object.
 
         """
-        body = self.serialize(object_type, object_dict)
+        body = self.serialize(object_dict)
         uri = self._get_uri(resource)
 
         resp, body = self.post(uri, body=body)

@@ -15,10 +15,11 @@
 
 import uuid
 
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
+
 from tempest.api.compute import base
-from tempest.common.utils import data_utils
 from tempest import config
-from tempest import exceptions
 from tempest import test
 
 CONF = config.CONF
@@ -27,11 +28,12 @@ CONF = config.CONF
 class FloatingIPDetailsNegativeTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def resource_setup(cls):
-        super(FloatingIPDetailsNegativeTestJSON, cls).resource_setup()
+    def setup_clients(cls):
+        super(FloatingIPDetailsNegativeTestJSON, cls).setup_clients()
         cls.client = cls.floating_ips_client
 
     @test.attr(type=['negative', 'gate'])
+    @test.idempotent_id('7ab18834-4a4b-4f28-a2c5-440579866695')
     @test.services('network')
     def test_get_nonexistent_floating_ip_details(self):
         # Negative test:Should not be able to GET the details
@@ -41,9 +43,5 @@ class FloatingIPDetailsNegativeTestJSON(base.BaseV2ComputeTest):
             non_exist_id = str(uuid.uuid4())
         else:
             non_exist_id = data_utils.rand_int_id(start=999)
-        self.assertRaises(exceptions.NotFound,
+        self.assertRaises(lib_exc.NotFound,
                           self.client.get_floating_ip_details, non_exist_id)
-
-
-class FloatingIPDetailsNegativeTestXML(FloatingIPDetailsNegativeTestJSON):
-    _interface = 'xml'

@@ -15,19 +15,11 @@
 
 import json
 
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
-class PolicyClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(PolicyClientJSON, self).__init__(auth_provider)
-        self.service = CONF.identity.catalog_type
-        self.endpoint_url = 'adminURL'
-        self.api_version = "v3"
+class PolicyClientJSON(service_client.ServiceClient):
+    api_version = "v3"
 
     def create_policy(self, blob, type):
         """Creates a Policy."""
@@ -39,14 +31,14 @@ class PolicyClientJSON(rest_client.RestClient):
         resp, body = self.post('policies', post_body)
         self.expected_success(201, resp.status)
         body = json.loads(body)
-        return resp, body['policy']
+        return service_client.ResponseBody(resp, body['policy'])
 
     def list_policies(self):
         """Lists the policies."""
         resp, body = self.get('policies')
         self.expected_success(200, resp.status)
         body = json.loads(body)
-        return resp, body['policies']
+        return service_client.ResponseBodyList(resp, body['policies'])
 
     def get_policy(self, policy_id):
         """Lists out the given policy."""
@@ -54,7 +46,7 @@ class PolicyClientJSON(rest_client.RestClient):
         resp, body = self.get(url)
         self.expected_success(200, resp.status)
         body = json.loads(body)
-        return resp, body['policy']
+        return service_client.ResponseBody(resp, body['policy'])
 
     def update_policy(self, policy_id, **kwargs):
         """Updates a policy."""
@@ -67,11 +59,11 @@ class PolicyClientJSON(rest_client.RestClient):
         resp, body = self.patch(url, post_body)
         self.expected_success(200, resp.status)
         body = json.loads(body)
-        return resp, body['policy']
+        return service_client.ResponseBody(resp, body['policy'])
 
     def delete_policy(self, policy_id):
         """Deletes the policy."""
         url = "policies/%s" % policy_id
         resp, body = self.delete(url)
         self.expected_success(204, resp.status)
-        return resp, body
+        return service_client.ResponseBody(resp, body)

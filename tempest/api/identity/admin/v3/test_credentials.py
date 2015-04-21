@@ -13,13 +13,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from tempest_lib.common.utils import data_utils
+
 from tempest.api.identity import base
-from tempest.common.utils import data_utils
 from tempest import test
 
 
 class CredentialsTestJSON(base.BaseIdentityV3AdminTest):
-    _interface = 'json'
 
     @classmethod
     def resource_setup(cls):
@@ -27,17 +27,17 @@ class CredentialsTestJSON(base.BaseIdentityV3AdminTest):
         cls.projects = list()
         cls.creds_list = [['project_id', 'user_id', 'id'],
                           ['access', 'secret']]
-        u_name = data_utils.rand_name('user-')
+        u_name = data_utils.rand_name('user')
         u_desc = '%s description' % u_name
         u_email = '%s@testmail.tm' % u_name
-        u_password = data_utils.rand_name('pass-')
+        u_password = data_utils.rand_name('pass')
         for i in range(2):
-            _, cls.project = cls.client.create_project(
-                data_utils.rand_name('project-'),
-                description=data_utils.rand_name('project-desc-'))
+            cls.project = cls.client.create_project(
+                data_utils.rand_name('project'),
+                description=data_utils.rand_name('project-desc'))
             cls.projects.append(cls.project['id'])
 
-        _, cls.user_body = cls.client.create_user(
+        cls.user_body = cls.client.create_user(
             u_name, description=u_desc, password=u_password,
             email=u_email, project_id=cls.projects[0])
 
@@ -52,10 +52,11 @@ class CredentialsTestJSON(base.BaseIdentityV3AdminTest):
         self.creds_client.delete_credential(cred_id)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('7cd59bf9-bda4-4c72-9467-d21cab278355')
     def test_credentials_create_get_update_delete(self):
-        keys = [data_utils.rand_name('Access-'),
-                data_utils.rand_name('Secret-')]
-        _, cred = self.creds_client.create_credential(
+        keys = [data_utils.rand_name('Access'),
+                data_utils.rand_name('Secret')]
+        cred = self.creds_client.create_credential(
             keys[0], keys[1], self.user_body['id'],
             self.projects[0])
         self.addCleanup(self._delete_credential, cred['id'])
@@ -64,9 +65,9 @@ class CredentialsTestJSON(base.BaseIdentityV3AdminTest):
         for value2 in self.creds_list[1]:
             self.assertIn(value2, cred['blob'])
 
-        new_keys = [data_utils.rand_name('NewAccess-'),
-                    data_utils.rand_name('NewSecret-')]
-        _, update_body = self.creds_client.update_credential(
+        new_keys = [data_utils.rand_name('NewAccess'),
+                    data_utils.rand_name('NewSecret')]
+        update_body = self.creds_client.update_credential(
             cred['id'], access_key=new_keys[0], secret_key=new_keys[1],
             project_id=self.projects[1])
         self.assertEqual(cred['id'], update_body['id'])
@@ -75,7 +76,7 @@ class CredentialsTestJSON(base.BaseIdentityV3AdminTest):
         self.assertEqual(update_body['blob']['access'], new_keys[0])
         self.assertEqual(update_body['blob']['secret'], new_keys[1])
 
-        _, get_body = self.creds_client.get_credential(cred['id'])
+        get_body = self.creds_client.get_credential(cred['id'])
         for value1 in self.creds_list[0]:
             self.assertEqual(update_body[value1],
                              get_body[value1])
@@ -84,19 +85,20 @@ class CredentialsTestJSON(base.BaseIdentityV3AdminTest):
                              get_body['blob'][value2])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('13202c00-0021-42a1-88d4-81b44d448aab')
     def test_credentials_list_delete(self):
         created_cred_ids = list()
         fetched_cred_ids = list()
 
         for i in range(2):
-            _, cred = self.creds_client.create_credential(
-                data_utils.rand_name('Access-'),
-                data_utils.rand_name('Secret-'),
+            cred = self.creds_client.create_credential(
+                data_utils.rand_name('Access'),
+                data_utils.rand_name('Secret'),
                 self.user_body['id'], self.projects[0])
             created_cred_ids.append(cred['id'])
             self.addCleanup(self._delete_credential, cred['id'])
 
-        _, creds = self.creds_client.list_credentials()
+        creds = self.creds_client.list_credentials()
 
         for i in creds:
             fetched_cred_ids.append(i['id'])
@@ -105,7 +107,3 @@ class CredentialsTestJSON(base.BaseIdentityV3AdminTest):
         self.assertEqual(0, len(missing_creds),
                          "Failed to find cred %s in fetched list" %
                          ', '.join(m_cred for m_cred in missing_creds))
-
-
-class CredentialsTestXML(CredentialsTestJSON):
-    _interface = 'xml'

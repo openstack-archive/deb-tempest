@@ -13,8 +13,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from oslo_log import log as logging
+
 from tempest import config
-from tempest.openstack.common import log as logging
 from tempest.scenario import manager
 from tempest import test
 
@@ -97,14 +98,14 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
     def get_flavor_ephemeral_size(self):
         """Returns size of the ephemeral partition in GiB."""
         f_id = self.instance['flavor']['id']
-        _, flavor = self.flavors_client.get_flavor_details(f_id)
+        flavor = self.flavors_client.get_flavor_details(f_id)
         ephemeral = flavor.get('OS-FLV-EXT-DATA:ephemeral')
         if not ephemeral or ephemeral == 'N/A':
             return None
         return int(ephemeral)
 
     def add_floating_ip(self):
-        _, floating_ip = self.floating_ips_client.create_floating_ip()
+        floating_ip = self.floating_ips_client.create_floating_ip()
         self.floating_ips_client.associate_floating_ip_to_server(
             floating_ip['ip'], self.instance['id'])
         return floating_ip['ip']
@@ -112,11 +113,12 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
     def validate_ports(self):
         for port in self.get_ports(self.node['uuid']):
             n_port_id = port['extra']['vif_port_id']
-            _, body = self.network_client.show_port(n_port_id)
+            body = self.network_client.show_port(n_port_id)
             n_port = body['port']
             self.assertEqual(n_port['device_id'], self.instance['id'])
             self.assertEqual(n_port['mac_address'], port['address'])
 
+    @test.idempotent_id('549173a5-38ec-42bb-b0e2-c8b9f4a08943')
     @test.services('baremetal', 'compute', 'image', 'network')
     def test_baremetal_server_ops(self):
         test_filename = '/mnt/rebuild_test.txt'
@@ -132,7 +134,6 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
         # We expect the ephemeral partition to be mounted on /mnt and to have
         # the same size as our flavor definition.
         eph_size = self.get_flavor_ephemeral_size()
-        self.assertIsNotNone(eph_size)
         if eph_size > 0:
             preserve_ephemeral = True
 

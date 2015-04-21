@@ -16,10 +16,11 @@
 import logging
 
 from six import moves
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
 from testtools import matchers
 
 from tempest.api.messaging import base
-from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -29,18 +30,25 @@ LOG = logging.getLogger(__name__)
 class TestQueues(base.BaseMessagingTest):
 
     @test.attr(type='smoke')
-    def test_create_queue(self):
-        # Create Queue
+    @test.idempotent_id('9f1c4c72-80c5-4dac-acf3-188cef42e36c')
+    def test_create_delete_queue(self):
+        # Create & Delete Queue
         queue_name = data_utils.rand_name('test-')
         _, body = self.create_queue(queue_name)
 
         self.addCleanup(self.client.delete_queue, queue_name)
-
+        # NOTE(gmann): create_queue returns response status code as 201
+        # so specifically checking the expected empty response body as
+        # this is not going to be checked in response_checker().
         self.assertEqual('', body)
+
+        self.delete_queue(queue_name)
+        self.assertRaises(lib_exc.NotFound,
+                          self.client.show_queue,
+                          queue_name)
 
 
 class TestManageQueue(base.BaseMessagingTest):
-    _interface = 'json'
 
     @classmethod
     def resource_setup(cls):
@@ -53,27 +61,21 @@ class TestManageQueue(base.BaseMessagingTest):
             cls.client.create_queue(queue_name)
 
     @test.attr(type='smoke')
-    def test_delete_queue(self):
-        # Delete Queue
-        queue_name = self.queues.pop()
-        _, body = self.delete_queue(queue_name)
-        self.assertEqual('', body)
-
-    @test.attr(type='smoke')
+    @test.idempotent_id('ccd3d69e-f156-4c5f-8a12-b4f24bee44e1')
     def test_check_queue_existence(self):
         # Checking Queue Existence
         for queue_name in self.queues:
-            _, body = self.check_queue_exists(queue_name)
-            self.assertEqual('', body)
+            self.check_queue_exists(queue_name)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('e27634d8-9c8f-47d8-a677-655c47658d3e')
     def test_check_queue_head(self):
         # Checking Queue Existence by calling HEAD
         for queue_name in self.queues:
-            _, body = self.check_queue_exists_head(queue_name)
-            self.assertEqual('', body)
+            self.check_queue_exists_head(queue_name)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('0a0feeca-7768-4303-806d-82bbbb796ad3')
     def test_list_queues(self):
         # Listing queues
         _, body = self.list_queues()
@@ -82,6 +84,7 @@ class TestManageQueue(base.BaseMessagingTest):
             self.assertIn(item['name'], self.queues)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('8fb66602-077d-49d6-ae1a-5f2091739178')
     def test_get_queue_stats(self):
         # Retrieve random queue
         queue_name = self.queues[data_utils.rand_int_id(0,
@@ -95,6 +98,7 @@ class TestManageQueue(base.BaseMessagingTest):
             self.assertNotIn(element, msgs)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('0e2441e6-6593-4bdb-a3c0-20e66eeb3fff')
     def test_set_and_get_queue_metadata(self):
         # Retrieve random queue
         queue_name = self.queues[data_utils.rand_int_id(0,
@@ -111,8 +115,8 @@ class TestManageQueue(base.BaseMessagingTest):
         req_body = dict()
         req_body[data_utils.rand_name('key1')] = req_body1
         # Set Queue Metadata
-        _, body = self.set_queue_metadata(queue_name, req_body)
-        self.assertEqual('', body)
+        self.set_queue_metadata(queue_name, req_body)
+
         # Get Queue Metadata
         _, body = self.get_queue_metadata(queue_name)
         self.assertThat(body, matchers.Equals(req_body))

@@ -10,13 +10,15 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from tempest.common.utils import data_utils
+import re
+
+from tempest_lib.common.utils import data_utils
+
 from tempest.common.utils.linux import remote_client
 from tempest import config
 import tempest.stress.stressaction as stressaction
 import tempest.test
 
-import re
 CONF = config.CONF
 
 
@@ -24,7 +26,7 @@ class VolumeVerifyStress(stressaction.StressAction):
 
     def _create_keypair(self):
         keyname = data_utils.rand_name("key")
-        _, self.key = self.manager.keypairs_client.create_keypair(keyname)
+        self.key = self.manager.keypairs_client.create_keypair(keyname)
 
     def _delete_keypair(self):
         self.manager.keypairs_client.delete_keypair(self.key['name'])
@@ -36,9 +38,9 @@ class VolumeVerifyStress(stressaction.StressAction):
         vm_args = self.vm_extra_args.copy()
         vm_args['security_groups'] = [self.sec_grp]
         vm_args['key_name'] = self.key['name']
-        _, server = servers_client.create_server(name, self.image,
-                                                 self.flavor,
-                                                 **vm_args)
+        server = servers_client.create_server(name, self.image,
+                                              self.flavor,
+                                              **vm_args)
         self.server_id = server['id']
         self.manager.servers_client.wait_for_server_status(self.server_id,
                                                            'ACTIVE')
@@ -51,10 +53,10 @@ class VolumeVerifyStress(stressaction.StressAction):
 
     def _create_sec_group(self):
         sec_grp_cli = self.manager.security_groups_client
-        s_name = data_utils.rand_name('sec_grp-')
-        s_description = data_utils.rand_name('desc-')
-        _, self.sec_grp = sec_grp_cli.create_security_group(s_name,
-                                                            s_description)
+        s_name = data_utils.rand_name('sec_grp')
+        s_description = data_utils.rand_name('desc')
+        self.sec_grp = sec_grp_cli.create_security_group(s_name,
+                                                         s_description)
         create_rule = sec_grp_cli.create_security_group_rule
         create_rule(self.sec_grp['id'], 'tcp', 22, 22)
         create_rule(self.sec_grp['id'], 'icmp', -1, -1)
@@ -65,7 +67,7 @@ class VolumeVerifyStress(stressaction.StressAction):
 
     def _create_floating_ip(self):
         floating_cli = self.manager.floating_ips_client
-        _, self.floating = floating_cli.create_floating_ip(self.floating_pool)
+        self.floating = floating_cli.create_floating_ip(self.floating_pool)
 
     def _destroy_floating_ip(self):
         cli = self.manager.floating_ips_client
@@ -77,8 +79,7 @@ class VolumeVerifyStress(stressaction.StressAction):
         name = data_utils.rand_name("volume")
         self.logger.info("creating volume: %s" % name)
         volumes_client = self.manager.volumes_client
-        _, self.volume = volumes_client.create_volume(
-            size=1,
+        self.volume = volumes_client.create_volume(
             display_name=name)
         volumes_client.wait_for_volume_status(self.volume['id'],
                                               'available')
@@ -95,7 +96,7 @@ class VolumeVerifyStress(stressaction.StressAction):
         cli = self.manager.floating_ips_client
 
         def func():
-            _, floating = cli.get_floating_ip_details(self.floating['id'])
+            floating = cli.get_floating_ip_details(self.floating['id'])
             return floating['instance_id'] is None
 
         if not tempest.test.call_until_true(func, CONF.compute.build_timeout,

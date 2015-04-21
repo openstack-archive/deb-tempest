@@ -17,29 +17,22 @@ from tempest.api.compute import base
 from tempest import test
 
 
-class CertificatesV3Test(base.BaseComputeTest):
+class CertificatesV2TestJSON(base.BaseComputeTest):
 
-    _api_version = 3
-
-    @test.attr(type='gate')
-    def test_create_root_certificate(self):
-        # create certificates
-        resp, body = self.certificates_client.create_certificate()
-        self.assertIn('data', body)
-        self.assertIn('private_key', body)
-
-    @test.attr(type='gate')
-    def test_get_root_certificate(self):
-        # get the root certificate
-        resp, body = self.certificates_client.get_certificate('root')
-        self.assertEqual(200, resp.status)
-        self.assertIn('data', body)
-        self.assertIn('private_key', body)
-
-
-class CertificatesV2TestJSON(CertificatesV3Test):
     _api_version = 2
 
+    @test.attr(type='gate')
+    @test.idempotent_id('c070a441-b08e-447e-a733-905909535b1b')
+    def test_create_root_certificate(self):
+        # create certificates
+        body = self.certificates_client.create_certificate()
+        self.assertIn('data', body)
+        self.assertIn('private_key', body)
 
-class CertificatesV2TestXML(CertificatesV2TestJSON):
-    _interface = 'xml'
+    @test.attr(type='gate')
+    @test.idempotent_id('3ac273d0-92d2-4632-bdfc-afbc21d4606c')
+    def test_get_root_certificate(self):
+        # get the root certificate
+        body = self.certificates_client.get_certificate('root')
+        self.assertIn('data', body)
+        self.assertIn('private_key', body)

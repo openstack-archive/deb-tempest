@@ -13,10 +13,11 @@
 
 import time
 
-from tempest.common.utils import misc as misc_utils
+from oslo_log import log as logging
+from tempest_lib.common.utils import misc as misc_utils
+
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common import log as logging
 
 CONF = config.CONF
 LOG = logging.getLogger(__name__)
@@ -28,15 +29,11 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
     """Waits for a server to reach a given status."""
 
     def _get_task_state(body):
-        if client.service == CONF.compute.catalog_v3_type:
-            task_state = body.get("os-extended-status:task_state", None)
-        else:
-            task_state = body.get('OS-EXT-STS:task_state', None)
-        return task_state
+        return body.get('OS-EXT-STS:task_state', None)
 
     # NOTE(afazekas): UNKNOWN status possible on ERROR
     # or in a very early stage.
-    resp, body = client.get_server(server_id)
+    body = client.get_server(server_id)
     old_status = server_status = body['status']
     old_task_state = task_state = _get_task_state(body)
     start_time = int(time.time())
@@ -63,7 +60,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
                 return
 
         time.sleep(client.build_interval)
-        resp, body = client.get_server(server_id)
+        body = client.get_server(server_id)
         server_status = body['status']
         task_state = _get_task_state(body)
         if (server_status != old_status) or (task_state != old_task_state):
@@ -105,28 +102,30 @@ def wait_for_image_status(client, image_id, status):
     The client should have a get_image(image_id) method to get the image.
     The client should also have build_interval and build_timeout attributes.
     """
-    resp, image = client.get_image(image_id)
+    image = client.get_image(image_id)
     start = int(time.time())
 
     while image['status'] != status:
         time.sleep(client.build_interval)
-        resp, image = client.get_image(image_id)
-        if image['status'] == 'ERROR':
+        image = client.get_image(image_id)
+        status_curr = image['status']
+        if status_curr == 'ERROR':
             raise exceptions.AddImageException(image_id=image_id)
 
         # check the status again to avoid a false negative where we hit
         # the timeout at the same time that the image reached the expected
         # status
-        if image['status'] == status:
+        if status_curr == status:
             return
 
         if int(time.time()) - start >= client.build_timeout:
-            message = ('Image %(image_id)s failed to reach %(status)s '
-                       'status within the required time (%(timeout)s s).' %
+            message = ('Image %(image_id)s failed to reach %(status)s state'
+                       '(current state %(status_curr)s) '
+                       'within the required time (%(timeout)s s).' %
                        {'image_id': image_id,
                         'status': status,
+                        'status_curr': status_curr,
                         'timeout': client.build_timeout})
-            message += ' Current status: %s.' % image['status']
             caller = misc_utils.find_test_caller()
             if caller:
                 message = '(%s) %s' % (caller, message)
@@ -144,7 +143,8 @@ def wait_for_bm_node_status(client, node_id, attr, status):
     while node[attr] != status:
         time.sleep(client.build_interval)
         _, node = client.show_node(node_id)
-        if node[attr] == status:
+        status_curr = node[attr]
+        if status_curr == status:
             return
 
         if int(time.time()) - start >= client.build_timeout:
@@ -154,7 +154,7 @@ def wait_for_bm_node_status(client, node_id, attr, status):
                         'attr': attr,
                         'status': status,
                         'timeout': client.build_timeout})
-            message += ' Current state of %s: %s.' % (attr, node[attr])
+            message += ' Current state of %s: %s.' % (attr, status_curr)
             caller = misc_utils.find_test_caller()
             if caller:
                 message = '(%s) %s' % (caller, message)

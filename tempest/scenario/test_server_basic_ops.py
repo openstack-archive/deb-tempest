@@ -13,8 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from oslo_log import log as logging
+
 from tempest import config
-from tempest.openstack.common import log as logging
 from tempest.scenario import manager
 from tempest.scenario import utils as test_utils
 from tempest import test
@@ -68,7 +69,7 @@ class TestServerBasicOps(manager.ScenarioTest):
 
     def boot_instance(self):
         # Create server with image and flavor from input scenario
-        security_groups = [self.security_group]
+        security_groups = [{'name': self.security_group['name']}]
         create_kwargs = {
             'key_name': self.keypair['name'],
             'security_groups': security_groups
@@ -80,7 +81,7 @@ class TestServerBasicOps(manager.ScenarioTest):
     def verify_ssh(self):
         if self.run_ssh:
             # Obtain a floating IP
-            _, floating_ip = self.floating_ips_client.create_floating_ip()
+            floating_ip = self.floating_ips_client.create_floating_ip()
             self.addCleanup(self.delete_wrapper,
                             self.floating_ips_client.delete_floating_ip,
                             floating_ip['id'])
@@ -88,16 +89,12 @@ class TestServerBasicOps(manager.ScenarioTest):
             self.floating_ips_client.associate_floating_ip_to_server(
                 floating_ip['ip'], self.instance['id'])
             # Check ssh
-            try:
-                self.get_remote_client(
-                    server_or_ip=floating_ip['ip'],
-                    username=self.image_utils.ssh_user(self.image_ref),
-                    private_key=self.keypair['private_key'])
-            except Exception:
-                LOG.exception('ssh to server failed')
-                self._log_console_output()
-                raise
+            self.get_remote_client(
+                server_or_ip=floating_ip['ip'],
+                username=self.image_utils.ssh_user(self.image_ref),
+                private_key=self.keypair['private_key'])
 
+    @test.idempotent_id('7fff3fb3-91d8-4fd0-bd7d-0204f1f180ba')
     @test.services('compute', 'network')
     def test_server_basicops(self):
         self.add_keypair()

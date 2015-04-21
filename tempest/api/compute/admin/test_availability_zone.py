@@ -17,36 +17,27 @@ from tempest.api.compute import base
 from tempest import test
 
 
-class AZAdminV3Test(base.BaseComputeAdminTest):
+class AZAdminV2TestJSON(base.BaseComputeAdminTest):
     """
     Tests Availability Zone API List
     """
-    _api_version = 3
+    _api_version = 2
 
     @classmethod
-    def resource_setup(cls):
-        super(AZAdminV3Test, cls).resource_setup()
+    def setup_clients(cls):
+        super(AZAdminV2TestJSON, cls).setup_clients()
         cls.client = cls.availability_zone_admin_client
 
     @test.attr(type='gate')
+    @test.idempotent_id('d3431479-8a09-4f76-aa2d-26dc580cb27c')
     def test_get_availability_zone_list(self):
         # List of availability zone
-        resp, availability_zone = self.client.get_availability_zone_list()
-        self.assertEqual(200, resp.status)
+        availability_zone = self.client.get_availability_zone_list()
         self.assertTrue(len(availability_zone) > 0)
 
     @test.attr(type='gate')
+    @test.idempotent_id('ef726c58-530f-44c2-968c-c7bed22d5b8c')
     def test_get_availability_zone_list_detail(self):
         # List of availability zones and available services
-        resp, availability_zone = \
-            self.client.get_availability_zone_list_detail()
-        self.assertEqual(200, resp.status)
+        availability_zone = self.client.get_availability_zone_list_detail()
         self.assertTrue(len(availability_zone) > 0)
-
-
-class AZAdminV2TestJSON(AZAdminV3Test):
-    _api_version = 2
-
-
-class AZAdminV2TestXML(AZAdminV2TestJSON):
-    _interface = 'xml'

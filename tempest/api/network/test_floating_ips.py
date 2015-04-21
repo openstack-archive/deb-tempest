@@ -14,9 +14,9 @@
 #    under the License.
 
 import netaddr
+from tempest_lib.common.utils import data_utils
 
 from tempest.api.network import base
-from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -24,8 +24,6 @@ CONF = config.CONF
 
 
 class FloatingIPTestJSON(base.BaseNetworkTest):
-    _interface = 'json'
-
     """
     Tests the following operations in the Quantum API using the REST client for
     Neutron:
@@ -46,11 +44,15 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
     """
 
     @classmethod
-    def resource_setup(cls):
-        super(FloatingIPTestJSON, cls).resource_setup()
+    def skip_checks(cls):
+        super(FloatingIPTestJSON, cls).skip_checks()
         if not test.is_extension_enabled('router', 'network'):
             msg = "router extension not enabled."
             raise cls.skipException(msg)
+
+    @classmethod
+    def resource_setup(cls):
+        super(FloatingIPTestJSON, cls).resource_setup()
         cls.ext_net_id = CONF.network.public_network_id
 
         # Create network, subnet, router and add interface
@@ -65,9 +67,10 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
             cls.create_port(cls.network)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('62595970-ab1c-4b7f-8fcc-fddfe55e8718')
     def test_create_list_show_update_delete_floating_ip(self):
         # Creates a floating IP
-        _, body = self.client.create_floatingip(
+        body = self.client.create_floatingip(
             floating_network_id=self.ext_net_id,
             port_id=self.ports[0]['id'])
         created_floating_ip = body['floatingip']
@@ -82,7 +85,7 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertIn(created_floating_ip['fixed_ip_address'],
                       [ip['ip_address'] for ip in self.ports[0]['fixed_ips']])
         # Verifies the details of a floating_ip
-        _, floating_ip = self.client.show_floatingip(created_floating_ip['id'])
+        floating_ip = self.client.show_floatingip(created_floating_ip['id'])
         shown_floating_ip = floating_ip['floatingip']
         self.assertEqual(shown_floating_ip['id'], created_floating_ip['id'])
         self.assertEqual(shown_floating_ip['floating_network_id'],
@@ -94,13 +97,13 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertEqual(shown_floating_ip['port_id'], self.ports[0]['id'])
 
         # Verify the floating ip exists in the list of all floating_ips
-        _, floating_ips = self.client.list_floatingips()
+        floating_ips = self.client.list_floatingips()
         floatingip_id_list = list()
         for f in floating_ips['floatingips']:
             floatingip_id_list.append(f['id'])
         self.assertIn(created_floating_ip['id'], floatingip_id_list)
         # Associate floating IP to the other port
-        _, floating_ip = self.client.update_floatingip(
+        floating_ip = self.client.update_floatingip(
             created_floating_ip['id'],
             port_id=self.ports[1]['id'])
         updated_floating_ip = floating_ip['floatingip']
@@ -110,7 +113,7 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertEqual(updated_floating_ip['router_id'], self.router['id'])
 
         # Disassociate floating IP from the port
-        _, floating_ip = self.client.update_floatingip(
+        floating_ip = self.client.update_floatingip(
             created_floating_ip['id'],
             port_id=None)
         updated_floating_ip = floating_ip['floatingip']
@@ -119,23 +122,24 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertIsNone(updated_floating_ip['router_id'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('e1f6bffd-442f-4668-b30e-df13f2705e77')
     def test_floating_ip_delete_port(self):
         # Create a floating IP
-        _, body = self.client.create_floatingip(
+        body = self.client.create_floatingip(
             floating_network_id=self.ext_net_id)
         created_floating_ip = body['floatingip']
         self.addCleanup(self.client.delete_floatingip,
                         created_floating_ip['id'])
         # Create a port
-        resp, port = self.client.create_port(network_id=self.network['id'])
+        port = self.client.create_port(network_id=self.network['id'])
         created_port = port['port']
-        _, floating_ip = self.client.update_floatingip(
+        floating_ip = self.client.update_floatingip(
             created_floating_ip['id'],
             port_id=created_port['id'])
         # Delete port
         self.client.delete_port(created_port['id'])
         # Verifies the details of the floating_ip
-        _, floating_ip = self.client.show_floatingip(created_floating_ip['id'])
+        floating_ip = self.client.show_floatingip(created_floating_ip['id'])
         shown_floating_ip = floating_ip['floatingip']
         # Confirm the fields are back to None
         self.assertEqual(shown_floating_ip['id'], created_floating_ip['id'])
@@ -144,9 +148,10 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertIsNone(shown_floating_ip['router_id'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('1bb2f731-fe5a-4b8c-8409-799ade1bed4d')
     def test_floating_ip_update_different_router(self):
         # Associate a floating IP to a port on a router
-        _, body = self.client.create_floatingip(
+        body = self.client.create_floatingip(
             floating_network_id=self.ext_net_id,
             port_id=self.ports[1]['id'])
         created_floating_ip = body['floatingip']
@@ -160,7 +165,7 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.create_router_interface(router2['id'], subnet2['id'])
         port_other_router = self.create_port(network2)
         # Associate floating IP to the other port on another router
-        _, floating_ip = self.client.update_floatingip(
+        floating_ip = self.client.update_floatingip(
             created_floating_ip['id'],
             port_id=port_other_router['id'])
         updated_floating_ip = floating_ip['floatingip']
@@ -170,8 +175,9 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertIsNotNone(updated_floating_ip['fixed_ip_address'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('36de4bd0-f09c-43e3-a8e1-1decc1ffd3a5')
     def test_create_floating_ip_specifying_a_fixed_ip_address(self):
-        _, body = self.client.create_floatingip(
+        body = self.client.create_floatingip(
             floating_network_id=self.ext_net_id,
             port_id=self.ports[1]['id'],
             fixed_ip_address=self.ports[1]['fixed_ips'][0]['ip_address'])
@@ -181,24 +187,25 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertIsNotNone(created_floating_ip['id'])
         self.assertEqual(created_floating_ip['fixed_ip_address'],
                          self.ports[1]['fixed_ips'][0]['ip_address'])
-        _, floating_ip = self.client.update_floatingip(
+        floating_ip = self.client.update_floatingip(
             created_floating_ip['id'],
             port_id=None)
         self.assertIsNone(floating_ip['floatingip']['port_id'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('45c4c683-ea97-41ef-9c51-5e9802f2f3d7')
     def test_create_update_floatingip_with_port_multiple_ip_address(self):
         # Find out ips that can be used for tests
         ips = list(netaddr.IPNetwork(self.subnet['cidr']))
         list_ips = [str(ip) for ip in ips[-3:-1]]
         fixed_ips = [{'ip_address': list_ips[0]}, {'ip_address': list_ips[1]}]
         # Create port
-        _, body = self.client.create_port(network_id=self.network['id'],
-                                          fixed_ips=fixed_ips)
+        body = self.client.create_port(network_id=self.network['id'],
+                                       fixed_ips=fixed_ips)
         port = body['port']
         self.addCleanup(self.client.delete_port, port['id'])
         # Create floating ip
-        _, body = self.client.create_floatingip(
+        body = self.client.create_floatingip(
             floating_network_id=self.ext_net_id,
             port_id=port['id'],
             fixed_ip_address=list_ips[0])
@@ -207,13 +214,9 @@ class FloatingIPTestJSON(base.BaseNetworkTest):
         self.assertIsNotNone(floating_ip['id'])
         self.assertEqual(floating_ip['fixed_ip_address'], list_ips[0])
         # Update floating ip
-        _, body = self.client.update_floatingip(floating_ip['id'],
-                                                port_id=port['id'],
-                                                fixed_ip_address=list_ips[1])
+        body = self.client.update_floatingip(floating_ip['id'],
+                                             port_id=port['id'],
+                                             fixed_ip_address=list_ips[1])
         update_floating_ip = body['floatingip']
         self.assertEqual(update_floating_ip['fixed_ip_address'],
                          list_ips[1])
-
-
-class FloatingIPTestXML(FloatingIPTestJSON):
-    _interface = 'xml'

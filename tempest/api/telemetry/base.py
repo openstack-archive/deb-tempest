@@ -12,10 +12,12 @@
 
 import time
 
-from tempest.common.utils import data_utils
+from oslo_utils import timeutils
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
+
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common import timeutils
 import tempest.test
 
 CONF = config.CONF
@@ -26,18 +28,29 @@ class BaseTelemetryTest(tempest.test.BaseTestCase):
     """Base test case class for all Telemetry API tests."""
 
     @classmethod
-    def resource_setup(cls):
+    def skip_checks(cls):
+        super(BaseTelemetryTest, cls).skip_checks()
         if not CONF.service_available.ceilometer:
             raise cls.skipException("Ceilometer support is required")
-        cls.set_network_resources()
-        super(BaseTelemetryTest, cls).resource_setup()
-        os = cls.get_client_manager()
-        cls.telemetry_client = os.telemetry_client
-        cls.servers_client = os.servers_client
-        cls.flavors_client = os.flavors_client
-        cls.image_client = os.image_client
-        cls.image_client_v2 = os.image_client_v2
 
+    @classmethod
+    def setup_credentials(cls):
+        cls.set_network_resources()
+        super(BaseTelemetryTest, cls).setup_credentials()
+        cls.os = cls.get_client_manager()
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseTelemetryTest, cls).setup_clients()
+        cls.telemetry_client = cls.os.telemetry_client
+        cls.servers_client = cls.os.servers_client
+        cls.flavors_client = cls.os.flavors_client
+        cls.image_client = cls.os.image_client
+        cls.image_client_v2 = cls.os.image_client_v2
+
+    @classmethod
+    def resource_setup(cls):
+        super(BaseTelemetryTest, cls).resource_setup()
         cls.nova_notifications = ['memory', 'vcpus', 'disk.root.size',
                                   'disk.ephemeral.size']
 
@@ -52,35 +65,35 @@ class BaseTelemetryTest(tempest.test.BaseTestCase):
 
     @classmethod
     def create_alarm(cls, **kwargs):
-        resp, body = cls.telemetry_client.create_alarm(
+        body = cls.telemetry_client.create_alarm(
             name=data_utils.rand_name('telemetry_alarm'),
             type='threshold', **kwargs)
         cls.alarm_ids.append(body['alarm_id'])
-        return resp, body
+        return body
 
     @classmethod
     def create_server(cls):
-        resp, body = cls.servers_client.create_server(
+        body = cls.servers_client.create_server(
             data_utils.rand_name('ceilometer-instance'),
             CONF.compute.image_ref, CONF.compute.flavor_ref,
             wait_until='ACTIVE')
         cls.server_ids.append(body['id'])
-        return resp, body
+        return body
 
     @classmethod
     def create_image(cls, client):
-        resp, body = client.create_image(
+        body = client.create_image(
             data_utils.rand_name('image'), container_format='bare',
             disk_format='raw', visibility='private')
         cls.image_ids.append(body['id'])
-        return resp, body
+        return body
 
     @staticmethod
     def cleanup_resources(method, list_of_ids):
         for resource_id in list_of_ids:
             try:
                 method(resource_id)
-            except exceptions.NotFound:
+            except lib_exc.NotFound:
                 pass
 
     @classmethod
@@ -88,7 +101,6 @@ class BaseTelemetryTest(tempest.test.BaseTestCase):
         cls.cleanup_resources(cls.telemetry_client.delete_alarm, cls.alarm_ids)
         cls.cleanup_resources(cls.servers_client.delete_server, cls.server_ids)
         cls.cleanup_resources(cls.image_client.delete_image, cls.image_ids)
-        cls.clear_isolated_creds()
         super(BaseTelemetryTest, cls).resource_cleanup()
 
     def await_samples(self, metric, query):
@@ -100,10 +112,9 @@ class BaseTelemetryTest(tempest.test.BaseTestCase):
         timeout = CONF.compute.build_timeout
         start = timeutils.utcnow()
         while timeutils.delta_seconds(start, timeutils.utcnow()) < timeout:
-            resp, body = self.telemetry_client.list_samples(metric, query)
-            self.assertEqual(resp.status, 200)
+            body = self.telemetry_client.list_samples(metric, query)
             if body:
-                return resp, body
+                return body
             time.sleep(CONF.compute.build_interval)
 
         raise exceptions.TimeoutException(

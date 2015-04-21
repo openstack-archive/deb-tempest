@@ -10,9 +10,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest.common.utils import data_utils
+from oslo_log import log
+from tempest_lib.common.utils import data_utils
+
 from tempest import config
-from tempest.openstack.common import log
 from tempest.scenario import manager
 from tempest import test
 
@@ -36,11 +37,12 @@ class TestVolumeBootPattern(manager.ScenarioTest):
      * Check written content in the instance booted from snapshot
     """
     @classmethod
-    def resource_setup(cls):
-        super(TestVolumeBootPattern, cls).resource_setup()
-
+    def skip_checks(cls):
+        super(TestVolumeBootPattern, cls).skip_checks()
         if not CONF.volume_feature_enabled.snapshot:
             raise cls.skipException("Cinder volume snapshots are disabled")
+        if CONF.volume.storage_protocol == 'ceph':
+            raise cls.skipException('Skip until bug 1439371 is fixed.')
 
     def _create_volume_from_image(self):
         img_uuid = CONF.compute.image_ref
@@ -67,7 +69,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
 
     def _create_snapshot_from_volume(self, vol_id):
         snap_name = data_utils.rand_name('snapshot')
-        _, snap = self.snapshots_client.create_snapshot(
+        snap = self.snapshots_client.create_snapshot(
             volume_id=vol_id,
             force=True,
             display_name=snap_name)
@@ -100,7 +102,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
 
     def _ssh_to_server(self, server, keypair):
         if CONF.compute.use_floatingip_for_ssh:
-            _, floating_ip = self.floating_ips_client.create_floating_ip()
+            floating_ip = self.floating_ips_client.create_floating_ip()
             self.addCleanup(self.delete_wrapper,
                             self.floating_ips_client.delete_floating_ip,
                             floating_ip['id'])
@@ -111,20 +113,14 @@ class TestVolumeBootPattern(manager.ScenarioTest):
             network_name_for_ssh = CONF.compute.network_for_ssh
             ip = server.networks[network_name_for_ssh][0]
 
-        try:
-            return self.get_remote_client(
-                ip,
-                private_key=keypair['private_key'])
-        except Exception:
-            LOG.exception('ssh to server failed')
-            self._log_console_output(servers=[server])
-            raise
+        return self.get_remote_client(ip, private_key=keypair['private_key'],
+                                      log_console_of_servers=[server])
 
     def _get_content(self, ssh_client):
         return ssh_client.exec_command('cat /tmp/text')
 
     def _write_text(self, ssh_client):
-        text = data_utils.rand_name('text-')
+        text = data_utils.rand_name('text')
         ssh_client.exec_command('echo "%s" > /tmp/text; sync' % (text))
 
         return self._get_content(ssh_client)
@@ -137,6 +133,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
         actual = self._get_content(ssh_client)
         self.assertEqual(expected, actual)
 
+    @test.idempotent_id('557cd2c2-4eb8-4dce-98be-f86765ff311b')
     @test.services('compute', 'volume', 'image')
     def test_volume_boot_pattern(self):
         keypair = self.create_keypair()
@@ -179,7 +176,6 @@ class TestVolumeBootPattern(manager.ScenarioTest):
         # NOTE(gfidente): ensure resources are in clean state for
         # deletion operations to succeed
         self._stop_instances([instance_2nd, instance_from_snapshot])
-        self._detach_volumes([volume_origin, volume])
 
 
 class TestVolumeBootPatternV2(TestVolumeBootPattern):

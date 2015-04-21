@@ -14,12 +14,14 @@
 #    under the License.
 
 import netaddr
+from oslo_log import log as logging
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
 
 from tempest import clients
-from tempest.common.utils import data_utils
+from tempest.common import credentials
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common import log as logging
 import tempest.test
 
 CONF = config.CONF
@@ -49,24 +51,36 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
         neutron as True
     """
 
-    _interface = 'json'
     force_tenant_isolation = False
 
     # Default to ipv4.
     _ip_version = 4
 
     @classmethod
-    def resource_setup(cls):
-        # Create no network resources for these test.
-        cls.set_network_resources()
-        super(BaseNetworkTest, cls).resource_setup()
+    def skip_checks(cls):
+        super(BaseNetworkTest, cls).skip_checks()
         if not CONF.service_available.neutron:
             raise cls.skipException("Neutron support is required")
+        if cls._ip_version == 6 and not CONF.network_feature_enabled.ipv6:
+            raise cls.skipException("IPv6 Tests are disabled.")
 
-        os = cls.get_client_manager()
+    @classmethod
+    def setup_credentials(cls):
+        # Create no network resources for these test.
+        cls.set_network_resources()
+        super(BaseNetworkTest, cls).setup_credentials()
+        cls.os = cls.get_client_manager()
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseNetworkTest, cls).setup_clients()
+        cls.client = cls.os.network_client
+
+    @classmethod
+    def resource_setup(cls):
+        super(BaseNetworkTest, cls).resource_setup()
 
         cls.network_cfg = CONF.network
-        cls.client = os.network_client
         cls.networks = []
         cls.subnets = []
         cls.ports = []
@@ -90,95 +104,138 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
         if CONF.service_available.neutron:
             # Clean up ipsec policies
             for ipsecpolicy in cls.ipsecpolicies:
-                cls.client.delete_ipsecpolicy(ipsecpolicy['id'])
+                cls._try_delete_resource(cls.client.delete_ipsecpolicy,
+                                         ipsecpolicy['id'])
             # Clean up firewall policies
             for fw_policy in cls.fw_policies:
-                cls.client.delete_firewall_policy(fw_policy['id'])
+                cls._try_delete_resource(cls.client.delete_firewall_policy,
+                                         fw_policy['id'])
             # Clean up firewall rules
             for fw_rule in cls.fw_rules:
-                cls.client.delete_firewall_rule(fw_rule['id'])
+                cls._try_delete_resource(cls.client.delete_firewall_rule,
+                                         fw_rule['id'])
             # Clean up ike policies
             for ikepolicy in cls.ikepolicies:
-                cls.client.delete_ikepolicy(ikepolicy['id'])
+                cls._try_delete_resource(cls.client.delete_ikepolicy,
+                                         ikepolicy['id'])
             # Clean up vpn services
             for vpnservice in cls.vpnservices:
-                cls.client.delete_vpnservice(vpnservice['id'])
+                cls._try_delete_resource(cls.client.delete_vpnservice,
+                                         vpnservice['id'])
             # Clean up floating IPs
             for floating_ip in cls.floating_ips:
-                cls.client.delete_floatingip(floating_ip['id'])
+                cls._try_delete_resource(cls.client.delete_floatingip,
+                                         floating_ip['id'])
             # Clean up routers
             for router in cls.routers:
-                cls.delete_router(router)
+                cls._try_delete_resource(cls.delete_router,
+                                         router)
 
             # Clean up health monitors
             for health_monitor in cls.health_monitors:
-                cls.client.delete_health_monitor(health_monitor['id'])
+                cls._try_delete_resource(cls.client.delete_health_monitor,
+                                         health_monitor['id'])
             # Clean up members
             for member in cls.members:
-                cls.client.delete_member(member['id'])
+                cls._try_delete_resource(cls.client.delete_member,
+                                         member['id'])
             # Clean up vips
             for vip in cls.vips:
-                cls.client.delete_vip(vip['id'])
+                cls._try_delete_resource(cls.client.delete_vip,
+                                         vip['id'])
             # Clean up pools
             for pool in cls.pools:
-                cls.client.delete_pool(pool['id'])
+                cls._try_delete_resource(cls.client.delete_pool,
+                                         pool['id'])
             # Clean up metering label rules
             for metering_label_rule in cls.metering_label_rules:
-                cls.admin_client.delete_metering_label_rule(
+                cls._try_delete_resource(
+                    cls.admin_client.delete_metering_label_rule,
                     metering_label_rule['id'])
             # Clean up metering labels
             for metering_label in cls.metering_labels:
-                cls.admin_client.delete_metering_label(metering_label['id'])
+                cls._try_delete_resource(
+                    cls.admin_client.delete_metering_label,
+                    metering_label['id'])
             # Clean up ports
             for port in cls.ports:
-                cls.client.delete_port(port['id'])
+                cls._try_delete_resource(cls.client.delete_port,
+                                         port['id'])
             # Clean up subnets
             for subnet in cls.subnets:
-                cls.client.delete_subnet(subnet['id'])
+                cls._try_delete_resource(cls.client.delete_subnet,
+                                         subnet['id'])
             # Clean up networks
             for network in cls.networks:
-                cls.client.delete_network(network['id'])
-            cls.clear_isolated_creds()
+                cls._try_delete_resource(cls.client.delete_network,
+                                         network['id'])
         super(BaseNetworkTest, cls).resource_cleanup()
+
+    @classmethod
+    def _try_delete_resource(self, delete_callable, *args, **kwargs):
+        """Cleanup resources in case of test-failure
+
+        Some resources are explicitly deleted by the test.
+        If the test failed to delete a resource, this method will execute
+        the appropriate delete methods. Otherwise, the method ignores NotFound
+        exceptions thrown for resources that were correctly deleted by the
+        test.
+
+        :param delete_callable: delete method
+        :param args: arguments for delete method
+        :param kwargs: keyword arguments for delete method
+        """
+        try:
+            delete_callable(*args, **kwargs)
+        # if resource is not found, this means it was deleted in the test
+        except lib_exc.NotFound:
+            pass
 
     @classmethod
     def create_network(cls, network_name=None):
         """Wrapper utility that returns a test network."""
         network_name = network_name or data_utils.rand_name('test-network-')
 
-        resp, body = cls.client.create_network(name=network_name)
+        body = cls.client.create_network(name=network_name)
         network = body['network']
         cls.networks.append(network)
         return network
 
     @classmethod
-    def create_subnet(cls, network, gateway=None, cidr=None, mask_bits=None,
-                      **kwargs):
+    def create_subnet(cls, network, gateway='', cidr=None, mask_bits=None,
+                      ip_version=None, client=None, **kwargs):
         """Wrapper utility that returns a test subnet."""
+
+        # allow tests to use admin client
+        if not client:
+            client = cls.client
+
         # The cidr and mask_bits depend on the ip version.
-        if cls._ip_version == 4:
+        ip_version = ip_version if ip_version is not None else cls._ip_version
+        gateway_not_set = gateway == ''
+        if ip_version == 4:
             cidr = cidr or netaddr.IPNetwork(CONF.network.tenant_network_cidr)
             mask_bits = mask_bits or CONF.network.tenant_network_mask_bits
-        elif cls._ip_version == 6:
+        elif ip_version == 6:
             cidr = (
                 cidr or netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr))
             mask_bits = mask_bits or CONF.network.tenant_network_v6_mask_bits
         # Find a cidr that is not in use yet and create a subnet with it
         for subnet_cidr in cidr.subnet(mask_bits):
-            if not gateway:
-                gateway = str(netaddr.IPAddress(subnet_cidr) + 1)
+            if gateway_not_set:
+                gateway_ip = str(netaddr.IPAddress(subnet_cidr) + 1)
+            else:
+                gateway_ip = gateway
             try:
-                resp, body = cls.client.create_subnet(
+                body = client.create_subnet(
                     network_id=network['id'],
                     cidr=str(subnet_cidr),
-                    ip_version=cls._ip_version,
-                    gateway_ip=gateway,
+                    ip_version=ip_version,
+                    gateway_ip=gateway_ip,
                     **kwargs)
                 break
-            except exceptions.BadRequest as e:
+            except lib_exc.BadRequest as e:
                 is_overlapping_cidr = 'overlaps with another subnet' in str(e)
-                # Unset gateway value if there is an overlapping subnet
-                gateway = None
                 if not is_overlapping_cidr:
                     raise
         else:
@@ -191,8 +248,8 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_port(cls, network, **kwargs):
         """Wrapper utility that returns a test port."""
-        resp, body = cls.client.create_port(network_id=network['id'],
-                                            **kwargs)
+        body = cls.client.create_port(network_id=network['id'],
+                                      **kwargs)
         port = body['port']
         cls.ports.append(port)
         return port
@@ -200,21 +257,22 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def update_port(cls, port, **kwargs):
         """Wrapper utility that updates a test port."""
-        resp, body = cls.client.update_port(port['id'],
-                                            **kwargs)
+        body = cls.client.update_port(port['id'],
+                                      **kwargs)
         return body['port']
 
     @classmethod
     def create_router(cls, router_name=None, admin_state_up=False,
-                      external_network_id=None, enable_snat=None):
+                      external_network_id=None, enable_snat=None,
+                      **kwargs):
         ext_gw_info = {}
         if external_network_id:
             ext_gw_info['network_id'] = external_network_id
         if enable_snat:
             ext_gw_info['enable_snat'] = enable_snat
-        resp, body = cls.client.create_router(
+        body = cls.client.create_router(
             router_name, external_gateway_info=ext_gw_info,
-            admin_state_up=admin_state_up)
+            admin_state_up=admin_state_up, **kwargs)
         router = body['router']
         cls.routers.append(router)
         return router
@@ -222,7 +280,7 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_floatingip(cls, external_network_id):
         """Wrapper utility that returns a test floating IP."""
-        resp, body = cls.client.create_floatingip(
+        body = cls.client.create_floatingip(
             floating_network_id=external_network_id)
         fip = body['floatingip']
         cls.floating_ips.append(fip)
@@ -231,7 +289,7 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_pool(cls, name, lb_method, protocol, subnet):
         """Wrapper utility that returns a test pool."""
-        resp, body = cls.client.create_pool(
+        body = cls.client.create_pool(
             name=name,
             lb_method=lb_method,
             protocol=protocol,
@@ -243,72 +301,74 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def update_pool(cls, name):
         """Wrapper utility that returns a test pool."""
-        resp, body = cls.client.update_pool(name=name)
+        body = cls.client.update_pool(name=name)
         pool = body['pool']
         return pool
 
     @classmethod
     def create_vip(cls, name, protocol, protocol_port, subnet, pool):
         """Wrapper utility that returns a test vip."""
-        resp, body = cls.client.create_vip(name=name,
-                                           protocol=protocol,
-                                           protocol_port=protocol_port,
-                                           subnet_id=subnet['id'],
-                                           pool_id=pool['id'])
+        body = cls.client.create_vip(name=name,
+                                     protocol=protocol,
+                                     protocol_port=protocol_port,
+                                     subnet_id=subnet['id'],
+                                     pool_id=pool['id'])
         vip = body['vip']
         cls.vips.append(vip)
         return vip
 
     @classmethod
     def update_vip(cls, name):
-        resp, body = cls.client.update_vip(name=name)
+        body = cls.client.update_vip(name=name)
         vip = body['vip']
         return vip
 
     @classmethod
-    def create_member(cls, protocol_port, pool):
+    def create_member(cls, protocol_port, pool, ip_version=None):
         """Wrapper utility that returns a test member."""
-        resp, body = cls.client.create_member(address="10.0.9.46",
-                                              protocol_port=protocol_port,
-                                              pool_id=pool['id'])
+        ip_version = ip_version if ip_version is not None else cls._ip_version
+        member_address = "fd00::abcd" if ip_version == 6 else "10.0.9.46"
+        body = cls.client.create_member(address=member_address,
+                                        protocol_port=protocol_port,
+                                        pool_id=pool['id'])
         member = body['member']
         cls.members.append(member)
         return member
 
     @classmethod
     def update_member(cls, admin_state_up):
-        resp, body = cls.client.update_member(admin_state_up=admin_state_up)
+        body = cls.client.update_member(admin_state_up=admin_state_up)
         member = body['member']
         return member
 
     @classmethod
     def create_health_monitor(cls, delay, max_retries, Type, timeout):
         """Wrapper utility that returns a test health monitor."""
-        resp, body = cls.client.create_health_monitor(delay=delay,
-                                                      max_retries=max_retries,
-                                                      type=Type,
-                                                      timeout=timeout)
+        body = cls.client.create_health_monitor(delay=delay,
+                                                max_retries=max_retries,
+                                                type=Type,
+                                                timeout=timeout)
         health_monitor = body['health_monitor']
         cls.health_monitors.append(health_monitor)
         return health_monitor
 
     @classmethod
     def update_health_monitor(cls, admin_state_up):
-        resp, body = cls.client.update_vip(admin_state_up=admin_state_up)
+        body = cls.client.update_vip(admin_state_up=admin_state_up)
         health_monitor = body['health_monitor']
         return health_monitor
 
     @classmethod
     def create_router_interface(cls, router_id, subnet_id):
         """Wrapper utility that returns a router interface."""
-        resp, interface = cls.client.add_router_interface_with_subnet_id(
+        interface = cls.client.add_router_interface_with_subnet_id(
             router_id, subnet_id)
         return interface
 
     @classmethod
     def create_vpnservice(cls, subnet_id, router_id):
         """Wrapper utility that returns a test vpn service."""
-        resp, body = cls.client.create_vpnservice(
+        body = cls.client.create_vpnservice(
             subnet_id=subnet_id, router_id=router_id, admin_state_up=True,
             name=data_utils.rand_name("vpnservice-"))
         vpnservice = body['vpnservice']
@@ -318,7 +378,7 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_ikepolicy(cls, name):
         """Wrapper utility that returns a test ike policy."""
-        resp, body = cls.client.create_ikepolicy(name=name)
+        body = cls.client.create_ikepolicy(name=name)
         ikepolicy = body['ikepolicy']
         cls.ikepolicies.append(ikepolicy)
         return ikepolicy
@@ -326,7 +386,7 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_firewall_rule(cls, action, protocol):
         """Wrapper utility that returns a test firewall rule."""
-        resp, body = cls.client.create_firewall_rule(
+        body = cls.client.create_firewall_rule(
             name=data_utils.rand_name("fw-rule"),
             action=action,
             protocol=protocol)
@@ -337,7 +397,7 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_firewall_policy(cls):
         """Wrapper utility that returns a test firewall policy."""
-        resp, body = cls.client.create_firewall_policy(
+        body = cls.client.create_firewall_policy(
             name=data_utils.rand_name("fw-policy"))
         fw_policy = body['firewall_policy']
         cls.fw_policies.append(fw_policy)
@@ -345,17 +405,20 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
 
     @classmethod
     def delete_router(cls, router):
-        resp, body = cls.client.list_router_interfaces(router['id'])
+        body = cls.client.list_router_interfaces(router['id'])
         interfaces = body['ports']
         for i in interfaces:
-            cls.client.remove_router_interface_with_subnet_id(
-                router['id'], i['fixed_ips'][0]['subnet_id'])
+            try:
+                cls.client.remove_router_interface_with_subnet_id(
+                    router['id'], i['fixed_ips'][0]['subnet_id'])
+            except lib_exc.NotFound:
+                pass
         cls.client.delete_router(router['id'])
 
     @classmethod
     def create_ipsecpolicy(cls, name):
         """Wrapper utility that returns a test ipsec policy."""
-        _, body = cls.client.create_ipsecpolicy(name=name)
+        body = cls.client.create_ipsecpolicy(name=name)
         ipsecpolicy = body['ipsecpolicy']
         cls.ipsecpolicies.append(ipsecpolicy)
         return ipsecpolicy
@@ -364,23 +427,28 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
 class BaseAdminNetworkTest(BaseNetworkTest):
 
     @classmethod
-    def resource_setup(cls):
-        super(BaseAdminNetworkTest, cls).resource_setup()
-
-        try:
-            creds = cls.isolated_creds.get_admin_creds()
-            cls.os_adm = clients.Manager(
-                credentials=creds, interface=cls._interface)
-        except NotImplementedError:
+    def skip_checks(cls):
+        super(BaseAdminNetworkTest, cls).skip_checks()
+        if not credentials.is_admin_available():
             msg = ("Missing Administrative Network API credentials "
                    "in configuration.")
             raise cls.skipException(msg)
+
+    @classmethod
+    def setup_credentials(cls):
+        super(BaseAdminNetworkTest, cls).setup_credentials()
+        creds = cls.isolated_creds.get_admin_creds()
+        cls.os_adm = clients.Manager(credentials=creds)
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseAdminNetworkTest, cls).setup_clients()
         cls.admin_client = cls.os_adm.network_client
 
     @classmethod
     def create_metering_label(cls, name, description):
         """Wrapper utility that returns a test metering label."""
-        resp, body = cls.admin_client.create_metering_label(
+        body = cls.admin_client.create_metering_label(
             description=description,
             name=data_utils.rand_name("metering-label"))
         metering_label = body['metering_label']
@@ -391,7 +459,7 @@ class BaseAdminNetworkTest(BaseNetworkTest):
     def create_metering_label_rule(cls, remote_ip_prefix, direction,
                                    metering_label_id):
         """Wrapper utility that returns a test metering label rule."""
-        resp, body = cls.admin_client.create_metering_label_rule(
+        body = cls.admin_client.create_metering_label_rule(
             remote_ip_prefix=remote_ip_prefix, direction=direction,
             metering_label_id=metering_label_id)
         metering_label_rule = body['metering_label_rule']

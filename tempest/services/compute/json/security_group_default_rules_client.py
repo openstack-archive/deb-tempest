@@ -15,20 +15,12 @@
 
 import json
 
-from tempest.api_schema.response.compute.v2 import \
+from tempest.api_schema.response.compute.v2_1 import \
     security_group_default_rule as schema
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
-class SecurityGroupDefaultRulesClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(SecurityGroupDefaultRulesClientJSON,
-              self).__init__(auth_provider)
-        self.service = CONF.compute.catalog_type
+class SecurityGroupDefaultRulesClientJSON(service_client.ServiceClient):
 
     def create_security_default_group_rule(self, ip_protocol, from_port,
                                            to_port, **kwargs):
@@ -51,7 +43,8 @@ class SecurityGroupDefaultRulesClientJSON(rest_client.RestClient):
         body = json.loads(body)
         self.validate_response(schema.create_get_security_group_default_rule,
                                resp, body)
-        return resp, body['security_group_default_rule']
+        rule = body['security_group_default_rule']
+        return service_client.ResponseBody(resp, rule)
 
     def delete_security_group_default_rule(self,
                                            security_group_default_rule_id):
@@ -60,7 +53,7 @@ class SecurityGroupDefaultRulesClientJSON(rest_client.RestClient):
             security_group_default_rule_id))
         self.validate_response(schema.delete_security_group_default_rule,
                                resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def list_security_group_default_rules(self):
         """List all Security Group default rules."""
@@ -68,7 +61,8 @@ class SecurityGroupDefaultRulesClientJSON(rest_client.RestClient):
         body = json.loads(body)
         self.validate_response(schema.list_security_group_default_rules,
                                resp, body)
-        return resp, body['security_group_default_rules']
+        rules = body['security_group_default_rules']
+        return service_client.ResponseBodyList(resp, rules)
 
     def get_security_group_default_rule(self, security_group_default_rule_id):
         """Return the details of provided Security Group default rule."""
@@ -77,4 +71,5 @@ class SecurityGroupDefaultRulesClientJSON(rest_client.RestClient):
         body = json.loads(body)
         self.validate_response(schema.create_get_security_group_default_rule,
                                resp, body)
-        return resp, body['security_group_default_rule']
+        rule = body['security_group_default_rule']
+        return service_client.ResponseBody(resp, rule)

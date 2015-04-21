@@ -21,14 +21,19 @@ import time
 import zlib
 
 import six
+from tempest_lib.common.utils import data_utils
 
 from tempest.api.object_storage import base
+from tempest import clients
 from tempest.common import custom_matchers
-from tempest.common.utils import data_utils
+from tempest import config
 from tempest import test
+
+CONF = config.CONF
 
 
 class ObjectTest(base.BaseObjectTest):
+
     @classmethod
     def resource_setup(cls):
         super(ObjectTest, cls).resource_setup()
@@ -60,7 +65,6 @@ class ObjectTest(base.BaseObjectTest):
         for i in six.moves.xrange(segments):
             resp, _ = self.object_client.create_object_segments(
                 self.container_name, object_name, i, data_segments[i])
-            self.assertEqual(resp['status'], '201')
 
         return object_name, data_segments
 
@@ -86,6 +90,7 @@ class ObjectTest(base.BaseObjectTest):
                 self.assertNotIn('x-object-meta-' + meta_key, resp)
 
     @test.attr(type='gate')
+    @test.idempotent_id('5b4ce26f-3545-46c9-a2ba-5754358a4c62')
     def test_create_object(self):
         # create object
         object_name = data_utils.rand_name(name='TestObject')
@@ -97,7 +102,6 @@ class ObjectTest(base.BaseObjectTest):
         data = data_utils.arbitrary_string()
         resp, _ = self.object_client.create_object(self.container_name,
                                                    object_name, data)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # check uploaded content
@@ -106,6 +110,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('5daebb1d-f0d5-4dc9-b541-69672eff00b0')
     def test_create_object_with_content_disposition(self):
         # create object with content_disposition
         object_name = data_utils.rand_name(name='TestObject')
@@ -117,7 +122,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             data,
             metadata=metadata)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         resp, body = self.object_client.get_object(
@@ -129,6 +133,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(body, data)
 
     @test.attr(type='gate')
+    @test.idempotent_id('605f8317-f945-4bee-ae91-013f1da8f0a0')
     def test_create_object_with_content_encoding(self):
         # create object with content_encoding
         object_name = data_utils.rand_name(name='TestObject')
@@ -144,7 +149,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             data,
             metadata=metadata)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # download compressed object
@@ -157,6 +161,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(body, data_before)
 
     @test.attr(type='gate')
+    @test.idempotent_id('73820093-0503-40b1-a478-edf0e69c7d1f')
     def test_create_object_with_etag(self):
         # create object with etag
         object_name = data_utils.rand_name(name='TestObject')
@@ -168,7 +173,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             data,
             metadata=metadata)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # check uploaded content
@@ -177,12 +181,13 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('84dafe57-9666-4f6d-84c8-0814d37923b8')
     def test_create_object_with_expect_continue(self):
         # create object with expect_continue
         object_name = data_utils.rand_name(name='TestObject')
         data = data_utils.arbitrary_string()
         metadata = {'Expect': '100-continue'}
-        resp = self.custom_object_client.create_object_continue(
+        resp = self.object_client.create_object_continue(
             self.container_name,
             object_name,
             data,
@@ -191,7 +196,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertIn('status', resp)
         self.assertEqual(resp['status'], '100')
 
-        self.custom_object_client.create_object_continue(
+        self.object_client.create_object_continue(
             self.container_name,
             object_name,
             data,
@@ -203,6 +208,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('4f84422a-e2f2-4403-b601-726a4220b54e')
     def test_create_object_with_transfer_encoding(self):
         # create object with transfer_encoding
         object_name = data_utils.rand_name(name='TestObject')
@@ -212,7 +218,6 @@ class ObjectTest(base.BaseObjectTest):
             name=object_name,
             contents=StringIO.StringIO(data),
             chunk_size=512)
-        self.assertEqual(status, 201)
         self.assertHeaders(resp_headers, 'Object', 'PUT')
 
         # check uploaded content
@@ -221,6 +226,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('0f3d62a6-47e3-4554-b0e5-1a5dc372d501')
     def test_create_object_with_x_fresh_metadata(self):
         # create object with x_fresh_metadata
         object_name_base = data_utils.rand_name(name='TestObject')
@@ -239,7 +245,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             '',
             metadata=metadata_2)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         resp, body = self.object_client.get_object(self.container_name,
@@ -248,6 +253,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('1c7ed3e4-2099-406b-b843-5301d4811baf')
     def test_create_object_with_x_object_meta(self):
         # create object with object_meta
         object_name = data_utils.rand_name(name='TestObject')
@@ -258,7 +264,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             data,
             metadata=metadata)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         resp, body = self.object_client.get_object(self.container_name,
@@ -268,6 +273,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('e4183917-33db-4153-85cc-4dacbb938865')
     def test_create_object_with_x_object_metakey(self):
         # create object with the blank value of metadata
         object_name = data_utils.rand_name(name='TestObject')
@@ -278,7 +284,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             data,
             metadata=metadata)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         resp, body = self.object_client.get_object(self.container_name,
@@ -288,6 +293,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('ce798afc-b278-45de-a5ce-2ea124b98b99')
     def test_create_object_with_x_remove_object_meta(self):
         # create object with x_remove_object_meta
         object_name = data_utils.rand_name(name='TestObject')
@@ -303,7 +309,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             data,
             metadata=metadata_remove)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         resp, body = self.object_client.get_object(self.container_name,
@@ -312,6 +317,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('ad21e342-7916-4f9e-ab62-a1f885f2aaf9')
     def test_create_object_with_x_remove_object_metakey(self):
         # create object with the blank value of remove metadata
         object_name = data_utils.rand_name(name='TestObject')
@@ -327,7 +333,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             data,
             metadata=metadata_remove)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         resp, body = self.object_client.get_object(self.container_name,
@@ -336,6 +341,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(data, body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('17738d45-03bd-4d45-9e0b-7b2f58f98687')
     def test_delete_object(self):
         # create object
         object_name = data_utils.rand_name(name='TestObject')
@@ -345,10 +351,10 @@ class ObjectTest(base.BaseObjectTest):
         # delete object
         resp, _ = self.object_client.delete_object(self.container_name,
                                                    object_name)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'DELETE')
 
     @test.attr(type='smoke')
+    @test.idempotent_id('7a94c25d-66e6-434c-9c38-97d4e2c29945')
     def test_update_object_metadata(self):
         # update object metadata
         object_name, data = self._create_object()
@@ -359,7 +365,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             metadata,
             metadata_prefix='')
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'POST')
 
         resp, _ = self.object_client.list_object_metadata(
@@ -368,6 +373,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertIn('x-object-meta-test-meta', resp)
         self.assertEqual(resp['x-object-meta-test-meta'], 'Meta')
 
+    @test.idempotent_id('48650ed0-c189-4e1e-ad6b-1d4770c6e134')
     def test_update_object_metadata_with_remove_metadata(self):
         # update object metadata with remove metadata
         object_name = data_utils.rand_name(name='TestObject')
@@ -384,7 +390,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             update_metadata,
             metadata_prefix='')
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'POST')
 
         resp, _ = self.object_client.list_object_metadata(
@@ -393,6 +398,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertNotIn('x-object-meta-test-meta1', resp)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('f726174b-2ded-4708-bff7-729d12ce1f84')
     def test_update_object_metadata_with_create_and_remove_metadata(self):
         # creation and deletion of metadata with one request
         object_name = data_utils.rand_name(name='TestObject')
@@ -410,7 +416,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             update_metadata,
             metadata_prefix='')
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'POST')
 
         resp, _ = self.object_client.list_object_metadata(
@@ -421,6 +426,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(resp['x-object-meta-test-meta2'], 'Meta2')
 
     @test.attr(type='smoke')
+    @test.idempotent_id('08854588-6449-4bb7-8cca-f2e1040f5e6f')
     def test_update_object_metadata_with_x_object_manifest(self):
         # update object metadata with x_object_manifest
 
@@ -439,7 +445,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             update_metadata,
             metadata_prefix='')
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'POST')
 
         resp, _ = self.object_client.list_object_metadata(
@@ -448,6 +453,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertIn('x-object-manifest', resp)
         self.assertNotEqual(len(resp['x-object-manifest']), 0)
 
+    @test.idempotent_id('0dbbe89c-6811-4d84-a2df-eca2bdd40c0e')
     def test_update_object_metadata_with_x_object_metakey(self):
         # update object metadata with a blenk value of metadata
         object_name, data = self._create_object()
@@ -458,7 +464,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             update_metadata,
             metadata_prefix='')
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'POST')
 
         resp, _ = self.object_client.list_object_metadata(
@@ -468,6 +473,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(resp['x-object-meta-test-meta'], '')
 
     @test.attr(type='smoke')
+    @test.idempotent_id('9a88dca4-b684-425b-806f-306cd0e57e42')
     def test_update_object_metadata_with_x_remove_object_metakey(self):
         # update object metadata with a blank value of remove metadata
         object_name = data_utils.rand_name(name='TestObject')
@@ -484,7 +490,6 @@ class ObjectTest(base.BaseObjectTest):
             object_name,
             update_metadata,
             metadata_prefix='')
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'POST')
 
         resp, _ = self.object_client.list_object_metadata(
@@ -493,6 +498,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertNotIn('x-object-meta-test-meta', resp)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('9a447cf6-de06-48de-8226-a8c6ed31caf2')
     def test_list_object_metadata(self):
         # get object metadata
         object_name = data_utils.rand_name(name='TestObject')
@@ -506,12 +512,12 @@ class ObjectTest(base.BaseObjectTest):
         resp, _ = self.object_client.list_object_metadata(
             self.container_name,
             object_name)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'HEAD')
         self.assertIn('x-object-meta-test-meta', resp)
         self.assertEqual(resp['x-object-meta-test-meta'], 'Meta')
 
     @test.attr(type='smoke')
+    @test.idempotent_id('170fb90e-f5c3-4b1f-ae1b-a18810821172')
     def test_list_no_object_metadata(self):
         # get empty list of object metadata
         object_name, data = self._create_object()
@@ -519,11 +525,11 @@ class ObjectTest(base.BaseObjectTest):
         resp, _ = self.object_client.list_object_metadata(
             self.container_name,
             object_name)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'HEAD')
         self.assertNotIn('x-object-meta-', str(resp))
 
     @test.attr(type='smoke')
+    @test.idempotent_id('23a3674c-d6de-46c3-86af-ff92bfc8a3da')
     def test_list_object_metadata_with_x_object_manifest(self):
         # get object metadata with x_object_manifest
 
@@ -542,7 +548,6 @@ class ObjectTest(base.BaseObjectTest):
         resp, _ = self.object_client.list_object_metadata(
             self.container_name,
             object_name)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
 
         # Check only the existence of common headers with custom matcher
         self.assertThat(resp, custom_matchers.ExistsAllResponseHeaders(
@@ -565,6 +570,7 @@ class ObjectTest(base.BaseObjectTest):
                          '%s/%s' % (self.container_name, object_name))
 
     @test.attr(type='smoke')
+    @test.idempotent_id('02610ba7-86b7-4272-9ed8-aa8d417cb3cd')
     def test_get_object(self):
         # retrieve object's data (in response body)
 
@@ -573,12 +579,12 @@ class ObjectTest(base.BaseObjectTest):
         # get object
         resp, body = self.object_client.get_object(self.container_name,
                                                    object_name)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
 
         self.assertEqual(body, data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('005f9bf6-e06d-41ec-968e-96c78e0b1d82')
     def test_get_object_with_metadata(self):
         # get object with metadata
         object_name = data_utils.rand_name(name='TestObject')
@@ -592,13 +598,13 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=None)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
         self.assertIn('x-object-meta-test-meta', resp)
         self.assertEqual(resp['x-object-meta-test-meta'], 'Meta')
         self.assertEqual(body, data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('05a1890e-7db9-4a6c-90a8-ce998a2bddfa')
     def test_get_object_with_range(self):
         # get object with range
         object_name = data_utils.rand_name(name='TestObject')
@@ -613,11 +619,11 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=metadata)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
         self.assertEqual(body, data[rand_num - 3: rand_num])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('11b4515b-7ba7-4ca8-8838-357ded86fc10')
     def test_get_object_with_x_object_manifest(self):
         # get object with x_object_manifest
 
@@ -637,7 +643,6 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=None)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
 
         # Check only the existence of common headers with custom matcher
         self.assertThat(resp, custom_matchers.ExistsAllResponseHeaders(
@@ -662,6 +667,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(''.join(data_segments), body)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('c05b4013-e4de-47af-be84-e598062b16fc')
     def test_get_object_with_if_match(self):
         # get object with if_match
         object_name = data_utils.rand_name(name='TestObject')
@@ -678,11 +684,11 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=list_metadata)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
         self.assertEqual(body, data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('be133639-e5d2-4313-9b1f-2d59fc054a16')
     def test_get_object_with_if_modified_since(self):
         # get object with if_modified_since
         object_name = data_utils.rand_name(name='TestObject')
@@ -699,10 +705,10 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=list_metadata)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
         self.assertEqual(body, data)
 
+    @test.idempotent_id('641500d5-1612-4042-a04d-01fc4528bc30')
     def test_get_object_with_if_none_match(self):
         # get object with if_none_match
         object_name = data_utils.rand_name(name='TestObject')
@@ -721,11 +727,11 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=list_metadata)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
         self.assertEqual(body, data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('0aa1201c-10aa-467a-bee7-63cbdd463152')
     def test_get_object_with_if_unmodified_since(self):
         # get object with if_unmodified_since
         object_name, data = self._create_object()
@@ -737,11 +743,11 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=list_metadata)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
         self.assertEqual(body, data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('94587078-475f-48f9-a40f-389c246e31cd')
     def test_get_object_with_x_newest(self):
         # get object with x_newest
         object_name, data = self._create_object()
@@ -751,11 +757,11 @@ class ObjectTest(base.BaseObjectTest):
             self.container_name,
             object_name,
             metadata=list_metadata)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
         self.assertEqual(body, data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('1a9ab572-1b66-4981-8c21-416e2a5e6011')
     def test_copy_object_in_same_container(self):
         # create source object
         src_object_name = data_utils.rand_name(name='SrcObject')
@@ -774,7 +780,6 @@ class ObjectTest(base.BaseObjectTest):
         # copy source object to destination
         resp, _ = self.object_client.copy_object_in_same_container(
             self.container_name, src_object_name, dst_object_name)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # check data
@@ -783,6 +788,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(body, src_data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('2248abba-415d-410b-9c30-22dff9cd6e67')
     def test_copy_object_to_itself(self):
         # change the content type of an existing object
 
@@ -796,7 +802,6 @@ class ObjectTest(base.BaseObjectTest):
         self.assertNotEqual(resp_tmp['content-type'], metadata['content-type'])
         resp, _ = self.object_client.copy_object_in_same_container(
             self.container_name, object_name, object_name, metadata)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # check the content type
@@ -805,6 +810,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(resp['content-type'], metadata['content-type'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('06f90388-2d0e-40aa-934c-e9a8833e958a')
     def test_copy_object_2d_way(self):
         # create source object
         src_object_name = data_utils.rand_name(name='SrcObject')
@@ -822,7 +828,6 @@ class ObjectTest(base.BaseObjectTest):
         resp, _ = self.object_client.copy_object_2d_way(self.container_name,
                                                         src_object_name,
                                                         dst_object_name)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'COPY')
         self.assertEqual(
             resp['x-copied-from'],
@@ -832,6 +837,7 @@ class ObjectTest(base.BaseObjectTest):
         self._check_copied_obj(dst_object_name, src_data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('aa467252-44f3-472a-b5ae-5b57c3c9c147')
     def test_copy_object_across_containers(self):
         # create a container to use as  asource container
         src_container_name = data_utils.rand_name(name='TestSourceContainer')
@@ -855,14 +861,12 @@ class ObjectTest(base.BaseObjectTest):
         resp, _ = self.object_client.update_object_metadata(src_container_name,
                                                             object_name,
                                                             orig_metadata)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'POST')
 
         # copy object from source container to destination container
         resp, _ = self.object_client.copy_object_across_containers(
             src_container_name, object_name, dst_container_name,
             object_name)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # check if object is present in destination container
@@ -874,6 +878,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(resp[actual_meta_key], meta_value)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('5a9e2cc6-85b6-46fc-916d-0cbb7a88e5fd')
     def test_copy_object_with_x_fresh_metadata(self):
         # create source object
         metadata = {'x-object-meta-src': 'src_value'}
@@ -884,7 +889,6 @@ class ObjectTest(base.BaseObjectTest):
         dst_object_name, resp = self._copy_object_2d(src_object_name,
                                                      metadata)
 
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'COPY')
 
         self.assertNotIn('x-object-meta-src', resp)
@@ -895,6 +899,7 @@ class ObjectTest(base.BaseObjectTest):
         self._check_copied_obj(dst_object_name, data, not_in_meta=["src"])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('a28a8b99-e701-4d7e-9d84-3b66f121460b')
     def test_copy_object_with_x_object_metakey(self):
         # create source object
         metadata = {'x-object-meta-src': 'src_value'}
@@ -904,7 +909,6 @@ class ObjectTest(base.BaseObjectTest):
         metadata = {'x-object-meta-test': ''}
         dst_obj_name, resp = self._copy_object_2d(src_obj_name, metadata)
 
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'COPY')
 
         expected = {'x-object-meta-test': '',
@@ -918,6 +922,7 @@ class ObjectTest(base.BaseObjectTest):
         self._check_copied_obj(dst_obj_name, data, in_meta=["test", "src"])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('edabedca-24c3-4322-9b70-d6d9f942a074')
     def test_copy_object_with_x_object_meta(self):
         # create source object
         metadata = {'x-object-meta-src': 'src_value'}
@@ -927,7 +932,6 @@ class ObjectTest(base.BaseObjectTest):
         metadata = {'x-object-meta-test': 'value'}
         dst_obj_name, resp = self._copy_object_2d(src_obj_name, metadata)
 
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'COPY')
 
         expected = {'x-object-meta-test': 'value',
@@ -941,6 +945,7 @@ class ObjectTest(base.BaseObjectTest):
         self._check_copied_obj(dst_obj_name, data, in_meta=["test", "src"])
 
     @test.attr(type='gate')
+    @test.idempotent_id('e3e6a64a-9f50-4955-b987-6ce6767c97fb')
     def test_object_upload_in_segments(self):
         # create object
         object_name = data_utils.rand_name(name='LObject')
@@ -951,7 +956,6 @@ class ObjectTest(base.BaseObjectTest):
         for i in six.moves.xrange(segments):
             resp, _ = self.object_client.create_object_segments(
                 self.container_name, object_name, i, data_segments[i])
-            self.assertEqual(resp['status'], '201')
         # creating a manifest file
         metadata = {'X-Object-Manifest': '%s/%s/'
                     % (self.container_name, object_name)}
@@ -984,6 +988,7 @@ class ObjectTest(base.BaseObjectTest):
         self.assertEqual(''.join(data_segments), body)
 
     @test.attr(type='gate')
+    @test.idempotent_id('50d01f12-526f-4360-9ac2-75dd508d7b68')
     def test_get_object_if_different(self):
         # http://en.wikipedia.org/wiki/HTTP_ETag
         # Make a conditional request for an object using the If-None-Match
@@ -1012,11 +1017,23 @@ class ObjectTest(base.BaseObjectTest):
         md5 = hashlib.md5(local_data).hexdigest()
         headers = {'If-None-Match': md5}
         resp, body = self.object_client.get(url, headers=headers)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Object', 'GET')
 
 
 class PublicObjectTest(base.BaseObjectTest):
+
+    @classmethod
+    def setup_credentials(cls):
+        super(PublicObjectTest, cls).setup_credentials()
+        cls.os_alt = clients.Manager(
+            cls.isolated_creds.get_creds_by_roles(
+                roles=[CONF.object_storage.operator_role], force_new=True))
+
+    @classmethod
+    def setup_clients(cls):
+        super(PublicObjectTest, cls).setup_clients()
+        cls.identity_client_alt = cls.os_alt.identity_client
+
     def setUp(self):
         super(PublicObjectTest, self).setUp()
         self.container_name = data_utils.rand_name(name='TestContainer')
@@ -1027,6 +1044,7 @@ class PublicObjectTest(base.BaseObjectTest):
         super(PublicObjectTest, self).tearDown()
 
     @test.attr(type='smoke')
+    @test.idempotent_id('07c9cf95-c0d4-4b49-b9c8-0ef2c9b27193')
     def test_access_public_container_object_without_using_creds(self):
         # make container public-readable and access an object in it object
         # anonymously, without using credentials
@@ -1035,7 +1053,6 @@ class PublicObjectTest(base.BaseObjectTest):
         cont_headers = {'X-Container-Read': '.r:*,.rlistings'}
         resp_meta, body = self.container_client.update_container_metadata(
             self.container_name, metadata=cont_headers, metadata_prefix='')
-        self.assertIn(int(resp_meta['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp_meta, 'Container', 'POST')
 
         # create object
@@ -1044,30 +1061,29 @@ class PublicObjectTest(base.BaseObjectTest):
                                            base_text=object_name)
         resp, _ = self.object_client.create_object(self.container_name,
                                                    object_name, data)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # list container metadata
         resp_meta, _ = self.container_client.list_container_metadata(
             self.container_name)
-        self.assertIn(int(resp_meta['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp_meta, 'Container', 'HEAD')
 
         self.assertIn('x-container-read', resp_meta)
         self.assertEqual(resp_meta['x-container-read'], '.r:*,.rlistings')
 
         # trying to get object with empty headers as it is public readable
-        self.custom_object_client.auth_provider.set_alt_auth_data(
+        self.object_client.auth_provider.set_alt_auth_data(
             request_part='headers',
             auth_data=None
         )
-        resp, body = self.custom_object_client.get_object(
+        resp, body = self.object_client.get_object(
             self.container_name, object_name)
         self.assertHeaders(resp, 'Object', 'GET')
 
         self.assertEqual(body, data)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('54e2a2fe-42dc-491b-8270-8e4217dd4cdc')
     def test_access_public_object_with_another_user_creds(self):
         # make container public-readable and access an object in it using
         # another user's credentials
@@ -1075,7 +1091,6 @@ class PublicObjectTest(base.BaseObjectTest):
         resp_meta, body = self.container_client.update_container_metadata(
             self.container_name, metadata=cont_headers,
             metadata_prefix='')
-        self.assertIn(int(resp_meta['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp_meta, 'Container', 'POST')
 
         # create object
@@ -1084,13 +1099,11 @@ class PublicObjectTest(base.BaseObjectTest):
                                            base_text=object_name)
         resp, _ = self.object_client.create_object(self.container_name,
                                                    object_name, data)
-        self.assertEqual(resp['status'], '201')
         self.assertHeaders(resp, 'Object', 'PUT')
 
         # list container metadata
         resp, _ = self.container_client.list_container_metadata(
             self.container_name)
-        self.assertIn(int(resp['status']), test.HTTP_SUCCESS)
         self.assertHeaders(resp, 'Container', 'HEAD')
 
         self.assertIn('x-container-read', resp)
@@ -1098,12 +1111,12 @@ class PublicObjectTest(base.BaseObjectTest):
 
         # get auth token of alternative user
         alt_auth_data = self.identity_client_alt.auth_provider.auth_data
-        self.custom_object_client.auth_provider.set_alt_auth_data(
+        self.object_client.auth_provider.set_alt_auth_data(
             request_part='headers',
             auth_data=alt_auth_data
         )
         # access object using alternate user creds
-        resp, body = self.custom_object_client.get_object(
+        resp, body = self.object_client.get_object(
             self.container_name, object_name)
         self.assertHeaders(resp, 'Object', 'GET')
 

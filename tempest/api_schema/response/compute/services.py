@@ -22,13 +22,14 @@ list_services = {
                 'items': {
                     'type': 'object',
                     'properties': {
-                        'id': {'type': 'integer'},
+                        'id': {'type': ['integer', 'string'],
+                               'pattern': '^[a-zA-Z!]*@[0-9]+$'},
                         'zone': {'type': 'string'},
                         'host': {'type': 'string'},
                         'state': {'type': 'string'},
                         'binary': {'type': 'string'},
                         'status': {'type': 'string'},
-                        'updated_at': {'type': 'string'},
+                        'updated_at': {'type': ['string', 'null']},
                         'disabled_reason': {'type': ['string', 'null']}
                     },
                     'required': ['id', 'zone', 'host', 'state', 'binary',

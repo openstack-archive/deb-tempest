@@ -24,24 +24,22 @@ import urllib
 import uuid
 
 import fixtures
-import testresources
+from oslo_log import log as logging
+from oslo_utils import importutils
+import six
 import testscenarios
 import testtools
 
 from tempest import clients
 from tempest.common import credentials
+from tempest.common import fixed_network
 import tempest.common.generator.valid_generator as valid
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common import importutils
-from tempest.openstack.common import log as logging
 
 LOG = logging.getLogger(__name__)
 
 CONF = config.CONF
-
-# All the successful HTTP status codes from RFC 2616
-HTTP_SUCCESS = (200, 201, 202, 203, 204, 205, 206)
 
 
 def attr(*args, **kwargs):
@@ -66,6 +64,23 @@ def attr(*args, **kwargs):
     return decorator
 
 
+def idempotent_id(id):
+    """Stub for metadata decorator"""
+    if not isinstance(id, six.string_types):
+        raise TypeError('Test idempotent_id must be string not %s'
+                        '' % type(id).__name__)
+    uuid.UUID(id)
+
+    def decorator(f):
+        f = testtools.testcase.attr('id-%s' % id)(f)
+        if f.__doc__:
+            f.__doc__ = 'Test idempotent id: %s\n%s' % (id, f.__doc__)
+        else:
+            f.__doc__ = 'Test idempotent id: %s' % id
+        return f
+    return decorator
+
+
 def get_service_list():
     service_list = {
         'compute': CONF.service_available.nova,
@@ -80,7 +95,8 @@ def get_service_list():
         'object_storage': CONF.service_available.swift,
         'dashboard': CONF.service_available.horizon,
         'telemetry': CONF.service_available.ceilometer,
-        'data_processing': CONF.service_available.sahara
+        'data_processing': CONF.service_available.sahara,
+        'database': CONF.service_available.trove
     }
     return service_list
 
@@ -94,7 +110,7 @@ def services(*args, **kwargs):
     def decorator(f):
         services = ['compute', 'image', 'baremetal', 'volume', 'orchestration',
                     'network', 'identity', 'object_storage', 'dashboard',
-                    'telemetry', 'data_processing']
+                    'telemetry', 'data_processing', 'database']
         for service in args:
             if service not in services:
                 raise exceptions.InvalidServiceTag('%s is not a valid '
@@ -141,35 +157,6 @@ def stresstest(*args, **kwargs):
     return decorator
 
 
-def skip_because(*args, **kwargs):
-    """A decorator useful to skip tests hitting known bugs
-
-    @param bug: bug number causing the test to skip
-    @param condition: optional condition to be True for the skip to have place
-    @param interface: skip the test if it is the same as self._interface
-    """
-    def decorator(f):
-        @functools.wraps(f)
-        def wrapper(self, *func_args, **func_kwargs):
-            skip = False
-            if "condition" in kwargs:
-                if kwargs["condition"] is True:
-                    skip = True
-            elif "interface" in kwargs:
-                if kwargs["interface"] == self._interface:
-                    skip = True
-            else:
-                skip = True
-            if "bug" in kwargs and skip is True:
-                if not kwargs['bug'].isdigit():
-                    raise ValueError('bug must be a valid bug number')
-                msg = "Skipped until Bug: %s is resolved." % kwargs["bug"]
-                raise testtools.TestCase.skipException(msg)
-            return f(self, *func_args, **func_kwargs)
-        return wrapper
-    return decorator
-
-
 def requires_ext(*args, **kwargs):
     """A decorator to skip tests if an extension is not enabled
 
@@ -195,7 +182,6 @@ def is_extension_enabled(extension_name, service):
     """
     config_dict = {
         'compute': CONF.compute_feature_enabled.api_extensions,
-        'compute_v3': CONF.compute_feature_enabled.api_v3_extensions,
         'volume': CONF.volume_feature_enabled.api_extensions,
         'network': CONF.network_feature_enabled.api_extensions,
         'object': CONF.object_storage_feature_enabled.discoverable_apis,
@@ -222,23 +208,26 @@ def validate_tearDownClass():
 
 atexit.register(validate_tearDownClass)
 
-if sys.version_info >= (2, 7):
-    class BaseDeps(testtools.TestCase,
-                   testtools.testcase.WithAttributes,
-                   testresources.ResourcedTestCase):
-        pass
-else:
-    # Define asserts for py26
-    import unittest2
 
-    class BaseDeps(testtools.TestCase,
-                   testtools.testcase.WithAttributes,
-                   testresources.ResourcedTestCase,
-                   unittest2.TestCase):
-        pass
+class BaseTestCase(testtools.testcase.WithAttributes,
+                   testtools.TestCase):
+    """The test base class defines Tempest framework for class level fixtures.
+    `setUpClass` and `tearDownClass` are defined here and cannot be overwritten
+    by subclasses (enforced via hacking rule T105).
 
+    Set-up is split in a series of steps (setup stages), which can be
+    overwritten by test classes. Set-up stages are:
+    - skip_checks
+    - setup_credentials
+    - setup_clients
+    - resource_setup
 
-class BaseTestCase(BaseDeps):
+    Tear-down is also split in a series of steps (teardown stages), which are
+    stacked for execution only if the corresponding setup stage had been
+    reached during the setup phase. Tear-down stages are:
+    - clear_isolated_creds (defined in the base test class)
+    - resource_cleanup
+    """
 
     setUpClassCalled = False
     _service = None
@@ -257,31 +246,28 @@ class BaseTestCase(BaseDeps):
         if hasattr(super(BaseTestCase, cls), 'setUpClass'):
             super(BaseTestCase, cls).setUpClass()
         cls.setUpClassCalled = True
-        # No test resource is allocated until here
+        # Stack of (name, callable) to be invoked in reverse order at teardown
+        cls.teardowns = []
+        # All the configuration checks that may generate a skip
+        cls.skip_checks()
         try:
-            # TODO(andreaf) Split-up resource_setup in stages:
-            # skip checks, pre-hook, credentials, clients, resources, post-hook
+            # Allocation of all required credentials and client managers
+            cls.teardowns.append(('credentials', cls.clear_isolated_creds))
+            cls.setup_credentials()
+            # Shortcuts to clients
+            cls.setup_clients()
+            # Additional class-wide test resources
+            cls.teardowns.append(('resources', cls.resource_cleanup))
             cls.resource_setup()
         except Exception:
             etype, value, trace = sys.exc_info()
-            LOG.info("%s in resource setup. Invoking tearDownClass." % etype)
-            # Catch any exception in tearDown so we can re-raise the original
-            # exception at the end
+            LOG.info("%s raised in %s.setUpClass. Invoking tearDownClass." % (
+                     etype, cls.__name__))
+            cls.tearDownClass()
             try:
-                cls.tearDownClass()
-            except Exception as te:
-                tetype, _, _ = sys.exc_info()
-                # TODO(gmann): Till we split-up resource_setup &
-                # resource_cleanup in more structural way, log
-                # AttributeError as info instead of exception.
-                if tetype is AttributeError:
-                    LOG.info("tearDownClass failed: %s" % te)
-                else:
-                    LOG.exception("tearDownClass failed: %s" % te)
-            try:
-                raise etype(value), None, trace
+                raise etype, value, trace
             finally:
-                del trace  # for avoiding circular refs
+                del trace  # to avoid circular refs
 
     @classmethod
     def tearDownClass(cls):
@@ -289,21 +275,78 @@ class BaseTestCase(BaseDeps):
         # It should never be overridden by descendants
         if hasattr(super(BaseTestCase, cls), 'tearDownClass'):
             super(BaseTestCase, cls).tearDownClass()
-        try:
-            cls.resource_cleanup()
-        finally:
-            cls.clear_isolated_creds()
+        # Save any existing exception, we always want to re-raise the original
+        # exception only
+        etype, value, trace = sys.exc_info()
+        # If there was no exception during setup we shall re-raise the first
+        # exception in teardown
+        re_raise = (etype is None)
+        while cls.teardowns:
+            name, teardown = cls.teardowns.pop()
+            # Catch any exception in tearDown so we can re-raise the original
+            # exception at the end
+            try:
+                teardown()
+            except Exception as te:
+                sys_exec_info = sys.exc_info()
+                tetype = sys_exec_info[0]
+                # TODO(andreaf): Till we have the ability to cleanup only
+                # resources that were successfully setup in resource_cleanup,
+                # log AttributeError as info instead of exception.
+                if tetype is AttributeError and name == 'resources':
+                    LOG.info("tearDownClass of %s failed: %s" % (name, te))
+                else:
+                    LOG.exception("teardown of %s failed: %s" % (name, te))
+                if not etype:
+                    etype, value, trace = sys_exec_info
+        # If exceptions were raised during teardown, an not before, re-raise
+        # the first one
+        if re_raise and etype is not None:
+            try:
+                raise etype, value, trace
+            finally:
+                del trace  # to avoid circular refs
+
+    @classmethod
+    def skip_checks(cls):
+        """Class level skip checks. Subclasses verify in here all
+        conditions that might prevent the execution of the entire test class.
+        Checks implemented here may not make use API calls, and should rely on
+        configuration alone.
+        In general skip checks that require an API call are discouraged.
+        If one is really needed it may be implemented either in the
+        resource_setup or at test level.
+        """
+        pass
+
+    @classmethod
+    def setup_credentials(cls):
+        """Allocate credentials and the client managers from them."""
+        # TODO(andreaf) There is a fair amount of code that could me moved from
+        # base / test classes in here. Ideally tests should be able to only
+        # specify a list of (additional) credentials the need to use.
+        pass
+
+    @classmethod
+    def setup_clients(cls):
+        """Create links to the clients into the test object."""
+        # TODO(andreaf) There is a fair amount of code that could me moved from
+        # base / test classes in here. Ideally tests should be able to only
+        # specify which client is `client` and nothing else.
+        pass
 
     @classmethod
     def resource_setup(cls):
-        """Class level setup steps for test cases.
-        Recommended order: skip checks, credentials, clients, resources.
+        """Class level resource setup for test cases.
         """
         pass
 
     @classmethod
     def resource_cleanup(cls):
-        """Class level resource cleanup for test cases. """
+        """Class level resource cleanup for test cases.
+        Resource cleanup must be able to handle the case of partially setup
+        resources, in case a failure during `resource_setup` should happen.
+        """
         pass
 
     def setUp(self):
@@ -336,24 +379,23 @@ class BaseTestCase(BaseDeps):
                                                    level=None))
 
     @classmethod
-    def get_client_manager(cls, interface=None):
+    def get_client_manager(cls, identity_version=None):
         """
         Returns an OpenStack client manager
         """
         force_tenant_isolation = getattr(cls, 'force_tenant_isolation', None)
+        identity_version = identity_version or CONF.identity.auth_version
 
-        cls.isolated_creds = credentials.get_isolated_credentials(
-            name=cls.__name__, network_resources=cls.network_resources,
-            force_tenant_isolation=force_tenant_isolation,
-        )
+        if (not hasattr(cls, 'isolated_creds') or
+            not cls.isolated_creds.name == cls.__name__):
+            cls.isolated_creds = credentials.get_isolated_credentials(
+                name=cls.__name__, network_resources=cls.network_resources,
+                force_tenant_isolation=force_tenant_isolation,
+                identity_version=identity_version
+            )
 
         creds = cls.isolated_creds.get_primary_creds()
-        params = dict(credentials=creds, service=cls._service)
-        if getattr(cls, '_interface', None):
-            interface = cls._interface
-        if interface:
-            params['interface'] = interface
-        os = clients.Manager(**params)
+        os = clients.Manager(credentials=creds, service=cls._service)
         return os
 
     @classmethod
@@ -369,13 +411,12 @@ class BaseTestCase(BaseDeps):
         """
         Returns an instance of the Identity Admin API client
         """
-        os = clients.AdminManager(interface=cls._interface,
-                                  service=cls._service)
+        os = clients.AdminManager(service=cls._service)
         admin_client = os.identity_client
         return admin_client
 
     @classmethod
-    def set_network_resources(self, network=False, router=False, subnet=False,
+    def set_network_resources(cls, network=False, router=False, subnet=False,
                               dhcp=False):
         """Specify which network resources should be created
 
@@ -388,12 +429,32 @@ class BaseTestCase(BaseDeps):
         # in order to ensure that even if it's called multiple times in
         # a chain of overloaded methods, the attribute is set only
         # in the leaf class
-        if not self.network_resources:
-            self.network_resources = {
+        if not cls.network_resources:
+            cls.network_resources = {
                 'network': network,
                 'router': router,
                 'subnet': subnet,
                 'dhcp': dhcp}
+
+    @classmethod
+    def get_tenant_network(cls):
+        """Get the network to be used in testing
+
+        :return: network dict including 'id' and 'name'
+        """
+        # Make sure isolated_creds exists and get a network client
+        networks_client = cls.get_client_manager().networks_client
+        isolated_creds = getattr(cls, 'isolated_creds', None)
+        # In case of nova network, isolated tenants are not able to list the
+        # network configured in fixed_network_name, even if the can use it
+        # for their servers, so using an admin network client to validate
+        # the network name
+        if (not CONF.service_available.neutron and
+                credentials.is_admin_available()):
+            admin_creds = isolated_creds.get_admin_creds()
+            networks_client = clients.Manager(admin_creds).networks_client
+        return fixed_network.get_tenant_network(isolated_creds,
+                                                networks_client)
 
     def assertEmpty(self, list, msg=None):
         self.assertTrue(len(list) == 0, msg)
@@ -411,9 +472,6 @@ class NegativeAutoTest(BaseTestCase):
         super(NegativeAutoTest, cls).setUpClass()
         os = cls.get_client_manager()
         cls.client = os.negative_client
-        os_admin = clients.AdminManager(interface=cls._interface,
-                                        service=cls._service)
-        cls.admin_client = os_admin.negative_client
 
     @staticmethod
     def load_tests(*args):
@@ -427,12 +485,8 @@ class NegativeAutoTest(BaseTestCase):
         else:
             standard_tests, module, loader = args
         for test in testtools.iterate_tests(standard_tests):
-            schema_file = getattr(test, '_schema_file', None)
             schema = getattr(test, '_schema', None)
-            if schema_file is not None:
-                setattr(test, 'scenarios',
-                        NegativeAutoTest.generate_scenario(schema_file))
-            elif schema is not None:
+            if schema is not None:
                 setattr(test, 'scenarios',
                         NegativeAutoTest.generate_scenario(schema))
         return testscenarios.load_tests_apply_scenarios(*args)
@@ -545,7 +599,13 @@ class NegativeAutoTest(BaseTestCase):
                             "mechanism")
 
         if "admin_client" in description and description["admin_client"]:
-            client = self.admin_client
+            if not credentials.is_admin_available():
+                msg = ("Missing Identity Admin API credentials in"
+                       "configuration.")
+                raise self.skipException(msg)
+            creds = self.isolated_creds.get_admin_creds()
+            os_adm = clients.Manager(credentials=creds)
+            client = os_adm.negative_client
         else:
             client = self.client
         resp, resp_body = client.send_request(method, new_url,

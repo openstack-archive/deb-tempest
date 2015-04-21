@@ -12,8 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from tempest_lib.common.utils import data_utils as utils
+
 from tempest.api.volume import base
-from tempest.common.utils import data_utils as utils
 from tempest import test
 
 
@@ -47,12 +48,12 @@ class QosSpecsV2TestJSON(base.BaseVolumeAdminTest):
         self.volume_qos_client.wait_for_resource_deletion(body['id'])
 
         # validate the deletion
-        _, list_qos = self.volume_qos_client.list_qos()
+        list_qos = self.volume_qos_client.list_qos()
         self.assertNotIn(body, list_qos)
 
     def _create_test_volume_type(self):
         vol_type_name = utils.rand_name("volume-type")
-        _, vol_type = self.volume_types_client.create_volume_type(
+        vol_type = self.volume_types_client.create_volume_type(
             vol_type_name)
         self.addCleanup(self.volume_types_client.delete_volume_type,
                         vol_type['id'])
@@ -63,7 +64,7 @@ class QosSpecsV2TestJSON(base.BaseVolumeAdminTest):
             self.created_qos['id'], vol_type_id)
 
     def _test_get_association_qos(self):
-        _, body = self.volume_qos_client.get_association_qos(
+        body = self.volume_qos_client.show_association_qos(
             self.created_qos['id'])
 
         associations = []
@@ -72,6 +73,7 @@ class QosSpecsV2TestJSON(base.BaseVolumeAdminTest):
 
         return associations
 
+    @test.idempotent_id('7e15f883-4bef-49a9-95eb-f94209a1ced1')
     def test_create_delete_qos_with_front_end_consumer(self):
         """Tests the creation and deletion of QoS specs
 
@@ -79,6 +81,7 @@ class QosSpecsV2TestJSON(base.BaseVolumeAdminTest):
         """
         self._create_delete_test_qos_with_given_consumer('front-end')
 
+    @test.idempotent_id('b115cded-8f58-4ee4-aab5-9192cfada08f')
     def test_create_delete_qos_with_back_end_consumer(self):
         """Tests the creation and deletion of QoS specs
 
@@ -87,6 +90,7 @@ class QosSpecsV2TestJSON(base.BaseVolumeAdminTest):
         self._create_delete_test_qos_with_given_consumer('back-end')
 
     @test.attr(type='smoke')
+    @test.idempotent_id('f88d65eb-ea0d-487d-af8d-71f4011575a4')
     def test_create_delete_qos_with_both_consumer(self):
         """Tests the creation and deletion of QoS specs
 
@@ -95,26 +99,29 @@ class QosSpecsV2TestJSON(base.BaseVolumeAdminTest):
         self._create_delete_test_qos_with_given_consumer('both')
 
     @test.attr(type='smoke')
+    @test.idempotent_id('7aa214cc-ac1a-4397-931f-3bb2e83bb0fd')
     def test_get_qos(self):
         """Tests the detail of a given qos-specs"""
-        _, body = self.volume_qos_client.get_qos(self.created_qos['id'])
+        body = self.volume_qos_client.show_qos(self.created_qos['id'])
         self.assertEqual(self.qos_name, body['name'])
         self.assertEqual(self.qos_consumer, body['consumer'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('75e04226-bcf7-4595-a34b-fdf0736f38fc')
     def test_list_qos(self):
         """Tests the list of all qos-specs"""
-        _, body = self.volume_qos_client.list_qos()
+        body = self.volume_qos_client.list_qos()
         self.assertIn(self.created_qos, body)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('ed00fd85-4494-45f2-8ceb-9e2048919aed')
     def test_set_unset_qos_key(self):
         """Test the addition of a specs key to qos-specs"""
         args = {'iops_bytes': '500'}
-        _, body = self.volume_qos_client.set_qos_key(self.created_qos['id'],
-                                                     iops_bytes='500')
+        body = self.volume_qos_client.set_qos_key(self.created_qos['id'],
+                                                  iops_bytes='500')
         self.assertEqual(args, body)
-        _, body = self.volume_qos_client.get_qos(self.created_qos['id'])
+        body = self.volume_qos_client.show_qos(self.created_qos['id'])
         self.assertEqual(args['iops_bytes'], body['specs']['iops_bytes'])
 
         # test the deletion of a specs key from qos-specs
@@ -123,10 +130,11 @@ class QosSpecsV2TestJSON(base.BaseVolumeAdminTest):
         operation = 'qos-key-unset'
         self.volume_qos_client.wait_for_qos_operations(self.created_qos['id'],
                                                        operation, keys)
-        _, body = self.volume_qos_client.get_qos(self.created_qos['id'])
+        body = self.volume_qos_client.show_qos(self.created_qos['id'])
         self.assertNotIn(keys[0], body['specs'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('1dd93c76-6420-485d-a771-874044c416ac')
     def test_associate_disassociate_qos(self):
         """Test the following operations :
 

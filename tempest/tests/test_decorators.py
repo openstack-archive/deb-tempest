@@ -12,9 +12,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import uuid
 
 import mock
-from oslo.config import cfg
+from oslo_config import cfg
 from oslotest import mockpatch
 import testtools
 
@@ -62,6 +63,43 @@ class TestAttrDecorator(BaseDecoratorsTest):
 
     def test_attr_decorator_with_duplicated_type(self):
         self._test_attr_helper(expected_attrs=['foo'], type=['foo', 'foo'])
+
+
+class TestIdempotentIdDecorator(BaseDecoratorsTest):
+
+    def _test_helper(self, _id, **decorator_args):
+        @test.idempotent_id(_id)
+        def foo():
+            """Docstring"""
+            pass
+
+        return foo
+
+    def _test_helper_without_doc(self, _id, **decorator_args):
+        @test.idempotent_id(_id)
+        def foo():
+            pass
+
+        return foo
+
+    def test_positive(self):
+        _id = str(uuid.uuid4())
+        foo = self._test_helper(_id)
+        self.assertIn('id-%s' % _id, getattr(foo, '__testtools_attrs'))
+        self.assertTrue(foo.__doc__.startswith('Test idempotent id: %s' % _id))
+
+    def test_positive_without_doc(self):
+        _id = str(uuid.uuid4())
+        foo = self._test_helper_without_doc(_id)
+        self.assertTrue(foo.__doc__.startswith('Test idempotent id: %s' % _id))
+
+    def test_idempotent_id_not_str(self):
+        _id = 42
+        self.assertRaises(TypeError, self._test_helper, _id)
+
+    def test_idempotent_id_not_valid_uuid(self):
+        _id = '42'
+        self.assertRaises(ValueError, self._test_helper, _id)
 
 
 class TestServicesDecorator(BaseDecoratorsTest):
@@ -148,70 +186,6 @@ class TestStressDecorator(BaseDecoratorsTest):
                                      expected_inheritance=True,
                                      class_setup_per='application',
                                      allow_inheritance=True)
-
-
-class TestSkipBecauseDecorator(BaseDecoratorsTest):
-    def _test_skip_because_helper(self, expected_to_skip=True,
-                                  **decorator_args):
-        class TestFoo(test.BaseTestCase):
-            _interface = 'json'
-
-            @test.skip_because(**decorator_args)
-            def test_bar(self):
-                return 0
-
-        t = TestFoo('test_bar')
-        if expected_to_skip:
-            self.assertRaises(testtools.TestCase.skipException, t.test_bar)
-        else:
-            # assert that test_bar returned 0
-            self.assertEqual(TestFoo('test_bar').test_bar(), 0)
-
-    def test_skip_because_bug(self):
-        self._test_skip_because_helper(bug='12345')
-
-    def test_skip_because_bug_and_interface_match(self):
-        self._test_skip_because_helper(bug='12346', interface='json')
-
-    def test_skip_because_bug_interface_not_match(self):
-        self._test_skip_because_helper(expected_to_skip=False,
-                                       bug='12347', interface='xml')
-
-    def test_skip_because_bug_and_condition_true(self):
-        self._test_skip_because_helper(bug='12348', condition=True)
-
-    def test_skip_because_bug_and_condition_false(self):
-        self._test_skip_because_helper(expected_to_skip=False,
-                                       bug='12349', condition=False)
-
-    def test_skip_because_bug_condition_false_and_interface_match(self):
-        """
-        Assure that only condition will be evaluated if both parameters are
-        passed.
-        """
-        self._test_skip_because_helper(expected_to_skip=False,
-                                       bug='12350', condition=False,
-                                       interface='json')
-
-    def test_skip_because_bug_condition_true_and_interface_not_match(self):
-        """
-        Assure that only condition will be evaluated if both parameters are
-        passed.
-        """
-        self._test_skip_because_helper(bug='12351', condition=True,
-                                       interface='xml')
-
-    def test_skip_because_bug_without_bug_never_skips(self):
-        """Never skip without a bug parameter."""
-        self._test_skip_because_helper(expected_to_skip=False,
-                                       condition=True)
-        self._test_skip_because_helper(expected_to_skip=False,
-                                       interface='json')
-
-    def test_skip_because_invalid_bug_number(self):
-        """Raise ValueError if with an invalid bug number"""
-        self.assertRaises(ValueError, self._test_skip_because_helper,
-                          bug='critical_bug')
 
 
 class TestRequiresExtDecorator(BaseDecoratorsTest):

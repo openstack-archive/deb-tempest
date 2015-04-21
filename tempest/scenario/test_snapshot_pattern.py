@@ -13,10 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from oslo_log import log
 import testtools
 
 from tempest import config
-from tempest.openstack.common import log
 from tempest.scenario import manager
 from tempest import test
 
@@ -37,7 +37,7 @@ class TestSnapshotPattern(manager.ScenarioTest):
     """
 
     def _boot_image(self, image_id):
-        security_groups = [self.security_group]
+        security_groups = [{'name': self.security_group['name']}]
         create_kwargs = {
             'key_name': self.keypair['name'],
             'security_groups': security_groups
@@ -47,35 +47,17 @@ class TestSnapshotPattern(manager.ScenarioTest):
     def _add_keypair(self):
         self.keypair = self.create_keypair()
 
-    def _ssh_to_server(self, server_or_ip):
-        try:
-            return self.get_remote_client(server_or_ip)
-        except Exception:
-            LOG.exception('Initializing SSH connection failed')
-            self._log_console_output()
-            raise
-
     def _write_timestamp(self, server_or_ip):
-        ssh_client = self._ssh_to_server(server_or_ip)
+        ssh_client = self.get_remote_client(server_or_ip)
         ssh_client.exec_command('date > /tmp/timestamp; sync')
         self.timestamp = ssh_client.exec_command('cat /tmp/timestamp')
 
     def _check_timestamp(self, server_or_ip):
-        ssh_client = self._ssh_to_server(server_or_ip)
+        ssh_client = self.get_remote_client(server_or_ip)
         got_timestamp = ssh_client.exec_command('cat /tmp/timestamp')
         self.assertEqual(self.timestamp, got_timestamp)
 
-    def _create_floating_ip(self):
-        _, floating_ip = self.floating_ips_client.create_floating_ip()
-        self.addCleanup(self.delete_wrapper,
-                        self.floating_ips_client.delete_floating_ip,
-                        floating_ip['id'])
-        return floating_ip
-
-    def _set_floating_ip_to_server(self, server, floating_ip):
-        self.floating_ips_client.associate_floating_ip_to_server(
-            floating_ip['ip'], server['id'])
-
+    @test.idempotent_id('608e604b-1d63-4a82-8e3e-91bc665c90b4')
     @testtools.skipUnless(CONF.compute_feature_enabled.snapshot,
                           'Snapshotting is not available.')
     @test.services('compute', 'network', 'image')
@@ -87,8 +69,7 @@ class TestSnapshotPattern(manager.ScenarioTest):
         # boot a instance and create a timestamp file in it
         server = self._boot_image(CONF.compute.image_ref)
         if CONF.compute.use_floatingip_for_ssh:
-            fip_for_server = self._create_floating_ip()
-            self._set_floating_ip_to_server(server, fip_for_server)
+            fip_for_server = self.create_floating_ip(server)
             self._write_timestamp(fip_for_server['ip'])
         else:
             self._write_timestamp(server)
@@ -101,9 +82,7 @@ class TestSnapshotPattern(manager.ScenarioTest):
 
         # check the existence of the timestamp file in the second instance
         if CONF.compute.use_floatingip_for_ssh:
-            fip_for_snapshot = self._create_floating_ip()
-            self._set_floating_ip_to_server(server_from_snapshot,
-                                            fip_for_snapshot)
+            fip_for_snapshot = self.create_floating_ip(server_from_snapshot)
             self._check_timestamp(fip_for_snapshot['ip'])
         else:
             self._check_timestamp(server_from_snapshot)

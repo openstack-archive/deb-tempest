@@ -15,13 +15,16 @@
 
 import time
 
+from oslo_log import log as logging
+from tempest_lib.common.utils import data_utils
+from tempest_lib import decorators
+from tempest_lib import exceptions as lib_exc
 import testtools
 
-from tempest.common.utils import data_utils
 from tempest import config
 from tempest import exceptions
-from tempest.openstack.common import log as logging
 from tempest.scenario import manager
+from tempest import test
 import tempest.test
 
 CONF = config.CONF
@@ -51,9 +54,8 @@ class TestStampPattern(manager.ScenarioTest):
     """
 
     @classmethod
-    def resource_setup(cls):
-        super(TestStampPattern, cls).resource_setup()
-
+    def skip_checks(cls):
+        super(TestStampPattern, cls).skip_checks()
         if not CONF.volume_feature_enabled.snapshot:
             raise cls.skipException("Cinder volume snapshots are disabled")
 
@@ -62,7 +64,7 @@ class TestStampPattern(manager.ScenarioTest):
                                                        status)
 
     def _boot_image(self, image_id):
-        security_groups = [self.security_group]
+        security_groups = [{'name': self.security_group['name']}]
         create_kwargs = {
             'key_name': self.keypair['name'],
             'security_groups': security_groups
@@ -72,31 +74,20 @@ class TestStampPattern(manager.ScenarioTest):
     def _add_keypair(self):
         self.keypair = self.create_keypair()
 
-    def _create_floating_ip(self):
-        _, floating_ip = self.floating_ips_client.create_floating_ip()
-        self.addCleanup(self.delete_wrapper,
-                        self.floating_ips_client.delete_floating_ip,
-                        floating_ip['id'])
-        return floating_ip
-
-    def _add_floating_ip(self, server, floating_ip):
-        self.floating_ips_client.associate_floating_ip_to_server(
-            floating_ip['ip'], server['id'])
-
     def _ssh_to_server(self, server_or_ip):
         return self.get_remote_client(server_or_ip)
 
     def _create_volume_snapshot(self, volume):
-        snapshot_name = data_utils.rand_name('scenario-snapshot-')
+        snapshot_name = data_utils.rand_name('scenario-snapshot')
         _, snapshot = self.snapshots_client.create_snapshot(
             volume['id'], display_name=snapshot_name)
 
         def cleaner():
             self.snapshots_client.delete_snapshot(snapshot['id'])
             try:
-                while self.snapshots_client.get_snapshot(snapshot['id']):
+                while self.snapshots_client.show_snapshot(snapshot['id']):
                     time.sleep(1)
-            except exceptions.NotFound:
+            except lib_exc.NotFound:
                 pass
         self.addCleanup(cleaner)
         self._wait_for_volume_status(volume, 'available')
@@ -113,9 +104,8 @@ class TestStampPattern(manager.ScenarioTest):
 
     def _attach_volume(self, server, volume):
         # TODO(andreaf) we should use device from config instead if vdb
-        _, attached_volume = self.servers_client.attach_volume(
+        attached_volume = self.servers_client.attach_volume(
             server['id'], volume['id'], device='/dev/vdb')
-        attached_volume = attached_volume['volumeAttachment']
         self.assertEqual(volume['id'], attached_volume['id'])
         self._wait_for_volume_status(attached_volume, 'in-use')
 
@@ -150,7 +140,8 @@ class TestStampPattern(manager.ScenarioTest):
         got_timestamp = ssh_client.exec_command('sudo cat /mnt/timestamp')
         self.assertEqual(self.timestamp, got_timestamp)
 
-    @tempest.test.skip_because(bug="1205344")
+    @decorators.skip_because(bug="1205344")
+    @test.idempotent_id('10fd234a-515c-41e5-b092-8323060598c5')
     @testtools.skipUnless(CONF.compute_feature_enabled.snapshot,
                           'Snapshotting is not available.')
     @tempest.test.services('compute', 'network', 'volume', 'image')
@@ -165,8 +156,7 @@ class TestStampPattern(manager.ScenarioTest):
 
         # create and add floating IP to server1
         if CONF.compute.use_floatingip_for_ssh:
-            floating_ip_for_server = self._create_floating_ip()
-            self._add_floating_ip(server, floating_ip_for_server)
+            floating_ip_for_server = self.create_floating_ip(server)
             ip_for_server = floating_ip_for_server['ip']
         else:
             ip_for_server = server
@@ -191,9 +181,8 @@ class TestStampPattern(manager.ScenarioTest):
 
         # create and add floating IP to server_from_snapshot
         if CONF.compute.use_floatingip_for_ssh:
-            floating_ip_for_snapshot = self._create_floating_ip()
-            self._add_floating_ip(server_from_snapshot,
-                                  floating_ip_for_snapshot)
+            floating_ip_for_snapshot = self.create_floating_ip(
+                server_from_snapshot)
             ip_for_snapshot = floating_ip_for_snapshot['ip']
         else:
             ip_for_snapshot = server_from_snapshot

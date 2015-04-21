@@ -15,24 +15,17 @@
 
 import json
 
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
-class BaseExtensionsClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(BaseExtensionsClientJSON, self).__init__(auth_provider)
-        self.service = CONF.volume.catalog_type
+class BaseExtensionsClientJSON(service_client.ServiceClient):
 
     def list_extensions(self):
         url = 'extensions'
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
-        return resp, body['extensions']
+        return service_client.ResponseBodyList(resp, body['extensions'])
 
 
 class ExtensionsClientJSON(BaseExtensionsClientJSON):

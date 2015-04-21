@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tempest.common.utils import data_utils
+from oslo_log import log as logging
+from tempest_lib.common.utils import data_utils
+
 from tempest import config
-from tempest.openstack.common import log as logging
 from tempest import test
 
 CONF = config.CONF
@@ -35,13 +36,25 @@ class BaseMessagingTest(test.BaseTestCase):
     """
 
     @classmethod
-    def resource_setup(cls):
-        super(BaseMessagingTest, cls).resource_setup()
+    def skip_checks(cls):
+        super(BaseMessagingTest, cls).skip_checks()
         if not CONF.service_available.zaqar:
             raise cls.skipException("Zaqar support is required")
-        os = cls.get_client_manager()
+
+    @classmethod
+    def setup_credentials(cls):
+        super(BaseMessagingTest, cls).setup_credentials()
+        cls.os = cls.get_client_manager()
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseMessagingTest, cls).setup_clients()
+        cls.client = cls.os.messaging_client
+
+    @classmethod
+    def resource_setup(cls):
+        super(BaseMessagingTest, cls).resource_setup()
         cls.messaging_cfg = CONF.messaging
-        cls.client = os.messaging_client
 
     @classmethod
     def create_queue(cls, queue_name):
@@ -58,7 +71,7 @@ class BaseMessagingTest(test.BaseTestCase):
     @classmethod
     def check_queue_exists(cls, queue_name):
         """Wrapper utility that checks the existence of a test queue."""
-        resp, body = cls.client.get_queue(queue_name)
+        resp, body = cls.client.show_queue(queue_name)
         return resp, body
 
     @classmethod
@@ -76,13 +89,13 @@ class BaseMessagingTest(test.BaseTestCase):
     @classmethod
     def get_queue_stats(cls, queue_name):
         """Wrapper utility that returns the queue stats."""
-        resp, body = cls.client.get_queue_stats(queue_name)
+        resp, body = cls.client.show_queue_stats(queue_name)
         return resp, body
 
     @classmethod
     def get_queue_metadata(cls, queue_name):
         """Wrapper utility that gets a queue metadata."""
-        resp, body = cls.client.get_queue_metadata(queue_name)
+        resp, body = cls.client.show_queue_metadata(queue_name)
         return resp, body
 
     @classmethod
@@ -108,14 +121,14 @@ class BaseMessagingTest(test.BaseTestCase):
     @classmethod
     def get_single_message(cls, message_uri):
         """Wrapper utility that gets a single message."""
-        resp, body = cls.client.get_single_message(message_uri)
+        resp, body = cls.client.show_single_message(message_uri)
 
         return resp, body
 
     @classmethod
     def get_multiple_messages(cls, message_uri):
         """Wrapper utility that gets multiple messages."""
-        resp, body = cls.client.get_multiple_messages(message_uri)
+        resp, body = cls.client.show_multiple_messages(message_uri)
 
         return resp, body
 

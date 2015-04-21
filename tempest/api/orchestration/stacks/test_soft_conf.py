@@ -10,11 +10,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from oslo_log import log as logging
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
+
 from tempest.api.orchestration import base
-from tempest.common.utils import data_utils
 from tempest import config
-from tempest import exceptions
-from tempest.openstack.common import log as logging
 from tempest import test
 
 LOG = logging.getLogger(__name__)
@@ -70,39 +71,43 @@ class TestSoftwareConfig(base.BaseOrchestrationTest):
         self.client.delete_software_deploy(deploy_id)
         # Testing that it is really gone
         self.assertRaises(
-            exceptions.NotFound, self.client.get_software_deploy,
+            lib_exc.NotFound, self.client.show_software_deployment,
             self.deployment_id)
 
     def _config_delete(self, config_id):
         self.client.delete_software_config(config_id)
         # Testing that it is really gone
         self.assertRaises(
-            exceptions.NotFound, self.client.get_software_config, config_id)
+            lib_exc.NotFound, self.client.show_software_config, config_id)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('136162ed-9445-4b9c-b7fc-306af8b5da99')
     def test_get_software_config(self):
         """Testing software config get."""
         for conf in self.configs:
-            api_config = self.client.get_software_config(conf['id'])
+            api_config = self.client.show_software_config(conf['id'])
             self._validate_config(conf, api_config)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('1275c835-c967-4a2c-8d5d-ad533447ed91')
     def test_get_deployment_list(self):
         """Getting a list of all deployments"""
-        deploy_list = self.client.get_software_deploy_list()
+        deploy_list = self.client.list_software_deployments()
         deploy_ids = [deploy['id'] for deploy in
                       deploy_list['software_deployments']]
         self.assertIn(self.deployment_id, deploy_ids)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('fe7cd9f9-54b1-429c-a3b7-7df8451db913')
     def test_get_deployment_metadata(self):
         """Testing deployment metadata get"""
-        metadata = self.client.get_software_deploy_meta(self.server_id)
+        metadata = self.client.show_software_deployment_metadata(
+            self.server_id)
         conf_ids = [conf['id'] for conf in metadata['metadata']]
         self.assertIn(self.configs[0]['id'], conf_ids)
 
     def _validate_deployment(self, action, status, reason, config_id):
-        deployment = self.client.get_software_deploy(self.deployment_id)
+        deployment = self.client.show_software_deployment(self.deployment_id)
         self.assertEqual(action, deployment['software_deployment']['action'])
         self.assertEqual(status, deployment['software_deployment']['status'])
         self.assertEqual(reason,
@@ -111,6 +116,7 @@ class TestSoftwareConfig(base.BaseOrchestrationTest):
                          deployment['software_deployment']['config_id'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('f29d21f3-ed75-47cf-8cdc-ef1bdeb4c674')
     def test_software_deployment_create_validate(self):
         """Testing software deployment was created as expected."""
         # Asserting that all fields were created
@@ -123,9 +129,11 @@ class TestSoftwareConfig(base.BaseOrchestrationTest):
                                   self.status_reason, self.configs[0]['id'])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('2ac43ab3-34f2-415d-be2e-eabb4d14ee32')
     def test_software_deployment_update_no_metadata_change(self):
         """Testing software deployment update without metadata change."""
-        metadata = self.client.get_software_deploy_meta(self.server_id)
+        metadata = self.client.show_software_deployment_metadata(
+            self.server_id)
         # Updating values without changing the configuration ID
         new_action = 'ACTION_1'
         new_status = 'STATUS_1'
@@ -139,16 +147,19 @@ class TestSoftwareConfig(base.BaseOrchestrationTest):
                                   new_reason, self.configs[0]['id'])
 
         # Metadata should not be changed at this point
-        test_metadata = self.client.get_software_deploy_meta(self.server_id)
+        test_metadata = self.client.show_software_deployment_metadata(
+            self.server_id)
         for key in metadata['metadata'][0]:
             self.assertEqual(
                 metadata['metadata'][0][key],
                 test_metadata['metadata'][0][key])
 
     @test.attr(type='smoke')
+    @test.idempotent_id('92c48944-d79d-4595-a840-8e1a581c1a72')
     def test_software_deployment_update_with_metadata_change(self):
         """Testing software deployment update with metadata change."""
-        metadata = self.client.get_software_deploy_meta(self.server_id)
+        metadata = self.client.show_software_deployment_metadata(
+            self.server_id)
         self.client.update_software_deploy(
             self.deployment_id, self.server_id, self.configs[1]['id'],
             self.action, self.status, self.input_values,
@@ -156,7 +167,8 @@ class TestSoftwareConfig(base.BaseOrchestrationTest):
         self._validate_deployment(self.action, self.status,
                                   self.status_reason, self.configs[1]['id'])
         # Metadata should now be changed
-        new_metadata = self.client.get_software_deploy_meta(self.server_id)
+        new_metadata = self.client.show_software_deployment_metadata(
+            self.server_id)
         # Its enough to test the ID in this case
         meta_id = metadata['metadata'][0]['id']
         test_id = new_metadata['metadata'][0]['id']

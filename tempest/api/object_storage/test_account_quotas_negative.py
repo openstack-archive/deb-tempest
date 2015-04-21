@@ -1,7 +1,5 @@
 # Copyright (C) 2013 eNovance SAS <licensing@enovance.com>
 #
-# Author: Joe H. Rahme <joe.hakim.rahme@enovance.com>
-#
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -14,11 +12,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from tempest_lib.common.utils import data_utils
+from tempest_lib import decorators
+from tempest_lib import exceptions as lib_exc
+
 from tempest.api.object_storage import base
 from tempest import clients
-from tempest.common.utils import data_utils
 from tempest import config
-from tempest import exceptions
 from tempest import test
 
 CONF = config.CONF
@@ -27,14 +27,24 @@ CONF = config.CONF
 class AccountQuotasNegativeTest(base.BaseObjectTest):
 
     @classmethod
+    def setup_credentials(cls):
+        super(AccountQuotasNegativeTest, cls).setup_credentials()
+        reseller_admin_role = CONF.object_storage.reseller_admin_role
+        if not cls.isolated_creds.is_role_available(reseller_admin_role):
+            skip_msg = ("%s skipped because the configured credential provider"
+                        " is not able to provide credentials with the %s role "
+                        "assigned." % (cls.__name__, reseller_admin_role))
+            raise cls.skipException(skip_msg)
+        else:
+            cls.os_reselleradmin = clients.Manager(
+                cls.isolated_creds.get_creds_by_roles(
+                    roles=[reseller_admin_role]))
+
+    @classmethod
     def resource_setup(cls):
         super(AccountQuotasNegativeTest, cls).resource_setup()
         cls.container_name = data_utils.rand_name(name="TestContainer")
         cls.container_client.create_container(cls.container_name)
-
-        cls.data.setup_test_user(reseller=True)
-
-        cls.os_reselleradmin = clients.Manager(cls.data.test_credentials)
 
         # Retrieve a ResellerAdmin auth data and use it to set a quota
         # on the client's account
@@ -43,30 +53,30 @@ class AccountQuotasNegativeTest(base.BaseObjectTest):
 
     def setUp(self):
         super(AccountQuotasNegativeTest, self).setUp()
-        # Set the reselleradmin auth in headers for next custom_account_client
+        # Set the reselleradmin auth in headers for next account_client
         # request
-        self.custom_account_client.auth_provider.set_alt_auth_data(
+        self.account_client.auth_provider.set_alt_auth_data(
             request_part='headers',
             auth_data=self.reselleradmin_auth_data
         )
         # Set a quota of 20 bytes on the user's account before each test
         headers = {"X-Account-Meta-Quota-Bytes": "20"}
 
-        self.os.custom_account_client.request("POST", url="", headers=headers,
-                                              body="")
+        self.os.account_client.request("POST", url="", headers=headers,
+                                       body="")
 
     def tearDown(self):
-        # Set the reselleradmin auth in headers for next custom_account_client
+        # Set the reselleradmin auth in headers for next account_client
         # request
-        self.custom_account_client.auth_provider.set_alt_auth_data(
+        self.account_client.auth_provider.set_alt_auth_data(
             request_part='headers',
             auth_data=self.reselleradmin_auth_data
         )
         # remove the quota from the container
         headers = {"X-Remove-Account-Meta-Quota-Bytes": "x"}
 
-        self.os.custom_account_client.request("POST", url="", headers=headers,
-                                              body="")
+        self.os.account_client.request("POST", url="", headers=headers,
+                                       body="")
         super(AccountQuotasNegativeTest, self).tearDown()
 
     @classmethod
@@ -76,6 +86,7 @@ class AccountQuotasNegativeTest(base.BaseObjectTest):
         super(AccountQuotasNegativeTest, cls).resource_cleanup()
 
     @test.attr(type=["negative", "smoke"])
+    @test.idempotent_id('d1dc5076-555e-4e6d-9697-28f1fe976324')
     @test.requires_ext(extension='account_quotas', service='object')
     def test_user_modify_quota(self):
         """Test that a user is not able to modify or remove a quota on
@@ -83,21 +94,22 @@ class AccountQuotasNegativeTest(base.BaseObjectTest):
         """
 
         # Not able to remove quota
-        self.assertRaises(exceptions.Unauthorized,
+        self.assertRaises(lib_exc.Forbidden,
                           self.account_client.create_account_metadata,
                           {"Quota-Bytes": ""})
 
         # Not able to modify quota
-        self.assertRaises(exceptions.Unauthorized,
+        self.assertRaises(lib_exc.Forbidden,
                           self.account_client.create_account_metadata,
                           {"Quota-Bytes": "100"})
 
     @test.attr(type=["negative", "smoke"])
-    @test.skip_because(bug="1310597")
+    @decorators.skip_because(bug="1310597")
+    @test.idempotent_id('cf9e21f5-3aa4-41b1-9462-28ac550d8d3f')
     @test.requires_ext(extension='account_quotas', service='object')
     def test_upload_large_object(self):
         object_name = data_utils.rand_name(name="TestObject")
         data = data_utils.arbitrary_string(30)
-        self.assertRaises(exceptions.OverLimit,
+        self.assertRaises(lib_exc.OverLimit,
                           self.object_client.create_object,
                           self.container_name, object_name, data)

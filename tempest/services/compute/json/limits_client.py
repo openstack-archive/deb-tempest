@@ -15,24 +15,17 @@
 
 import json
 
-from tempest.api_schema.response.compute.v2 import limits as schema
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.api_schema.response.compute.v2_1 import limits as schema
+from tempest.common import service_client
 
 
-class LimitsClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(LimitsClientJSON, self).__init__(auth_provider)
-        self.service = CONF.compute.catalog_type
+class LimitsClientJSON(service_client.ServiceClient):
 
     def get_absolute_limits(self):
         resp, body = self.get("limits")
         body = json.loads(body)
         self.validate_response(schema.get_limit, resp, body)
-        return resp, body['limits']['absolute']
+        return service_client.ResponseBody(resp, body['limits']['absolute'])
 
     def get_specific_absolute_limit(self, absolute_limit):
         resp, body = self.get("limits")

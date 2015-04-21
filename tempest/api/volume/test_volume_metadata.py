@@ -34,6 +34,7 @@ class VolumesV2MetadataTest(base.BaseVolumeTest):
         super(VolumesV2MetadataTest, self).tearDown()
 
     @test.attr(type='gate')
+    @test.idempotent_id('6f5b125b-f664-44bf-910f-751591fe5769')
     def test_create_get_delete_volume_metadata(self):
         # Create metadata for the volume
         metadata = {"key1": "value1",
@@ -41,20 +42,21 @@ class VolumesV2MetadataTest(base.BaseVolumeTest):
                     "key3": "value3",
                     "key4": "<value&special_chars>"}
 
-        _, body = self.volumes_client.create_volume_metadata(self.volume_id,
-                                                             metadata)
+        body = self.volumes_client.create_volume_metadata(self.volume_id,
+                                                          metadata)
         # Get the metadata of the volume
-        _, body = self.volumes_client.get_volume_metadata(self.volume_id)
+        body = self.volumes_client.show_volume_metadata(self.volume_id)
         self.assertThat(body.items(), matchers.ContainsAll(metadata.items()))
         # Delete one item metadata of the volume
         self.volumes_client.delete_volume_metadata_item(
             self.volume_id, "key1")
-        _, body = self.volumes_client.get_volume_metadata(self.volume_id)
+        body = self.volumes_client.show_volume_metadata(self.volume_id)
         self.assertNotIn("key1", body)
         del metadata["key1"]
         self.assertThat(body.items(), matchers.ContainsAll(metadata.items()))
 
     @test.attr(type='gate')
+    @test.idempotent_id('774d2918-9beb-4f30-b3d1-2a4e8179ec0a')
     def test_update_volume_metadata(self):
         # Update metadata for the volume
         metadata = {"key1": "value1",
@@ -65,19 +67,20 @@ class VolumesV2MetadataTest(base.BaseVolumeTest):
                   "key1": "value1_update"}
 
         # Create metadata for the volume
-        _, body = self.volumes_client.create_volume_metadata(
+        body = self.volumes_client.create_volume_metadata(
             self.volume_id, metadata)
         # Get the metadata of the volume
-        _, body = self.volumes_client.get_volume_metadata(self.volume_id)
+        body = self.volumes_client.show_volume_metadata(self.volume_id)
         self.assertThat(body.items(), matchers.ContainsAll(metadata.items()))
         # Update metadata
-        _, body = self.volumes_client.update_volume_metadata(
+        body = self.volumes_client.update_volume_metadata(
             self.volume_id, update)
         # Get the metadata of the volume
-        _, body = self.volumes_client.get_volume_metadata(self.volume_id)
+        body = self.volumes_client.show_volume_metadata(self.volume_id)
         self.assertThat(body.items(), matchers.ContainsAll(update.items()))
 
     @test.attr(type='gate')
+    @test.idempotent_id('862261c5-8df4-475a-8c21-946e50e36a20')
     def test_update_volume_metadata_item(self):
         # Update metadata item for the volume
         metadata = {"key1": "value1",
@@ -88,24 +91,16 @@ class VolumesV2MetadataTest(base.BaseVolumeTest):
                   "key2": "value2",
                   "key3": "value3_update"}
         # Create metadata for the volume
-        _, body = self.volumes_client.create_volume_metadata(
+        body = self.volumes_client.create_volume_metadata(
             self.volume_id, metadata)
         self.assertThat(body.items(), matchers.ContainsAll(metadata.items()))
         # Update metadata item
-        _, body = self.volumes_client.update_volume_metadata_item(
+        body = self.volumes_client.update_volume_metadata_item(
             self.volume_id, "key3", update_item)
         # Get the metadata of the volume
-        _, body = self.volumes_client.get_volume_metadata(self.volume_id)
+        body = self.volumes_client.show_volume_metadata(self.volume_id)
         self.assertThat(body.items(), matchers.ContainsAll(expect.items()))
-
-
-class VolumesV2MetadataTestXML(VolumesV2MetadataTest):
-    _interface = "xml"
 
 
 class VolumesV1MetadataTest(VolumesV2MetadataTest):
     _api_version = 1
-
-
-class VolumesV1MetadataTestXML(VolumesV1MetadataTest):
-    _interface = "xml"

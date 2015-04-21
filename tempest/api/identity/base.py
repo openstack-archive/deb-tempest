@@ -13,26 +13,21 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from oslo_log import log as logging
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
 
-from tempest import auth
 from tempest import clients
-from tempest.common.utils import data_utils
+from tempest.common import cred_provider
+from tempest.common import credentials
 from tempest import config
-from tempest import exceptions
-from tempest.openstack.common import log as logging
 import tempest.test
 
 CONF = config.CONF
 LOG = logging.getLogger(__name__)
 
 
-class BaseIdentityAdminTest(tempest.test.BaseTestCase):
-
-    @classmethod
-    def resource_setup(cls):
-        super(BaseIdentityAdminTest, cls).resource_setup()
-        cls.os_adm = clients.AdminManager(interface=cls._interface)
-        cls.os = clients.Manager(interface=cls._interface)
+class BaseIdentityTest(tempest.test.BaseTestCase):
 
     @classmethod
     def disable_user(cls, user_name):
@@ -46,7 +41,7 @@ class BaseIdentityAdminTest(tempest.test.BaseTestCase):
 
     @classmethod
     def get_user_by_name(cls, name):
-        _, users = cls.client.get_users()
+        users = cls.client.get_users()
         user = [u for u in users if u['name'] == name]
         if len(user) > 0:
             return user[0]
@@ -54,34 +49,74 @@ class BaseIdentityAdminTest(tempest.test.BaseTestCase):
     @classmethod
     def get_tenant_by_name(cls, name):
         try:
-            _, tenants = cls.client.list_tenants()
+            tenants = cls.client.list_tenants()
         except AttributeError:
-            _, tenants = cls.client.list_projects()
+            tenants = cls.client.list_projects()
         tenant = [t for t in tenants if t['name'] == name]
         if len(tenant) > 0:
             return tenant[0]
 
     @classmethod
     def get_role_by_name(cls, name):
-        _, roles = cls.client.list_roles()
+        roles = cls.client.list_roles()
         role = [r for r in roles if r['name'] == name]
         if len(role) > 0:
             return role[0]
 
 
-class BaseIdentityV2AdminTest(BaseIdentityAdminTest):
+class BaseIdentityV2Test(BaseIdentityTest):
+
+    @classmethod
+    def setup_credentials(cls):
+        super(BaseIdentityV2Test, cls).setup_credentials()
+        cls.os = cls.get_client_manager(identity_version='v2')
+
+    @classmethod
+    def skip_checks(cls):
+        super(BaseIdentityV2Test, cls).skip_checks()
+        if not CONF.identity_feature_enabled.api_v2:
+            raise cls.skipException("Identity api v2 is not enabled")
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseIdentityV2Test, cls).setup_clients()
+        cls.non_admin_client = cls.os.identity_client
+        cls.non_admin_token_client = cls.os.token_client
 
     @classmethod
     def resource_setup(cls):
-        if not CONF.identity_feature_enabled.api_v2:
-            raise cls.skipException("Identity api v2 is not enabled")
-        super(BaseIdentityV2AdminTest, cls).resource_setup()
+        super(BaseIdentityV2Test, cls).resource_setup()
+
+    @classmethod
+    def resource_cleanup(cls):
+        super(BaseIdentityV2Test, cls).resource_cleanup()
+
+
+class BaseIdentityV2AdminTest(BaseIdentityV2Test):
+
+    @classmethod
+    def setup_credentials(cls):
+        super(BaseIdentityV2AdminTest, cls).setup_credentials()
+        cls.os_adm = clients.Manager(cls.isolated_creds.get_admin_creds())
+
+    @classmethod
+    def skip_checks(cls):
+        if not credentials.is_admin_available():
+            raise cls.skipException('v2 Admin auth disabled')
+        super(BaseIdentityV2AdminTest, cls).skip_checks()
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseIdentityV2AdminTest, cls).setup_clients()
         cls.client = cls.os_adm.identity_client
         cls.token_client = cls.os_adm.token_client
         if not cls.client.has_admin_extensions():
             raise cls.skipException("Admin extensions disabled")
+
+    @classmethod
+    def resource_setup(cls):
+        super(BaseIdentityV2AdminTest, cls).resource_setup()
         cls.data = DataGenerator(cls.client)
-        cls.non_admin_client = cls.os.identity_client
 
     @classmethod
     def resource_cleanup(cls):
@@ -89,28 +124,85 @@ class BaseIdentityV2AdminTest(BaseIdentityAdminTest):
         super(BaseIdentityV2AdminTest, cls).resource_cleanup()
 
 
-class BaseIdentityV3AdminTest(BaseIdentityAdminTest):
+class BaseIdentityV3Test(BaseIdentityTest):
 
     @classmethod
-    def resource_setup(cls):
+    def setup_credentials(cls):
+        super(BaseIdentityV3Test, cls).setup_credentials()
+        cls.os = cls.get_client_manager(identity_version='v3')
+
+    @classmethod
+    def skip_checks(cls):
+        super(BaseIdentityV3Test, cls).skip_checks()
         if not CONF.identity_feature_enabled.api_v3:
             raise cls.skipException("Identity api v3 is not enabled")
-        super(BaseIdentityV3AdminTest, cls).resource_setup()
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseIdentityV3Test, cls).setup_clients()
+        cls.non_admin_client = cls.os.identity_v3_client
+        cls.non_admin_token = cls.os.token_v3_client
+        cls.non_admin_endpoints_client = cls.os.endpoints_client
+        cls.non_admin_region_client = cls.os.region_client
+        cls.non_admin_service_client = cls.os.service_client
+        cls.non_admin_policy_client = cls.os.policy_client
+        cls.non_admin_creds_client = cls.os.credentials_client
+
+    @classmethod
+    def resource_cleanup(cls):
+        super(BaseIdentityV3Test, cls).resource_cleanup()
+
+
+class BaseIdentityV3AdminTest(BaseIdentityV3Test):
+
+    @classmethod
+    def setup_credentials(cls):
+        super(BaseIdentityV3AdminTest, cls).setup_credentials()
+        cls.os_adm = clients.Manager(cls.isolated_creds.get_admin_creds())
+
+    @classmethod
+    def skip_checks(cls):
+        if not credentials.is_admin_available():
+            raise cls.skipException('v3 Admin auth disabled')
+        super(BaseIdentityV3AdminTest, cls).skip_checks()
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseIdentityV3AdminTest, cls).setup_clients()
         cls.client = cls.os_adm.identity_v3_client
         cls.token = cls.os_adm.token_v3_client
         cls.endpoints_client = cls.os_adm.endpoints_client
         cls.region_client = cls.os_adm.region_client
         cls.data = DataGenerator(cls.client)
-        cls.non_admin_client = cls.os.identity_v3_client
         cls.service_client = cls.os_adm.service_client
         cls.policy_client = cls.os_adm.policy_client
         cls.creds_client = cls.os_adm.credentials_client
-        cls.non_admin_client = cls.os.identity_v3_client
 
     @classmethod
     def resource_cleanup(cls):
         cls.data.teardown_all()
         super(BaseIdentityV3AdminTest, cls).resource_cleanup()
+
+    @classmethod
+    def get_user_by_name(cls, name):
+        users = cls.client.get_users()
+        user = [u for u in users if u['name'] == name]
+        if len(user) > 0:
+            return user[0]
+
+    @classmethod
+    def get_tenant_by_name(cls, name):
+        tenants = cls.client.list_projects()
+        tenant = [t for t in tenants if t['name'] == name]
+        if len(tenant) > 0:
+            return tenant[0]
+
+    @classmethod
+    def get_role_by_name(cls, name):
+        roles = cls.client.list_roles()
+        role = [r for r in roles if r['name'] == name]
+        if len(role) > 0:
+            return role[0]
 
 
 class DataGenerator(object):
@@ -128,29 +220,29 @@ class DataGenerator(object):
 
         @property
         def test_credentials(self):
-            return auth.get_credentials(username=self.test_user,
-                                        user_id=self.user['id'],
-                                        password=self.test_password,
-                                        tenant_name=self.test_tenant,
-                                        tenant_id=self.tenant['id'])
+            return cred_provider.get_credentials(username=self.test_user,
+                                                 user_id=self.user['id'],
+                                                 password=self.test_password,
+                                                 tenant_name=self.test_tenant,
+                                                 tenant_id=self.tenant['id'])
 
         def setup_test_user(self):
             """Set up a test user."""
             self.setup_test_tenant()
-            self.test_user = data_utils.rand_name('test_user_')
-            self.test_password = data_utils.rand_name('pass_')
+            self.test_user = data_utils.rand_name('test_user')
+            self.test_password = data_utils.rand_name('pass')
             self.test_email = self.test_user + '@testmail.tm'
-            _, self.user = self.client.create_user(self.test_user,
-                                                   self.test_password,
-                                                   self.tenant['id'],
-                                                   self.test_email)
+            self.user = self.client.create_user(self.test_user,
+                                                self.test_password,
+                                                self.tenant['id'],
+                                                self.test_email)
             self.users.append(self.user)
 
         def setup_test_tenant(self):
             """Set up a test tenant."""
-            self.test_tenant = data_utils.rand_name('test_tenant_')
-            self.test_description = data_utils.rand_name('desc_')
-            _, self.tenant = self.client.create_tenant(
+            self.test_tenant = data_utils.rand_name('test_tenant')
+            self.test_description = data_utils.rand_name('desc')
+            self.tenant = self.client.create_tenant(
                 name=self.test_tenant,
                 description=self.test_description)
             self.tenants.append(self.tenant)
@@ -158,16 +250,16 @@ class DataGenerator(object):
         def setup_test_role(self):
             """Set up a test role."""
             self.test_role = data_utils.rand_name('role')
-            _, self.role = self.client.create_role(self.test_role)
+            self.role = self.client.create_role(self.test_role)
             self.roles.append(self.role)
 
         def setup_test_v3_user(self):
             """Set up a test v3 user."""
             self.setup_test_project()
-            self.test_user = data_utils.rand_name('test_user_')
-            self.test_password = data_utils.rand_name('pass_')
+            self.test_user = data_utils.rand_name('test_user')
+            self.test_password = data_utils.rand_name('pass')
             self.test_email = self.test_user + '@testmail.tm'
-            _, self.v3_user = self.client.create_user(
+            self.v3_user = self.client.create_user(
                 self.test_user,
                 password=self.test_password,
                 project_id=self.project['id'],
@@ -176,9 +268,9 @@ class DataGenerator(object):
 
         def setup_test_project(self):
             """Set up a test project."""
-            self.test_project = data_utils.rand_name('test_project_')
-            self.test_description = data_utils.rand_name('desc_')
-            _, self.project = self.client.create_project(
+            self.test_project = data_utils.rand_name('test_project')
+            self.test_description = data_utils.rand_name('desc')
+            self.project = self.client.create_project(
                 name=self.test_project,
                 description=self.test_description)
             self.projects.append(self.project)
@@ -186,14 +278,14 @@ class DataGenerator(object):
         def setup_test_v3_role(self):
             """Set up a test v3 role."""
             self.test_role = data_utils.rand_name('role')
-            _, self.v3_role = self.client.create_role(self.test_role)
+            self.v3_role = self.client.create_role(self.test_role)
             self.v3_roles.append(self.v3_role)
 
         def setup_test_domain(self):
             """Set up a test domain."""
             self.test_domain = data_utils.rand_name('test_domain')
             self.test_description = data_utils.rand_name('desc')
-            _, self.domain = self.client.create_domain(
+            self.domain = self.client.create_domain(
                 name=self.test_domain,
                 description=self.test_description)
             self.domains.append(self.domain)
@@ -205,7 +297,7 @@ class DataGenerator(object):
                     func(item['id'], **kwargs)
                 else:
                     func(item['id'])
-            except exceptions.NotFound:
+            except lib_exc.NotFound:
                 pass
             except Exception:
                 LOG.exception("Unexpected exception occurred in %s deletion."

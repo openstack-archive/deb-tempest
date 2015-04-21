@@ -12,13 +12,14 @@
 
 import os.path
 
+from oslo_log import log as logging
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
 import yaml
 
 from tempest import clients
-from tempest.common.utils import data_utils
+from tempest.common import credentials
 from tempest import config
-from tempest import exceptions
-from tempest.openstack.common import log as logging
 import tempest.test
 
 CONF = config.CONF
@@ -30,14 +31,31 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
     """Base test case class for all Orchestration API tests."""
 
     @classmethod
-    def resource_setup(cls):
-        super(BaseOrchestrationTest, cls).resource_setup()
-        cls.os = clients.Manager()
+    def skip_checks(cls):
+        super(BaseOrchestrationTest, cls).skip_checks()
         if not CONF.service_available.heat:
             raise cls.skipException("Heat support is required")
-        cls.build_timeout = CONF.orchestration.build_timeout
-        cls.build_interval = CONF.orchestration.build_interval
 
+    @classmethod
+    def setup_credentials(cls):
+        super(BaseOrchestrationTest, cls).setup_credentials()
+        if (not hasattr(cls, 'isolated_creds') or
+            not cls.isolated_creds.name == cls.__name__):
+            cls.isolated_creds = credentials.get_isolated_credentials(
+                name=cls.__name__, network_resources=cls.network_resources)
+        stack_owner_role = CONF.orchestration.stack_owner_role
+        if not cls.isolated_creds.is_role_available(stack_owner_role):
+            skip_msg = ("%s skipped because the configured credential provider"
+                        " is not able to provide credentials with the %s role "
+                        "assigned." % (cls.__name__, stack_owner_role))
+            raise cls.skipException(skip_msg)
+        else:
+            cls.os = clients.Manager(cls.isolated_creds.get_creds_by_roles(
+                [stack_owner_role]))
+
+    @classmethod
+    def setup_clients(cls):
+        super(BaseOrchestrationTest, cls).setup_clients()
         cls.orchestration_client = cls.os.orchestration_client
         cls.client = cls.orchestration_client
         cls.servers_client = cls.os.servers_client
@@ -45,13 +63,19 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
         cls.network_client = cls.os.network_client
         cls.volumes_client = cls.os.volumes_client
         cls.images_v2_client = cls.os.image_client_v2
+
+    @classmethod
+    def resource_setup(cls):
+        super(BaseOrchestrationTest, cls).resource_setup()
+        cls.build_timeout = CONF.orchestration.build_timeout
+        cls.build_interval = CONF.orchestration.build_interval
         cls.stacks = []
         cls.keypairs = []
         cls.images = []
 
     @classmethod
     def _get_default_network(cls):
-        _, networks = cls.network_client.list_networks()
+        networks = cls.network_client.list_networks()
         for net in networks['networks']:
             if net['name'] == CONF.compute.fixed_network_name:
                 return net
@@ -59,7 +83,7 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
     @classmethod
     def _get_identity_admin_client(cls):
         """Returns an instance of the Identity Admin API client."""
-        manager = clients.AdminManager(interface=cls._interface)
+        manager = clients.Manager(cls.isolated_creds.get_admin_creds())
         admin_client = manager.identity_client
         return admin_client
 
@@ -68,13 +92,13 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
                      environment=None, files=None):
         if parameters is None:
             parameters = {}
-        resp, body = cls.client.create_stack(
+        body = cls.client.create_stack(
             stack_name,
             template=template_data,
             parameters=parameters,
             environment=environment,
             files=files)
-        stack_id = resp['location'].split('/')[-1]
+        stack_id = body.response['location'].split('/')[-1]
         stack_identifier = '%s/%s' % (stack_name, stack_id)
         cls.stacks.append(stack_identifier)
         return stack_identifier
@@ -84,20 +108,20 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
         for stack_identifier in cls.stacks:
             try:
                 cls.client.delete_stack(stack_identifier)
-            except exceptions.NotFound:
+            except lib_exc.NotFound:
                 pass
 
         for stack_identifier in cls.stacks:
             try:
                 cls.client.wait_for_stack_status(
                     stack_identifier, 'DELETE_COMPLETE')
-            except exceptions.NotFound:
+            except lib_exc.NotFound:
                 pass
 
     @classmethod
     def _create_keypair(cls, name_start='keypair-heat-'):
         kp_name = data_utils.rand_name(name_start)
-        _, body = cls.keypairs_client.create_keypair(kp_name)
+        body = cls.keypairs_client.create_keypair(kp_name)
         cls.keypairs.append(kp_name)
         return body
 
@@ -113,9 +137,9 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
     def _create_image(cls, name_start='image-heat-', container_format='bare',
                       disk_format='iso'):
         image_name = data_utils.rand_name(name_start)
-        _, body = cls.images_v2_client.create_image(image_name,
-                                                    container_format,
-                                                    disk_format)
+        body = cls.images_v2_client.create_image(image_name,
+                                                 container_format,
+                                                 disk_format)
         image_id = body['id']
         cls.images.append(image_id)
         return body
@@ -125,7 +149,7 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
         for image_id in cls.images:
             try:
                 cls.images_v2_client.delete_image(image_id)
-            except exceptions.NotFound:
+            except lib_exc.NotFound:
                 pass
 
     @classmethod
@@ -164,7 +188,7 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
 
     def list_resources(self, stack_identifier):
         """Get a dict mapping of resource names to types."""
-        _, resources = self.client.list_resources(stack_identifier)
+        resources = self.client.list_resources(stack_identifier)
         self.assertIsInstance(resources, list)
         for res in resources:
             self.assert_fields_in_dict(res, 'logical_resource_id',
@@ -175,5 +199,5 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
                     for r in resources)
 
     def get_stack_output(self, stack_identifier, output_key):
-        _, body = self.client.get_stack(stack_identifier)
+        body = self.client.show_stack(stack_identifier)
         return self.stack_output(body, output_key)

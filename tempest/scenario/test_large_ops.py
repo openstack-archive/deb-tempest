@@ -13,9 +13,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest.common.utils import data_utils
+from oslo_log import log as logging
+from tempest_lib.common.utils import data_utils
+from tempest_lib import exceptions as lib_exc
+
 from tempest import config
-from tempest.openstack.common import log as logging
 from tempest.scenario import manager
 from tempest import test
 
@@ -38,57 +40,90 @@ class TestLargeOpsScenario(manager.ScenarioTest):
     """
 
     @classmethod
-    def resource_setup(cls):
+    def skip_checks(cls):
+        super(TestLargeOpsScenario, cls).skip_checks()
         if CONF.scenario.large_ops_number < 1:
             raise cls.skipException("large_ops_number not set to multiple "
                                     "instances")
+
+    @classmethod
+    def setup_credentials(cls):
         cls.set_network_resources()
+        super(TestLargeOpsScenario, cls).setup_credentials()
+
+    @classmethod
+    def resource_setup(cls):
         super(TestLargeOpsScenario, cls).resource_setup()
+        # list of cleanup calls to be executed in reverse order
+        cls._cleanup_resources = []
+
+    @classmethod
+    def resource_cleanup(cls):
+        while cls._cleanup_resources:
+            function, args, kwargs = cls._cleanup_resources.pop(-1)
+            try:
+                function(*args, **kwargs)
+            except lib_exc.NotFound:
+                pass
+        super(TestLargeOpsScenario, cls).resource_cleanup()
+
+    @classmethod
+    def addCleanupClass(cls, function, *arguments, **keywordArguments):
+        cls._cleanup_resources.append((function, arguments, keywordArguments))
 
     def _wait_for_server_status(self, status):
         for server in self.servers:
+            # Make sure nova list keeps working throughout the build process
+            self.servers_client.list_servers()
             self.servers_client.wait_for_server_status(server['id'], status)
 
     def nova_boot(self):
-        name = data_utils.rand_name('scenario-server-')
+        name = data_utils.rand_name('scenario-server')
         flavor_id = CONF.compute.flavor_ref
-        secgroup = self._create_security_group()
+        # Explicitly create secgroup to avoid cleanup at the end of testcases.
+        # Since no traffic is tested, we don't need to actually add rules to
+        # secgroup
+        secgroup = self.security_groups_client.create_security_group(
+            'secgroup-%s' % name, 'secgroup-desc-%s' % name)
+        self.addCleanupClass(self.security_groups_client.delete_security_group,
+                             secgroup['id'])
+
         self.servers_client.create_server(
             name,
             self.image,
             flavor_id,
             min_count=CONF.scenario.large_ops_number,
-            security_groups=[secgroup])
+            security_groups=[{'name': secgroup['name']}])
         # needed because of bug 1199788
         params = {'name': name}
-        _, server_list = self.servers_client.list_servers(params)
+        server_list = self.servers_client.list_servers(params)
         self.servers = server_list['servers']
         for server in self.servers:
             # after deleting all servers - wait for all servers to clear
             # before cleanup continues
-            self.addCleanup(self.servers_client.wait_for_server_termination,
-                            server['id'])
+            self.addCleanupClass(self.servers_client.
+                                 wait_for_server_termination,
+                                 server['id'])
         for server in self.servers:
-            self.addCleanup_with_wait(
-                waiter_callable=(self.servers_client.
-                                 wait_for_server_termination),
-                thing_id=server['id'], thing_id_param='server_id',
-                cleanup_callable=self.delete_wrapper,
-                cleanup_args=[self.servers_client.delete_server, server['id']])
+            self.addCleanupClass(self.servers_client.delete_server,
+                                 server['id'])
         self._wait_for_server_status('ACTIVE')
 
     def _large_ops_scenario(self):
         self.glance_image_create()
         self.nova_boot()
 
+    @test.idempotent_id('14ba0e78-2ed9-4d17-9659-a48f4756ecb3')
     @test.services('compute', 'image')
     def test_large_ops_scenario_1(self):
         self._large_ops_scenario()
 
+    @test.idempotent_id('b9b79b88-32aa-42db-8f8f-dcc8f4b4ccfe')
     @test.services('compute', 'image')
     def test_large_ops_scenario_2(self):
         self._large_ops_scenario()
 
+    @test.idempotent_id('3aab7e82-2de3-419a-9da1-9f3a070668fb')
     @test.services('compute', 'image')
     def test_large_ops_scenario_3(self):
         self._large_ops_scenario()

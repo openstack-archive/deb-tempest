@@ -14,21 +14,22 @@
 #    under the License.
 
 import base64
+from tempest_lib import exceptions as lib_exc
 
 from tempest.api.compute import base
-from tempest import exceptions
 from tempest import test
 
 
 class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
 
     @classmethod
-    def resource_setup(cls):
-        super(ServerPersonalityTestJSON, cls).resource_setup()
+    def setup_clients(cls):
+        super(ServerPersonalityTestJSON, cls).setup_clients()
         cls.client = cls.servers_client
         cls.user_client = cls.limits_client
 
     @test.attr(type='gate')
+    @test.idempotent_id('176cd8c9-b9e8-48ee-a480-180beab292bf')
     def test_personality_files_exceed_limit(self):
         # Server creation should fail if greater than the maximum allowed
         # number of files are injected into the server.
@@ -36,22 +37,27 @@ class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
         personality = []
         max_file_limit = \
             self.user_client.get_specific_absolute_limit("maxPersonality")
+        if max_file_limit == -1:
+            raise self.skipException("No limit for personality files")
         for i in range(0, int(max_file_limit) + 1):
             path = 'etc/test' + str(i) + '.txt'
             personality.append({'path': path,
                                 'contents': base64.b64encode(file_contents)})
         # A 403 Forbidden or 413 Overlimit (old behaviour) exception
         # will be raised when out of quota
-        self.assertRaises((exceptions.Unauthorized, exceptions.OverLimit),
+        self.assertRaises((lib_exc.Forbidden, lib_exc.OverLimit),
                           self.create_test_server, personality=personality)
 
     @test.attr(type='gate')
+    @test.idempotent_id('52f12ee8-5180-40cc-b417-31572ea3d555')
     def test_can_create_server_with_max_number_personality_files(self):
         # Server should be created successfully if maximum allowed number of
         # files is injected into the server during creation.
         file_contents = 'This is a test file.'
         max_file_limit = \
             self.user_client.get_specific_absolute_limit("maxPersonality")
+        if max_file_limit == -1:
+            raise self.skipException("No limit for personality files")
         person = []
         for i in range(0, int(max_file_limit)):
             path = 'etc/test' + str(i) + '.txt'
@@ -59,9 +65,4 @@ class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
                 'path': path,
                 'contents': base64.b64encode(file_contents),
             })
-        resp, server = self.create_test_server(personality=person)
-        self.assertEqual('202', resp['status'])
-
-
-class ServerPersonalityTestXML(ServerPersonalityTestJSON):
-    _interface = "xml"
+        self.create_test_server(personality=person)

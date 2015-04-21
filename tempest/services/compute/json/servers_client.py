@@ -18,22 +18,22 @@ import json
 import time
 import urllib
 
+from tempest_lib import exceptions as lib_exc
+
 from tempest.api_schema.response.compute import servers as common_schema
-from tempest.api_schema.response.compute.v2 import servers as schema
-from tempest.common import rest_client
+from tempest.api_schema.response.compute.v2_1 import servers as schema
+from tempest.common import service_client
 from tempest.common import waiters
-from tempest import config
 from tempest import exceptions
 
-CONF = config.CONF
 
+class ServersClientJSON(service_client.ServiceClient):
 
-class ServersClientJSON(rest_client.RestClient):
-
-    def __init__(self, auth_provider):
-        super(ServersClientJSON, self).__init__(auth_provider)
-
-        self.service = CONF.compute.catalog_type
+    def __init__(self, auth_provider, service, region,
+                 enable_instance_password=True, **kwargs):
+        super(ServersClientJSON, self).__init__(
+            auth_provider, service, region, **kwargs)
+        self.enable_instance_password = enable_instance_password
 
     def create_server(self, name, image_ref, flavor_ref, **kwargs):
         """
@@ -95,13 +95,13 @@ class ServersClientJSON(rest_client.RestClient):
         # NOTE(maurosr): this deals with the case of multiple server create
         # with return reservation id set True
         if 'reservation_id' in body:
-            return resp, body
-        if CONF.compute_feature_enabled.enable_instance_password:
+            return service_client.ResponseBody(resp, body)
+        if self.enable_instance_password:
             create_schema = schema.create_server_with_admin_pass
         else:
             create_schema = schema.create_server
         self.validate_response(create_schema, resp, body)
-        return resp, body['server']
+        return service_client.ResponseBody(resp, body['server'])
 
     def update_server(self, server_id, name=None, meta=None, accessIPv4=None,
                       accessIPv6=None, disk_config=None):
@@ -135,20 +135,20 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.put("servers/%s" % str(server_id), post_body)
         body = json.loads(body)
         self.validate_response(schema.update_server, resp, body)
-        return resp, body['server']
+        return service_client.ResponseBody(resp, body['server'])
 
     def get_server(self, server_id):
         """Returns the details of an existing server."""
         resp, body = self.get("servers/%s" % str(server_id))
         body = json.loads(body)
         self.validate_response(schema.get_server, resp, body)
-        return resp, body['server']
+        return service_client.ResponseBody(resp, body['server'])
 
     def delete_server(self, server_id):
         """Deletes the given server."""
         resp, body = self.delete("servers/%s" % str(server_id))
         self.validate_response(common_schema.delete_server, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def list_servers(self, params=None):
         """Lists all servers for a user."""
@@ -160,7 +160,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.get(url)
         body = json.loads(body)
         self.validate_response(common_schema.list_servers, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def list_servers_with_detail(self, params=None):
         """Lists all servers in detail for a user."""
@@ -172,7 +172,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.get(url)
         body = json.loads(body)
         self.validate_response(schema.list_servers_detail, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def wait_for_server_status(self, server_id, status, extra_timeout=0,
                                raise_on_error=True, ready_wait=True):
@@ -187,8 +187,8 @@ class ServersClientJSON(rest_client.RestClient):
         start_time = int(time.time())
         while True:
             try:
-                resp, body = self.get_server(server_id)
-            except exceptions.NotFound:
+                body = self.get_server(server_id)
+            except lib_exc.NotFound:
                 return
 
             server_status = body['status']
@@ -205,7 +205,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.get("servers/%s/ips" % str(server_id))
         body = json.loads(body)
         self.validate_response(schema.list_addresses, resp, body)
-        return resp, body['addresses']
+        return service_client.ResponseBody(resp, body['addresses'])
 
     def list_addresses_by_network(self, server_id, network_id):
         """Lists all addresses of a specific network type for a server."""
@@ -213,10 +213,11 @@ class ServersClientJSON(rest_client.RestClient):
                               (str(server_id), network_id))
         body = json.loads(body)
         self.validate_response(schema.list_addresses_by_network, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def action(self, server_id, action_name, response_key,
-               schema=common_schema.server_actions_common_schema, **kwargs):
+               schema=common_schema.server_actions_common_schema,
+               response_class=service_client.ResponseBody, **kwargs):
         post_body = json.dumps({action_name: kwargs})
         resp, body = self.post('servers/%s/action' % str(server_id),
                                post_body)
@@ -234,7 +235,7 @@ class ServersClientJSON(rest_client.RestClient):
             body = body[response_key]
         else:
             self.validate_response(schema, resp, body)
-        return resp, body
+        return response_class(resp, body)
 
     def create_backup(self, server_id, backup_type, rotation, name):
         """Backup a server instance."""
@@ -253,7 +254,7 @@ class ServersClientJSON(rest_client.RestClient):
                               str(server_id))
         body = json.loads(body)
         self.validate_response(common_schema.get_password, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def delete_password(self, server_id):
         """
@@ -265,7 +266,7 @@ class ServersClientJSON(rest_client.RestClient):
                                  str(server_id))
         self.validate_response(common_schema.server_actions_delete_password,
                                resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def reboot(self, server_id, reboot_type):
         """Reboots a server."""
@@ -277,7 +278,7 @@ class ServersClientJSON(rest_client.RestClient):
         if 'disk_config' in kwargs:
             kwargs['OS-DCF:diskConfig'] = kwargs['disk_config']
             del kwargs['disk_config']
-        if CONF.compute_feature_enabled.enable_instance_password:
+        if self.enable_instance_password:
             rebuild_schema = schema.rebuild_server_with_admin_pass
         else:
             rebuild_schema = schema.rebuild_server
@@ -306,7 +307,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.get("servers/%s/metadata" % str(server_id))
         body = json.loads(body)
         self.validate_response(common_schema.list_server_metadata, resp, body)
-        return resp, body['metadata']
+        return service_client.ResponseBody(resp, body['metadata'])
 
     def set_server_metadata(self, server_id, meta, no_metadata_field=False):
         if no_metadata_field:
@@ -317,7 +318,7 @@ class ServersClientJSON(rest_client.RestClient):
                               post_body)
         body = json.loads(body)
         self.validate_response(common_schema.set_server_metadata, resp, body)
-        return resp, body['metadata']
+        return service_client.ResponseBody(resp, body['metadata'])
 
     def update_server_metadata(self, server_id, meta):
         post_body = json.dumps({'metadata': meta})
@@ -326,14 +327,14 @@ class ServersClientJSON(rest_client.RestClient):
         body = json.loads(body)
         self.validate_response(common_schema.update_server_metadata,
                                resp, body)
-        return resp, body['metadata']
+        return service_client.ResponseBody(resp, body['metadata'])
 
     def get_server_metadata_item(self, server_id, key):
         resp, body = self.get("servers/%s/metadata/%s" % (str(server_id), key))
         body = json.loads(body)
         self.validate_response(schema.set_get_server_metadata_item,
                                resp, body)
-        return resp, body['meta']
+        return service_client.ResponseBody(resp, body['meta'])
 
     def set_server_metadata_item(self, server_id, key, meta):
         post_body = json.dumps({'meta': meta})
@@ -342,14 +343,14 @@ class ServersClientJSON(rest_client.RestClient):
         body = json.loads(body)
         self.validate_response(schema.set_get_server_metadata_item,
                                resp, body)
-        return resp, body['meta']
+        return service_client.ResponseBody(resp, body['meta'])
 
     def delete_server_metadata_item(self, server_id, key):
         resp, body = self.delete("servers/%s/metadata/%s" %
                                  (str(server_id), key))
         self.validate_response(common_schema.delete_server_metadata_item,
                                resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def stop(self, server_id, **kwargs):
         return self.action(server_id, 'os-stop', None, **kwargs)
@@ -369,14 +370,30 @@ class ServersClientJSON(rest_client.RestClient):
                                post_body)
         body = json.loads(body)
         self.validate_response(schema.attach_volume, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body['volumeAttachment'])
 
     def detach_volume(self, server_id, volume_id):
         """Detaches a volume from a server instance."""
         resp, body = self.delete('servers/%s/os-volume_attachments/%s' %
                                  (server_id, volume_id))
         self.validate_response(schema.detach_volume, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
+
+    def get_volume_attachment(self, server_id, attach_id):
+        """Return details about the given volume attachment."""
+        resp, body = self.get('servers/%s/os-volume_attachments/%s' % (
+            str(server_id), attach_id))
+        body = json.loads(body)
+        self.validate_response(schema.get_volume_attachment, resp, body)
+        return service_client.ResponseBody(resp, body['volumeAttachment'])
+
+    def list_volume_attachments(self, server_id):
+        """Returns the list of volume attachments for a given instance."""
+        resp, body = self.get('servers/%s/os-volume_attachments' % (
+            str(server_id)))
+        body = json.loads(body)
+        self.validate_response(schema.list_volume_attachments, resp, body)
+        return service_client.ResponseBodyList(resp, body['volumeAttachments'])
 
     def add_security_group(self, server_id, name):
         """Adds a security group to the server."""
@@ -400,7 +417,7 @@ class ServersClientJSON(rest_client.RestClient):
         resp, body = self.post("servers/%s/action" % str(server_id), req_body)
         self.validate_response(common_schema.server_actions_common_schema,
                                resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def migrate_server(self, server_id, **kwargs):
         """Migrates a server to a new host."""
@@ -449,7 +466,9 @@ class ServersClientJSON(rest_client.RestClient):
     def get_console_output(self, server_id, length):
         kwargs = {'length': length} if length else {}
         return self.action(server_id, 'os-getConsoleOutput', 'output',
-                           common_schema.get_console_output, **kwargs)
+                           common_schema.get_console_output,
+                           response_class=service_client.ResponseBodyData,
+                           **kwargs)
 
     def list_virtual_interfaces(self, server_id):
         """
@@ -459,12 +478,14 @@ class ServersClientJSON(rest_client.RestClient):
                               'os-virtual-interfaces']))
         body = json.loads(body)
         self.validate_response(schema.list_virtual_interfaces, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def rescue_server(self, server_id, **kwargs):
         """Rescue the provided server."""
         return self.action(server_id, 'rescue', 'adminPass',
-                           schema.rescue_server, **kwargs)
+                           schema.rescue_server,
+                           response_class=service_client.ResponseBodyData,
+                           **kwargs)
 
     def unrescue_server(self, server_id):
         """Unrescue the provided server."""
@@ -473,7 +494,7 @@ class ServersClientJSON(rest_client.RestClient):
     def get_server_diagnostics(self, server_id):
         """Get the usage data for a server."""
         resp, body = self.get("servers/%s/diagnostics" % str(server_id))
-        return resp, json.loads(body)
+        return service_client.ResponseBody(resp, json.loads(body))
 
     def list_instance_actions(self, server_id):
         """List the provided server action."""
@@ -481,7 +502,7 @@ class ServersClientJSON(rest_client.RestClient):
                               str(server_id))
         body = json.loads(body)
         self.validate_response(schema.list_instance_actions, resp, body)
-        return resp, body['instanceActions']
+        return service_client.ResponseBodyList(resp, body['instanceActions'])
 
     def get_instance_action(self, server_id, request_id):
         """Returns the action details of the provided server."""
@@ -489,7 +510,7 @@ class ServersClientJSON(rest_client.RestClient):
                               (str(server_id), str(request_id)))
         body = json.loads(body)
         self.validate_response(schema.get_instance_action, resp, body)
-        return resp, body['instanceAction']
+        return service_client.ResponseBody(resp, body['instanceAction'])
 
     def force_delete_server(self, server_id, **kwargs):
         """Force delete a server."""
@@ -529,24 +550,24 @@ class ServersClientJSON(rest_client.RestClient):
 
         body = json.loads(body)
         self.validate_response(schema.create_get_server_group, resp, body)
-        return resp, body['server_group']
+        return service_client.ResponseBody(resp, body['server_group'])
 
     def delete_server_group(self, server_group_id):
         """Delete the given server-group."""
         resp, body = self.delete("os-server-groups/%s" % str(server_group_id))
         self.validate_response(schema.delete_server_group, resp, body)
-        return resp, body
+        return service_client.ResponseBody(resp, body)
 
     def list_server_groups(self):
         """List the server-groups."""
         resp, body = self.get("os-server-groups")
         body = json.loads(body)
         self.validate_response(schema.list_server_groups, resp, body)
-        return resp, body['server_groups']
+        return service_client.ResponseBodyList(resp, body['server_groups'])
 
     def get_server_group(self, server_group_id):
         """Get the details of given server_group."""
         resp, body = self.get("os-server-groups/%s" % str(server_group_id))
         body = json.loads(body)
         self.validate_response(schema.create_get_server_group, resp, body)
-        return resp, body['server_group']
+        return service_client.ResponseBody(resp, body['server_group'])

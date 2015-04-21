@@ -12,8 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from tempest_lib.common.utils import data_utils
+
 from tempest.api.data_processing import base as dp_base
-from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -61,29 +62,33 @@ class NodeGroupTemplateTest(dp_base.BaseDataProcessingTest):
         return resp_body['id'], template_name
 
     @test.attr(type='smoke')
+    @test.idempotent_id('63164051-e46d-4387-9741-302ef4791cbd')
     def test_node_group_template_create(self):
         self._create_node_group_template()
 
     @test.attr(type='smoke')
+    @test.idempotent_id('eb39801d-2612-45e5-88b1-b5d70b329185')
     def test_node_group_template_list(self):
         template_info = self._create_node_group_template()
 
         # check for node group template in list
-        _, templates = self.client.list_node_group_templates()
+        templates = self.client.list_node_group_templates()
         templates_info = [(template['id'], template['name'])
                           for template in templates]
         self.assertIn(template_info, templates_info)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('6ee31539-a708-466f-9c26-4093ce09a836')
     def test_node_group_template_get(self):
         template_id, template_name = self._create_node_group_template()
 
         # check node group template fetch by id
-        _, template = self.client.get_node_group_template(template_id)
+        template = self.client.get_node_group_template(template_id)
         self.assertEqual(template_name, template['name'])
         self.assertDictContainsSubset(self.node_group_template, template)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('f4f5cb82-708d-4031-81c4-b0618a706a2f')
     def test_node_group_template_delete(self):
         template_id, _ = self._create_node_group_template()
 

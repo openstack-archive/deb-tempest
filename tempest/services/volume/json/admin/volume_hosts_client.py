@@ -16,23 +16,13 @@
 import json
 import urllib
 
-from tempest.common import rest_client
-from tempest import config
-
-CONF = config.CONF
+from tempest.common import service_client
 
 
-class VolumeHostsClientJSON(rest_client.RestClient):
+class BaseVolumeHostsClientJSON(service_client.ServiceClient):
     """
     Client class to send CRUD Volume Hosts API requests to a Cinder endpoint
     """
-
-    def __init__(self, auth_provider):
-        super(VolumeHostsClientJSON, self).__init__(auth_provider)
-
-        self.service = CONF.volume.catalog_type
-        self.build_interval = CONF.volume.build_interval
-        self.build_timeout = CONF.volume.build_timeout
 
     def list_hosts(self, params=None):
         """Lists all hosts."""
@@ -44,4 +34,10 @@ class VolumeHostsClientJSON(rest_client.RestClient):
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
-        return resp, body['hosts']
+        return service_client.ResponseBodyList(resp, body['hosts'])
+
+
+class VolumeHostsClientJSON(BaseVolumeHostsClientJSON):
+    """
+    Client class to send CRUD Volume Host API V1 requests to a Cinder endpoint
+    """

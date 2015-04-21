@@ -35,8 +35,8 @@ class TestEncryptedCinderVolumes(manager.EncryptionScenarioTest):
         self.glance_image_create()
         self.nova_boot()
 
-    def create_encrypted_volume(self, encryption_provider):
-        volume_type = self.create_volume_type(name='luks')
+    def create_encrypted_volume(self, encryption_provider, volume_type):
+        volume_type = self.create_volume_type(name=volume_type)
         self.create_encryption_type(type_id=volume_type['id'],
                                     provider=encryption_provider,
                                     key_size=512,
@@ -48,16 +48,20 @@ class TestEncryptedCinderVolumes(manager.EncryptionScenarioTest):
         self.nova_volume_attach()
         self.nova_volume_detach()
 
+    @test.idempotent_id('79165fb4-5534-4b9d-8429-97ccffb8f86e')
     @test.services('compute', 'volume', 'image')
     def test_encrypted_cinder_volumes_luks(self):
         self.launch_instance()
         self.create_encrypted_volume('nova.volume.encryptors.'
-                                     'luks.LuksEncryptor')
+                                     'luks.LuksEncryptor',
+                                     volume_type='luks')
         self.attach_detach_volume()
 
+    @test.idempotent_id('cbc752ed-b716-4717-910f-956cce965722')
     @test.services('compute', 'volume', 'image')
     def test_encrypted_cinder_volumes_cryptsetup(self):
         self.launch_instance()
         self.create_encrypted_volume('nova.volume.encryptors.'
-                                     'cryptsetup.CryptsetupEncryptor')
+                                     'cryptsetup.CryptsetupEncryptor',
+                                     volume_type='cryptsetup')
         self.attach_detach_volume()

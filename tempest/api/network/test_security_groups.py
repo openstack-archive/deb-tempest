@@ -14,9 +14,9 @@
 #    under the License.
 
 import six
+from tempest_lib.common.utils import data_utils
 
 from tempest.api.network import base_security_groups as base
-from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -24,12 +24,11 @@ CONF = config.CONF
 
 
 class SecGroupTest(base.BaseSecGroupTest):
-    _interface = 'json'
     _tenant_network_cidr = CONF.network.tenant_network_cidr
 
     @classmethod
-    def resource_setup(cls):
-        super(SecGroupTest, cls).resource_setup()
+    def skip_checks(cls):
+        super(SecGroupTest, cls).skip_checks()
         if not test.is_extension_enabled('security-group', 'network'):
             msg = "security-group extension not enabled."
             raise cls.skipException(msg)
@@ -42,7 +41,7 @@ class SecGroupTest(base.BaseSecGroupTest):
                                            remote_ip_prefix=None):
         # Create Security Group rule with the input params and validate
         # that SG rule is created with the same parameters.
-        resp, rule_create_body = self.client.create_security_group_rule(
+        rule_create_body = self.client.create_security_group_rule(
             security_group_id=sg_id,
             direction=direction,
             ethertype=ethertype,
@@ -69,9 +68,10 @@ class SecGroupTest(base.BaseSecGroupTest):
                              (key, value))
 
     @test.attr(type='smoke')
+    @test.idempotent_id('e30abd17-fef9-4739-8617-dc26da88e686')
     def test_list_security_groups(self):
         # Verify the that security group belonging to tenant exist in list
-        _, body = self.client.list_security_groups()
+        body = self.client.list_security_groups()
         security_groups = body['security_groups']
         found = None
         for n in security_groups:
@@ -81,11 +81,12 @@ class SecGroupTest(base.BaseSecGroupTest):
         self.assertIsNotNone(found, msg)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('bfd128e5-3c92-44b6-9d66-7fe29d22c802')
     def test_create_list_update_show_delete_security_group(self):
         group_create_body, name = self._create_security_group()
 
         # List security groups and verify if created group is there in response
-        _, list_body = self.client.list_security_groups()
+        list_body = self.client.list_security_groups()
         secgroup_list = list()
         for secgroup in list_body['security_groups']:
             secgroup_list.append(secgroup['id'])
@@ -93,7 +94,7 @@ class SecGroupTest(base.BaseSecGroupTest):
         # Update the security group
         new_name = data_utils.rand_name('security-')
         new_description = data_utils.rand_name('security-description')
-        _, update_body = self.client.update_security_group(
+        update_body = self.client.update_security_group(
             group_create_body['security_group']['id'],
             name=new_name,
             description=new_description)
@@ -102,20 +103,21 @@ class SecGroupTest(base.BaseSecGroupTest):
         self.assertEqual(update_body['security_group']['description'],
                          new_description)
         # Show details of the updated security group
-        resp, show_body = self.client.show_security_group(
+        show_body = self.client.show_security_group(
             group_create_body['security_group']['id'])
         self.assertEqual(show_body['security_group']['name'], new_name)
         self.assertEqual(show_body['security_group']['description'],
                          new_description)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('cfb99e0e-7410-4a3d-8a0c-959a63ee77e9')
     def test_create_show_delete_security_group_rule(self):
         group_create_body, _ = self._create_security_group()
 
         # Create rules for each protocol
         protocols = ['tcp', 'udp', 'icmp']
         for protocol in protocols:
-            _, rule_create_body = self.client.create_security_group_rule(
+            rule_create_body = self.client.create_security_group_rule(
                 security_group_id=group_create_body['security_group']['id'],
                 protocol=protocol,
                 direction='ingress',
@@ -123,7 +125,7 @@ class SecGroupTest(base.BaseSecGroupTest):
             )
 
             # Show details of the created security rule
-            _, show_rule_body = self.client.show_security_group_rule(
+            show_rule_body = self.client.show_security_group_rule(
                 rule_create_body['security_group_rule']['id']
             )
             create_dict = rule_create_body['security_group_rule']
@@ -133,13 +135,14 @@ class SecGroupTest(base.BaseSecGroupTest):
                                  "%s does not match." % key)
 
             # List rules and verify created rule is in response
-            _, rule_list_body = self.client.list_security_group_rules()
+            rule_list_body = self.client.list_security_group_rules()
             rule_list = [rule['id']
                          for rule in rule_list_body['security_group_rules']]
             self.assertIn(rule_create_body['security_group_rule']['id'],
                           rule_list)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('87dfbcf9-1849-43ea-b1e4-efa3eeae9f71')
     def test_create_security_group_rule_with_additional_args(self):
         """Verify security group rule with additional arguments works.
 
@@ -158,11 +161,12 @@ class SecGroupTest(base.BaseSecGroupTest):
                                                 port_range_max)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('c9463db8-b44d-4f52-b6c0-8dbda99f26ce')
     def test_create_security_group_rule_with_icmp_type_code(self):
         """Verify security group rule for icmp protocol works.
 
         Specify icmp type (port_range_min) and icmp code
-        (port_range_max) with different values. A seperate testcase
+        (port_range_max) with different values. A separate testcase
         is added for icmp protocol as icmp validation would be
         different from tcp/udp.
         """
@@ -171,13 +175,14 @@ class SecGroupTest(base.BaseSecGroupTest):
         sg_id = group_create_body['security_group']['id']
         direction = 'ingress'
         protocol = 'icmp'
-        icmp_type_codes = [(3, 2), (2, 3), (3, 0), (2, None)]
+        icmp_type_codes = [(3, 2), (3, 0), (8, 0), (0, 0), (11, None)]
         for icmp_type, icmp_code in icmp_type_codes:
             self._create_verify_security_group_rule(sg_id, direction,
                                                     self.ethertype, protocol,
                                                     icmp_type, icmp_code)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('c2ed2deb-7a0c-44d8-8b4c-a5825b5c310b')
     def test_create_security_group_rule_with_remote_group_id(self):
         # Verify creating security group rule with remote_group_id works
         sg1_body, _ = self._create_security_group()
@@ -196,6 +201,7 @@ class SecGroupTest(base.BaseSecGroupTest):
                                                 remote_group_id=remote_id)
 
     @test.attr(type='smoke')
+    @test.idempotent_id('16459776-5da2-4634-bce4-4b55ee3ec188')
     def test_create_security_group_rule_with_remote_ip_prefix(self):
         # Verify creating security group rule with remote_ip_prefix works
         sg1_body, _ = self._create_security_group()
@@ -212,22 +218,26 @@ class SecGroupTest(base.BaseSecGroupTest):
                                                 port_range_max,
                                                 remote_ip_prefix=ip_prefix)
 
-
-class SecGroupTestXML(SecGroupTest):
-    _interface = 'xml'
+    @test.attr(type='smoke')
+    @test.idempotent_id('0a307599-6655-4220-bebc-fd70c64f2290')
+    def test_create_security_group_rule_with_protocol_integer_value(self):
+        # Verify creating security group rule with the
+        # protocol as integer value
+        # arguments : "protocol": 17
+        group_create_body, _ = self._create_security_group()
+        direction = 'ingress'
+        protocol = 17
+        security_group_id = group_create_body['security_group']['id']
+        rule_create_body = self.client.create_security_group_rule(
+            security_group_id=security_group_id,
+            direction=direction,
+            protocol=protocol
+        )
+        sec_group_rule = rule_create_body['security_group_rule']
+        self.assertEqual(sec_group_rule['direction'], direction)
+        self.assertEqual(int(sec_group_rule['protocol']), protocol)
 
 
 class SecGroupIPv6Test(SecGroupTest):
     _ip_version = 6
     _tenant_network_cidr = CONF.network.tenant_network_v6_cidr
-
-    @classmethod
-    def resource_setup(cls):
-        if not CONF.network_feature_enabled.ipv6:
-            skip_msg = "IPv6 Tests are disabled."
-            raise cls.skipException(skip_msg)
-        super(SecGroupIPv6Test, cls).resource_setup()
-
-
-class SecGroupIPv6TestXML(SecGroupIPv6Test):
-    _interface = 'xml'
