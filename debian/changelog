@@ -1,3 +1,9 @@
+tempest (3+git20150421+30ab7d9596-1) unstable; urgency=medium
+
+  * Packaging commit ID 30ab7d95963 from 2015-04-21.
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 21 Apr 2015 22:48:55 +0200
+
 tempest (2-1) unstable; urgency=medium
 
   * Initial release (Closes: #750164).
