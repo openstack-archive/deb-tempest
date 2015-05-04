@@ -1,18 +1,5 @@
 tempest (4-1) unstable; urgency=medium
 
-  * New upstream release.
-
- -- Thomas Goirand <zigo@debian.org>  Mon, 04 May 2015 22:17:41 +0200
-
-tempest (3+git20150421+30ab7d9596-1) unstable; urgency=medium
-
-  * Packaging commit ID 30ab7d95963 from 2015-04-21.
-  * Fixed (build-)depends for this release.
-
- -- Thomas Goirand <zigo@debian.org>  Tue, 21 Apr 2015 22:48:55 +0200
-
-tempest (2-1) unstable; urgency=medium
-
   * Initial release (Closes: #750164).
 
- -- Thomas Goirand <zigo@debian.org>  Fri, 08 Mar 2013 17:50:11 +0800
+ -- Thomas Goirand <zigo@debian.org>  Mon, 04 May 2015 22:17:41 +0200
