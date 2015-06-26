@@ -5,6 +5,9 @@ include /usr/share/openstack-pkg-tools/pkgos.make
 
 export OSLO_PACKAGE_VERSION=$(VERSION)
 
+LAST_CHANGE = $(shell dpkg-parsechangelog -S Date)
+BUILD_DATE  = $(shell LC_ALL=C date -u "+%B %d, %Y" -d "$(LAST_CHANGE)")
+
 %:
 	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
 
@@ -52,6 +55,6 @@ endif
 
 override_dh_sphinxdoc:
 ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
-	PYTHONPATH=. sphinx-build -b html doc/source $(CURDIR)/debian/tempest/usr/share/doc/tempest/html
+	PYTHONPATH=. sphinx-build -D html_last_updated_fmt="$(BUILD_DATE)" -b html doc/source $(CURDIR)/debian/tempest/usr/share/doc/tempest/html
 	dh_sphinxdoc -O--buildsystem=python_distutils
 endif
