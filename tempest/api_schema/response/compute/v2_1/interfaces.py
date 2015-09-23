@@ -12,7 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest.api_schema.response.compute import parameter_types
+from tempest.api_schema.response.compute.v2_1 import parameter_types
 
 interface_common_info = {
     'type': 'object',
@@ -27,11 +27,9 @@ interface_common_info = {
                         'type': 'string',
                         'format': 'uuid'
                     },
-                    'ip_address': {
-                        'type': 'string',
-                        'format': 'ipv4'
-                    }
+                    'ip_address': parameter_types.ip_address
                 },
+                'additionalProperties': False,
                 'required': ['subnet_id', 'ip_address']
             }
         },
@@ -39,6 +37,7 @@ interface_common_info = {
         'net_id': {'type': 'string', 'format': 'uuid'},
         'mac_addr': parameter_types.mac_address
     },
+    'additionalProperties': False,
     'required': ['port_state', 'fixed_ips', 'port_id', 'net_id', 'mac_addr']
 }
 
@@ -49,6 +48,7 @@ get_create_interfaces = {
         'properties': {
             'interfaceAttachment': interface_common_info
         },
+        'additionalProperties': False,
         'required': ['interfaceAttachment']
     }
 }
@@ -63,6 +63,7 @@ list_interfaces = {
                 'items': interface_common_info
             }
         },
+        'additionalProperties': False,
         'required': ['interfaceAttachments']
     }
 }

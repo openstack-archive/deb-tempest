@@ -39,7 +39,8 @@ class ExtensionsTestJSON(base.BaseNetworkTest):
                           'ext-gw-mode', 'binding', 'quotas',
                           'agent', 'dhcp_agent_scheduler', 'provider',
                           'router', 'extraroute', 'external-net',
-                          'allowed-address-pairs', 'extra_dhcp_opt']
+                          'allowed-address-pairs', 'extra_dhcp_opt',
+                          'metering', 'dvr']
         expected_alias = [ext for ext in expected_alias if
                           test.is_extension_enabled(ext, 'network')]
         actual_alias = list()
@@ -57,7 +58,6 @@ class ExtensionsTestJSON(base.BaseNetworkTest):
             self.assertIn('updated', ext_details.keys())
             self.assertIn('name', ext_details.keys())
             self.assertIn('description', ext_details.keys())
-            self.assertIn('namespace', ext_details.keys())
             self.assertIn('links', ext_details.keys())
             self.assertIn('alias', ext_details.keys())
             self.assertEqual(ext_details['name'], ext_name)

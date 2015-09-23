@@ -13,9 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
-
 from tempest.api.network import base_routers as base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -36,12 +35,11 @@ class RoutersTestDVR(base.BaseRouterTest):
         super(RoutersTestDVR, cls).resource_setup()
         name = data_utils.rand_name('pretest-check')
         router = cls.admin_client.create_router(name)
-        if 'distributed' not in router['router']:
-            msg = "'distributed' attribute not found. DVR Possibly not enabled"
-            raise cls.skipException(msg)
         cls.admin_client.delete_router(router['router']['id'])
+        if 'distributed' not in router['router']:
+            msg = "'distributed' flag not found. DVR Possibly not enabled"
+            raise cls.skipException(msg)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('08a2a0a8-f1e4-4b34-8e30-e522e836c44e')
     def test_distributed_router_creation(self):
         """
@@ -59,7 +57,6 @@ class RoutersTestDVR(base.BaseRouterTest):
                         router['router']['id'])
         self.assertTrue(router['router']['distributed'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('8a0a72b4-7290-4677-afeb-b4ffe37bc352')
     def test_centralized_router_creation(self):
         """
@@ -78,7 +75,6 @@ class RoutersTestDVR(base.BaseRouterTest):
                         router['router']['id'])
         self.assertFalse(router['router']['distributed'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('acd43596-c1fb-439d-ada8-31ad48ae3c2e')
     def test_centralized_router_update_to_dvr(self):
         """
@@ -93,7 +89,9 @@ class RoutersTestDVR(base.BaseRouterTest):
         attribute will be set to True
         """
         name = data_utils.rand_name('router')
-        router = self.admin_client.create_router(name, distributed=False)
+        # router needs to be in admin state down in order to be upgraded to DVR
+        router = self.admin_client.create_router(name, distributed=False,
+                                                 admin_state_up=False)
         self.addCleanup(self.admin_client.delete_router,
                         router['router']['id'])
         self.assertFalse(router['router']['distributed'])

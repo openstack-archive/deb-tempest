@@ -14,9 +14,10 @@
 #    under the License.
 
 import netaddr
-from tempest_lib.common.utils import data_utils
+import six
 
 from tempest.api.network import base_routers as base
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -83,7 +84,6 @@ class RoutersTest(base.BaseRouterTest):
             create_body['router']['id'])
         self.assertEqual(show_body['router']['name'], updated_name)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('e54dd3a3-4352-4921-b09d-44369ae17397')
     def test_create_router_setting_tenant_id(self):
         # Test creating router from admin user setting tenant_id.
@@ -103,7 +103,6 @@ class RoutersTest(base.BaseRouterTest):
 
     @test.idempotent_id('847257cc-6afd-4154-b8fb-af49f5670ce8')
     @test.requires_ext(extension='ext-gw-mode', service='network')
-    @test.attr(type='smoke')
     def test_create_router_with_default_snat_value(self):
         # Create a router with default snat rule
         name = data_utils.rand_name('router')
@@ -115,7 +114,6 @@ class RoutersTest(base.BaseRouterTest):
 
     @test.idempotent_id('ea74068d-09e9-4fd7-8995-9b6a1ace920f')
     @test.requires_ext(extension='ext-gw-mode', service='network')
-    @test.attr(type='smoke')
     def test_create_router_with_snat_explicit(self):
         name = data_utils.rand_name('snat-router')
         # Create a router enabling snat attributes
@@ -179,7 +177,7 @@ class RoutersTest(base.BaseRouterTest):
             self.assertIsNone(actual_ext_gw_info)
             return
         # Verify only keys passed in exp_ext_gw_info
-        for k, v in exp_ext_gw_info.iteritems():
+        for k, v in six.iteritems(exp_ext_gw_info):
             self.assertEqual(v, actual_ext_gw_info[k])
 
     def _verify_gateway_port(self, router_id):
@@ -196,7 +194,6 @@ class RoutersTest(base.BaseRouterTest):
         self.assertIn(public_subnet_id,
                       map(lambda x: x['subnet_id'], fixed_ips))
 
-    @test.attr(type='smoke')
     @test.idempotent_id('6cc285d8-46bf-4f36-9b1a-783e3008ba79')
     def test_update_router_set_gateway(self):
         router = self._create_router(data_utils.rand_name('router-'))
@@ -212,7 +209,6 @@ class RoutersTest(base.BaseRouterTest):
 
     @test.idempotent_id('b386c111-3b21-466d-880c-5e72b01e1a33')
     @test.requires_ext(extension='ext-gw-mode', service='network')
-    @test.attr(type='smoke')
     def test_update_router_set_gateway_with_snat_explicit(self):
         router = self._create_router(data_utils.rand_name('router-'))
         self.admin_client.update_router_with_snat_gw_info(
@@ -228,7 +224,6 @@ class RoutersTest(base.BaseRouterTest):
 
     @test.idempotent_id('96536bc7-8262-4fb2-9967-5c46940fa279')
     @test.requires_ext(extension='ext-gw-mode', service='network')
-    @test.attr(type='smoke')
     def test_update_router_set_gateway_without_snat(self):
         router = self._create_router(data_utils.rand_name('router-'))
         self.admin_client.update_router_with_snat_gw_info(
@@ -242,7 +237,6 @@ class RoutersTest(base.BaseRouterTest):
              'enable_snat': False})
         self._verify_gateway_port(router['id'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('ad81b7ee-4f81-407b-a19c-17e623f763e8')
     def test_update_router_unset_gateway(self):
         router = self._create_router(
@@ -258,7 +252,6 @@ class RoutersTest(base.BaseRouterTest):
 
     @test.idempotent_id('f2faf994-97f4-410b-a831-9bc977b64374')
     @test.requires_ext(extension='ext-gw-mode', service='network')
-    @test.attr(type='smoke')
     def test_update_router_reset_gateway_without_snat(self):
         router = self._create_router(
             data_utils.rand_name('router-'),
@@ -276,49 +269,71 @@ class RoutersTest(base.BaseRouterTest):
 
     @test.idempotent_id('c86ac3a8-50bd-4b00-a6b8-62af84a0765c')
     @test.requires_ext(extension='extraroute', service='network')
-    @test.attr(type='smoke')
     def test_update_extra_route(self):
-        self.network = self.create_network()
-        self.name = self.network['name']
-        self.subnet = self.create_subnet(self.network)
-        # Add router interface with subnet id
-        self.router = self._create_router(
+        # Create different cidr for each subnet to avoid cidr duplicate
+        # The cidr starts from tenant_cidr
+        next_cidr = netaddr.IPNetwork(self.tenant_cidr)
+        # Prepare to build several routes
+        test_routes = []
+        routes_num = 4
+        # Create a router
+        router = self._create_router(
             data_utils.rand_name('router-'), True)
-        self.create_router_interface(self.router['id'], self.subnet['id'])
         self.addCleanup(
             self._delete_extra_routes,
-            self.router['id'])
+            router['id'])
         # Update router extra route, second ip of the range is
         # used as next hop
-        cidr = netaddr.IPNetwork(self.subnet['cidr'])
-        next_hop = str(cidr[2])
-        destination = str(self.subnet['cidr'])
-        extra_route = self.client.update_extra_routes(self.router['id'],
-                                                      next_hop, destination)
-        self.assertEqual(1, len(extra_route['router']['routes']))
-        self.assertEqual(destination,
-                         extra_route['router']['routes'][0]['destination'])
-        self.assertEqual(next_hop,
-                         extra_route['router']['routes'][0]['nexthop'])
-        show_body = self.client.show_router(self.router['id'])
-        self.assertEqual(destination,
-                         show_body['router']['routes'][0]['destination'])
-        self.assertEqual(next_hop,
-                         show_body['router']['routes'][0]['nexthop'])
+        for i in range(routes_num):
+            network = self.create_network()
+            subnet = self.create_subnet(network, cidr=next_cidr)
+            next_cidr = next_cidr.next()
+
+            # Add router interface with subnet id
+            self.create_router_interface(router['id'], subnet['id'])
+
+            cidr = netaddr.IPNetwork(subnet['cidr'])
+            next_hop = str(cidr[2])
+            destination = str(subnet['cidr'])
+            test_routes.append(
+                {'nexthop': next_hop, 'destination': destination}
+            )
+
+        test_routes.sort(key=lambda x: x['destination'])
+        extra_route = self.client.update_extra_routes(router['id'],
+                                                      test_routes)
+        show_body = self.client.show_router(router['id'])
+        # Assert the number of routes
+        self.assertEqual(routes_num, len(extra_route['router']['routes']))
+        self.assertEqual(routes_num, len(show_body['router']['routes']))
+
+        routes = extra_route['router']['routes']
+        routes.sort(key=lambda x: x['destination'])
+        # Assert the nexthops & destination
+        for i in range(routes_num):
+            self.assertEqual(test_routes[i]['destination'],
+                             routes[i]['destination'])
+            self.assertEqual(test_routes[i]['nexthop'], routes[i]['nexthop'])
+
+        routes = show_body['router']['routes']
+        routes.sort(key=lambda x: x['destination'])
+        for i in range(routes_num):
+            self.assertEqual(test_routes[i]['destination'],
+                             routes[i]['destination'])
+            self.assertEqual(test_routes[i]['nexthop'], routes[i]['nexthop'])
 
     def _delete_extra_routes(self, router_id):
         self.client.delete_extra_routes(router_id)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('a8902683-c788-4246-95c7-ad9c6d63a4d9')
     def test_update_router_admin_state(self):
-        self.router = self._create_router(data_utils.rand_name('router-'))
-        self.assertFalse(self.router['admin_state_up'])
+        router = self._create_router(data_utils.rand_name('router-'))
+        self.assertFalse(router['admin_state_up'])
         # Update router admin state
-        update_body = self.client.update_router(self.router['id'],
+        update_body = self.client.update_router(router['id'],
                                                 admin_state_up=True)
         self.assertTrue(update_body['router']['admin_state_up'])
-        show_body = self.client.show_router(self.router['id'])
+        show_body = self.client.show_router(router['id'])
         self.assertTrue(show_body['router']['admin_state_up'])
 
     @test.attr(type='smoke')
@@ -362,7 +377,6 @@ class DvrRoutersTest(base.BaseRouterTest):
             msg = "DVR extension not enabled."
             raise cls.skipException(msg)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('141297aa-3424-455d-aa8d-f2d95731e00a')
     def test_create_distributed_router(self):
         name = data_utils.rand_name('router')
@@ -373,7 +387,6 @@ class DvrRoutersTest(base.BaseRouterTest):
                         self.admin_client)
         self.assertTrue(create_body['router']['distributed'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('644d7a4a-01a1-4b68-bb8d-0c0042cb1729')
     def test_convert_centralized_router(self):
         router = self._create_router(data_utils.rand_name('router'))

@@ -13,11 +13,10 @@
 import os.path
 
 from oslo_log import log as logging
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 import yaml
 
-from tempest import clients
+from tempest.common.utils import data_utils
 from tempest import config
 import tempest.test
 
@@ -41,14 +40,7 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
     def setup_credentials(cls):
         super(BaseOrchestrationTest, cls).setup_credentials()
         stack_owner_role = CONF.orchestration.stack_owner_role
-        if not cls.isolated_creds.is_role_available(stack_owner_role):
-            skip_msg = ("%s skipped because the configured credential provider"
-                        " is not able to provide credentials with the %s role "
-                        "assigned." % (cls.__name__, stack_owner_role))
-            raise cls.skipException(skip_msg)
-        else:
-            cls.os = clients.Manager(cls.isolated_creds.get_creds_by_roles(
-                [stack_owner_role]))
+        cls.os = cls.get_client_manager(roles=[stack_owner_role])
 
     @classmethod
     def setup_clients(cls):
@@ -104,7 +96,7 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
     @classmethod
     def _create_keypair(cls, name_start='keypair-heat-'):
         kp_name = data_utils.rand_name(name_start)
-        body = cls.keypairs_client.create_keypair(kp_name)
+        body = cls.keypairs_client.create_keypair(name=kp_name)['keypair']
         cls.keypairs.append(kp_name)
         return body
 
@@ -171,7 +163,7 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
 
     def list_resources(self, stack_identifier):
         """Get a dict mapping of resource names to types."""
-        resources = self.client.list_resources(stack_identifier)
+        resources = self.client.list_resources(stack_identifier)['resources']
         self.assertIsInstance(resources, list)
         for res in resources:
             self.assert_fields_in_dict(res, 'logical_resource_id',
@@ -182,5 +174,5 @@ class BaseOrchestrationTest(tempest.test.BaseTestCase):
                     for r in resources)
 
     def get_stack_output(self, stack_identifier, output_key):
-        body = self.client.show_stack(stack_identifier)
+        body = self.client.show_stack(stack_identifier)['stack']
         return self.stack_output(body, output_key)

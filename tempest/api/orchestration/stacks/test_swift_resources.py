@@ -13,9 +13,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from tempest_lib.common.utils import data_utils
-
 from tempest.api.orchestration import base
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -29,6 +28,14 @@ class SwiftResourcesTestJSON(base.BaseOrchestrationTest):
         super(SwiftResourcesTestJSON, cls).skip_checks()
         if not CONF.service_available.swift:
             raise cls.skipException("Swift support is required")
+
+    @classmethod
+    def setup_credentials(cls):
+        super(SwiftResourcesTestJSON, cls).setup_credentials()
+        stack_owner_role = CONF.orchestration.stack_owner_role
+        operator_role = CONF.object_storage.operator_role
+        cls.os = cls.get_client_manager(
+            roles=[stack_owner_role, operator_role])
 
     @classmethod
     def setup_clients(cls):
@@ -48,7 +55,8 @@ class SwiftResourcesTestJSON(base.BaseOrchestrationTest):
         cls.stack_id = cls.stack_identifier.split('/')[1]
         cls.client.wait_for_stack_status(cls.stack_id, 'CREATE_COMPLETE')
         cls.test_resources = {}
-        resources = cls.client.list_resources(cls.stack_identifier)
+        resources = (cls.client.list_resources(cls.stack_identifier)
+                     ['resources'])
         for resource in resources:
             cls.test_resources[resource['logical_resource_id']] = resource
 

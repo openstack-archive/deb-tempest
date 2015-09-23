@@ -13,9 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
-
 from tempest.api.volume import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -26,24 +25,23 @@ class VolumeTypesExtraSpecsV2Test(base.BaseVolumeAdminTest):
         super(VolumeTypesExtraSpecsV2Test, cls).resource_setup()
         vol_type_name = data_utils.rand_name('Volume-type')
         cls.volume_type = cls.volume_types_client.create_volume_type(
-            vol_type_name)
+            vol_type_name)['volume_type']
 
     @classmethod
     def resource_cleanup(cls):
         cls.volume_types_client.delete_volume_type(cls.volume_type['id'])
         super(VolumeTypesExtraSpecsV2Test, cls).resource_cleanup()
 
-    @test.attr(type='smoke')
     @test.idempotent_id('b42923e9-0452-4945-be5b-d362ae533e60')
     def test_volume_type_extra_specs_list(self):
         # List Volume types extra specs.
         extra_specs = {"spec1": "val1"}
         body = self.volume_types_client.create_volume_type_extra_specs(
-            self.volume_type['id'], extra_specs)
+            self.volume_type['id'], extra_specs)['extra_specs']
         self.assertEqual(extra_specs, body,
                          "Volume type extra spec incorrectly created")
         body = self.volume_types_client.list_volume_types_extra_specs(
-            self.volume_type['id'])
+            self.volume_type['id'])['extra_specs']
         self.assertIsInstance(body, dict)
         self.assertIn('spec1', body)
 
@@ -52,7 +50,7 @@ class VolumeTypesExtraSpecsV2Test(base.BaseVolumeAdminTest):
         # Update volume type extra specs
         extra_specs = {"spec2": "val1"}
         body = self.volume_types_client.create_volume_type_extra_specs(
-            self.volume_type['id'], extra_specs)
+            self.volume_type['id'], extra_specs)['extra_specs']
         self.assertEqual(extra_specs, body,
                          "Volume type extra spec incorrectly created")
 
@@ -65,14 +63,13 @@ class VolumeTypesExtraSpecsV2Test(base.BaseVolumeAdminTest):
         self.assertEqual(extra_spec['spec2'], body['spec2'],
                          "Volume type extra spec incorrectly updated")
 
-    @test.attr(type='smoke')
     @test.idempotent_id('d4772798-601f-408a-b2a5-29e8a59d1220')
     def test_volume_type_extra_spec_create_get_delete(self):
         # Create/Get/Delete volume type extra spec.
         extra_specs = {"spec3": "val1"}
         body = self.volume_types_client.create_volume_type_extra_specs(
             self.volume_type['id'],
-            extra_specs)
+            extra_specs)['extra_specs']
         self.assertEqual(extra_specs, body,
                          "Volume type extra spec incorrectly created")
 

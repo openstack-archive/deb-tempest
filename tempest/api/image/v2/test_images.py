@@ -17,9 +17,9 @@
 import random
 
 from six import moves
-from tempest_lib.common.utils import data_utils
 
 from tempest.api.image import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -28,6 +28,7 @@ class BasicOperationsImagesTest(base.BaseV2ImageTest):
     Here we test the basic operations of images
     """
 
+    @test.attr(type='smoke')
     @test.idempotent_id('139b765e-7f3d-4b3d-8b37-3ca3876ee318')
     def test_register_upload_get_image_file(self):
 
@@ -55,10 +56,10 @@ class BasicOperationsImagesTest(base.BaseV2ImageTest):
         # Now try uploading an image file
         file_content = data_utils.random_bytes()
         image_file = moves.cStringIO(file_content)
-        self.client.store_image(image_id, image_file)
+        self.client.store_image_file(image_id, image_file)
 
         # Now try to get image details
-        body = self.client.get_image(image_id)
+        body = self.client.show_image(image_id)
         self.assertEqual(image_id, body['id'])
         self.assertEqual(image_name, body['name'])
         self.assertEqual(uuid, body['ramdisk_id'])
@@ -66,9 +67,10 @@ class BasicOperationsImagesTest(base.BaseV2ImageTest):
         self.assertEqual(1024, body.get('size'))
 
         # Now try get image file
-        body = self.client.get_image_file(image_id)
+        body = self.client.load_image_file(image_id)
         self.assertEqual(file_content, body.data)
 
+    @test.attr(type='smoke')
     @test.idempotent_id('f848bb94-1c6e-45a4-8726-39e3a5b23535')
     def test_delete_image(self):
         # Deletes an image by image_id
@@ -86,10 +88,11 @@ class BasicOperationsImagesTest(base.BaseV2ImageTest):
         self.client.wait_for_resource_deletion(image_id)
 
         # Verifying deletion
-        images = self.client.image_list()
+        images = self.client.list_images()['images']
         images_id = [item['id'] for item in images]
         self.assertNotIn(image_id, images_id)
 
+    @test.attr(type='smoke')
     @test.idempotent_id('f66891a7-a35c-41a8-b590-a065c2a1caa6')
     def test_update_image(self):
         # Updates an image by image_id
@@ -106,7 +109,7 @@ class BasicOperationsImagesTest(base.BaseV2ImageTest):
 
         # Now try uploading an image file
         image_file = moves.cStringIO(data_utils.random_bytes())
-        self.client.store_image(image_id, image_file)
+        self.client.store_image_file(image_id, image_file)
 
         # Update Image
         new_image_name = data_utils.rand_name('new-image')
@@ -115,7 +118,7 @@ class BasicOperationsImagesTest(base.BaseV2ImageTest):
 
         # Verifying updating
 
-        body = self.client.get_image(image_id)
+        body = self.client.show_image(image_id)
         self.assertEqual(image_id, body['id'])
         self.assertEqual(new_image_name, body['name'])
 
@@ -153,7 +156,7 @@ class ListImagesTest(base.BaseV2ImageTest):
                                 disk_format=disk_format,
                                 visibility='private')
         image_id = body['id']
-        cls.client.store_image(image_id, data=image_file)
+        cls.client.store_image_file(image_id, data=image_file)
 
         return image_id
 
@@ -161,7 +164,7 @@ class ListImagesTest(base.BaseV2ImageTest):
         """
         Perform list action with given params and validates result.
         """
-        images_list = self.client.image_list(params=params)
+        images_list = self.client.list_images(params=params)['images']
         # Validating params of fetched images
         for image in images_list:
             for key in params:
@@ -171,7 +174,7 @@ class ListImagesTest(base.BaseV2ImageTest):
     @test.idempotent_id('1e341d7a-90a9-494c-b143-2cdf2aeb6aee')
     def test_index_no_params(self):
         # Simple test to see all fixture images returned
-        images_list = self.client.image_list()
+        images_list = self.client.list_images()['images']
         image_list = map(lambda x: x['id'], images_list)
 
         for image in self.created_images:
@@ -200,7 +203,7 @@ class ListImagesTest(base.BaseV2ImageTest):
         # Test to get all images by size
         image_id = self.created_images[1]
         # Get image metadata
-        image = self.client.get_image(image_id)
+        image = self.client.show_image(image_id)
 
         params = {"size": image['size']}
         self._list_by_param_value_and_assert(params)
@@ -210,11 +213,11 @@ class ListImagesTest(base.BaseV2ImageTest):
         # Test to get all images with size between 2000 to 3000
         image_id = self.created_images[1]
         # Get image metadata
-        image = self.client.get_image(image_id)
+        image = self.client.show_image(image_id)
 
         size = image['size']
         params = {"size_min": size - 500, "size_max": size + 500}
-        images_list = self.client.image_list(params=params)
+        images_list = self.client.list_images(params=params)['images']
         image_size_list = map(lambda x: x['size'], images_list)
 
         for image_size in image_size_list:
@@ -232,7 +235,7 @@ class ListImagesTest(base.BaseV2ImageTest):
     def test_list_images_param_limit(self):
         # Test to get images by limit
         params = {"limit": 2}
-        images_list = self.client.image_list(params=params)
+        images_list = self.client.list_images(params=params)['images']
 
         self.assertEqual(len(images_list), params['limit'],
                          "Failed to get images by limit")
@@ -241,12 +244,12 @@ class ListImagesTest(base.BaseV2ImageTest):
     def test_get_image_schema(self):
         # Test to get image schema
         schema = "image"
-        body = self.client.get_schema(schema)
+        body = self.client.show_schema(schema)
         self.assertEqual("image", body['name'])
 
     @test.idempotent_id('25c8d7b2-df21-460f-87ac-93130bcdc684')
     def test_get_images_schema(self):
         # Test to get images schema
         schema = "images"
-        body = self.client.get_schema(schema)
+        body = self.client.show_schema(schema)
         self.assertEqual("images", body['name'])

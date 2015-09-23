@@ -15,11 +15,11 @@
 #    under the License.
 
 import argparse
-import json
 import os
 import sys
 
 import httplib2
+from oslo_serialization import jsonutils as json
 from six import moves
 from six.moves.urllib import parse as urlparse
 
@@ -57,14 +57,17 @@ def print_and_or_update(option, group, value, update):
         change_option(option, group, value)
 
 
+def contains_version(prefix, versions):
+    return any([x for x in versions if x.startswith(prefix)])
+
+
 def verify_glance_api_versions(os, update):
     # Check glance api versions
-    versions = os.image_client.get_versions()
-    if CONF.image_feature_enabled.api_v1 != ('v1.1' in versions or 'v1.0' in
-                                             versions):
+    _, versions = os.image_client.get_versions()
+    if CONF.image_feature_enabled.api_v1 != contains_version('v1.', versions):
         print_and_or_update('api_v1', 'image_feature_enabled',
                             not CONF.image_feature_enabled.api_v1, update)
-    if CONF.image_feature_enabled.api_v2 != ('v2.0' in versions):
+    if CONF.image_feature_enabled.api_v2 != contains_version('v2.', versions):
         print_and_or_update('api_v2', 'image_feature_enabled',
                             not CONF.image_feature_enabled.api_v2, update)
 
@@ -94,16 +97,18 @@ def _get_api_versions(os, service):
         versions = map(lambda x: x['id'], body['versions']['values'])
     else:
         versions = map(lambda x: x['id'], body['versions'])
-    return versions
+    return list(versions)
 
 
 def verify_keystone_api_versions(os, update):
     # Check keystone api versions
     versions = _get_api_versions(os, 'keystone')
-    if CONF.identity_feature_enabled.api_v2 != ('v2.0' in versions):
+    if (CONF.identity_feature_enabled.api_v2 !=
+            contains_version('v2.', versions)):
         print_and_or_update('api_v2', 'identity_feature_enabled',
                             not CONF.identity_feature_enabled.api_v2, update)
-    if CONF.identity_feature_enabled.api_v3 != ('v3.0' in versions):
+    if (CONF.identity_feature_enabled.api_v3 !=
+            contains_version('v3.', versions)):
         print_and_or_update('api_v3', 'identity_feature_enabled',
                             not CONF.identity_feature_enabled.api_v3, update)
 
@@ -111,10 +116,12 @@ def verify_keystone_api_versions(os, update):
 def verify_cinder_api_versions(os, update):
     # Check cinder api versions
     versions = _get_api_versions(os, 'cinder')
-    if CONF.volume_feature_enabled.api_v1 != ('v1.0' in versions):
+    if (CONF.volume_feature_enabled.api_v1 !=
+            contains_version('v1.', versions)):
         print_and_or_update('api_v1', 'volume_feature_enabled',
                             not CONF.volume_feature_enabled.api_v1, update)
-    if CONF.volume_feature_enabled.api_v2 != ('v2.0' in versions):
+    if (CONF.volume_feature_enabled.api_v2 !=
+            contains_version('v2.', versions)):
         print_and_or_update('api_v2', 'volume_feature_enabled',
                             not CONF.volume_feature_enabled.api_v2, update)
 
@@ -175,6 +182,7 @@ def verify_extensions(os, service, results):
 
     else:
         extensions = map(lambda x: x['alias'], resp)
+    extensions = list(extensions)
     if not results.get(service):
         results[service] = {}
     extensions_opt = get_enabled_extensions(service)
@@ -335,25 +343,28 @@ def main():
         CONF_PARSER.optionxform = str
         CONF_PARSER.readfp(conf_file)
     icreds = credentials.get_isolated_credentials('verify_tempest_config')
-    os = clients.Manager(icreds.get_primary_creds())
-    services = check_service_availability(os, update)
-    results = {}
-    for service in ['nova', 'cinder', 'neutron', 'swift']:
-        if service not in services:
-            continue
-        results = verify_extensions(os, service, results)
+    try:
+        os = clients.Manager(icreds.get_primary_creds())
+        services = check_service_availability(os, update)
+        results = {}
+        for service in ['nova', 'cinder', 'neutron', 'swift']:
+            if service not in services:
+                continue
+            results = verify_extensions(os, service, results)
 
-    # Verify API versions of all services in the keystone catalog and keystone
-    # itself.
-    services.append('keystone')
-    for service in services:
-        verify_api_versions(os, service, update)
+        # Verify API versions of all services in the keystone catalog and
+        # keystone itself.
+        services.append('keystone')
+        for service in services:
+            verify_api_versions(os, service, update)
 
-    display_results(results, update, replace)
-    if update:
-        conf_file.close()
-        CONF_PARSER.write(outfile)
-    outfile.close()
+        display_results(results, update, replace)
+        if update:
+            conf_file.close()
+            CONF_PARSER.write(outfile)
+        outfile.close()
+    finally:
+        icreds.clear_isolated_creds()
 
 
 if __name__ == "__main__":

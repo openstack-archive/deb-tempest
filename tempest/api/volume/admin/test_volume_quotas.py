@@ -12,9 +12,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
+import six
 
 from tempest.api.volume import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 QUOTA_KEYS = ['gigabytes', 'snapshots', 'volumes']
@@ -57,7 +58,7 @@ class BaseVolumeQuotasAdminV2TestJSON(base.BaseVolumeAdminTest):
             **new_quota_set)
 
         cleanup_quota_set = dict(
-            (k, v) for k, v in default_quota_set.iteritems()
+            (k, v) for k, v in six.iteritems(default_quota_set)
             if k in QUOTA_KEYS)
         self.addCleanup(self.quotas_client.update_quota_set,
                         self.demo_tenant_id, **cleanup_quota_set)
@@ -97,7 +98,7 @@ class BaseVolumeQuotasAdminV2TestJSON(base.BaseVolumeAdminTest):
     @test.idempotent_id('874b35a9-51f1-4258-bec5-cd561b6690d3')
     def test_delete_quota(self):
         # Admin can delete the resource quota set for a tenant
-        tenant_name = data_utils.rand_name('quota_tenant_')
+        tenant_name = data_utils.rand_name('quota_tenant')
         identity_client = self.os_adm.identity_client
         tenant = identity_client.create_tenant(tenant_name)
         tenant_id = tenant['id']

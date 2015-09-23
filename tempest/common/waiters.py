@@ -15,6 +15,7 @@ import time
 
 from oslo_log import log as logging
 from tempest_lib.common.utils import misc as misc_utils
+from tempest_lib import exceptions as lib_exc
 
 from tempest import config
 from tempest import exceptions
@@ -33,7 +34,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
 
     # NOTE(afazekas): UNKNOWN status possible on ERROR
     # or in a very early stage.
-    body = client.get_server(server_id)
+    body = client.show_server(server_id)
     old_status = server_status = body['status']
     old_task_state = task_state = _get_task_state(body)
     start_time = int(time.time())
@@ -50,7 +51,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
                     return
                 # NOTE(afazekas): The instance is in "ready for action state"
                 # when no task in progress
-                # NOTE(afazekas): Converted to string bacuse of the XML
+                # NOTE(afazekas): Converted to string because of the XML
                 # responses
                 if str(task_state) == "None":
                     # without state api extension 3 sec usually enough
@@ -60,7 +61,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
                 return
 
         time.sleep(client.build_interval)
-        body = client.get_server(server_id)
+        body = client.show_server(server_id)
         server_status = body['status']
         task_state = _get_task_state(body)
         if (server_status != old_status) or (task_state != old_task_state):
@@ -96,18 +97,45 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
         old_task_state = task_state
 
 
+def wait_for_server_termination(client, server_id, ignore_error=False):
+    """Waits for server to reach termination."""
+    start_time = int(time.time())
+    while True:
+        try:
+            body = client.show_server(server_id)
+        except lib_exc.NotFound:
+            return
+
+        server_status = body['status']
+        if server_status == 'ERROR' and not ignore_error:
+            raise exceptions.BuildErrorException(server_id=server_id)
+
+        if int(time.time()) - start_time >= client.build_timeout:
+            raise exceptions.TimeoutException
+
+        time.sleep(client.build_interval)
+
+
 def wait_for_image_status(client, image_id, status):
     """Waits for an image to reach a given status.
 
-    The client should have a get_image(image_id) method to get the image.
+    The client should have a show_image(image_id) method to get the image.
     The client should also have build_interval and build_timeout attributes.
     """
-    image = client.get_image(image_id)
+    image = client.show_image(image_id)
+    # Compute image client return response wrapped in 'image' element
+    # which is not case with glance image client.
+    if 'image' in image:
+        image = image['image']
     start = int(time.time())
 
     while image['status'] != status:
         time.sleep(client.build_interval)
-        image = client.get_image(image_id)
+        image = client.show_image(image_id)
+        # Compute image client return response wrapped in 'image' element
+        # which is not case with glance image client.
+        if 'image' in image:
+            image = image['image']
         status_curr = image['status']
         if status_curr == 'ERROR':
             raise exceptions.AddImageException(image_id=image_id)
@@ -129,6 +157,36 @@ def wait_for_image_status(client, image_id, status):
             caller = misc_utils.find_test_caller()
             if caller:
                 message = '(%s) %s' % (caller, message)
+            raise exceptions.TimeoutException(message)
+
+
+def wait_for_volume_status(client, volume_id, status):
+    """Waits for a Volume to reach a given status."""
+    body = client.show_volume(volume_id)
+    if 'volume' in body:
+        body = body['volume']
+    volume_status = body['status']
+    start = int(time.time())
+
+    while volume_status != status:
+        time.sleep(client.build_interval)
+        body = client.show_volume(volume_id)
+        # TODO(jswarren) always extract 'volume' value
+        # once the compute clients also return the full
+        # response.
+        if 'volume' in body:
+            body = body['volume']
+        volume_status = body['status']
+        if volume_status == 'error':
+            raise exceptions.VolumeBuildErrorException(volume_id=volume_id)
+        if volume_status == 'error_restoring':
+            raise exceptions.VolumeRestoreErrorException(volume_id=volume_id)
+
+        if int(time.time()) - start >= client.build_timeout:
+            message = ('Volume %s failed to reach %s status (current %s) '
+                       'within the required time (%s s).' %
+                       (volume_id, status, volume_status,
+                        client.build_timeout))
             raise exceptions.TimeoutException(message)
 
 

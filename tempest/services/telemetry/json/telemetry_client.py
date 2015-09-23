@@ -13,14 +13,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import urllib
-
 from oslo_serialization import jsonutils as json
+from six.moves.urllib import parse as urllib
 
 from tempest.common import service_client
 
 
-class TelemetryClientJSON(service_client.ServiceClient):
+class TelemetryClient(service_client.ServiceClient):
 
     version = '2'
     uri_prefix = "v2"
@@ -83,6 +82,10 @@ class TelemetryClientJSON(service_client.ServiceClient):
 
     def list_samples(self, meter_id, query=None):
         uri = '%s/meters/%s' % (self.uri_prefix, meter_id)
+        return self._helper_list(uri, query)
+
+    def list_events(self, query=None):
+        uri = '%s/events' % self.uri_prefix
         return self._helper_list(uri, query)
 
     def show_resource(self, resource_id):

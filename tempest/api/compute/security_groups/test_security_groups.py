@@ -13,10 +13,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.compute.security_groups import base
+from tempest.common.utils import data_utils
+from tempest.common import waiters
 from tempest import test
 
 
@@ -39,7 +40,7 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
             security_group_list.append(body)
         # Fetch all Security Groups and verify the list
         # has all created Security Groups
-        fetched_list = self.client.list_security_groups()
+        fetched_list = self.client.list_security_groups()['security_groups']
         # Now check if all the created Security Groups are in fetched list
         missing_sgs = \
             [sg for sg in security_group_list if sg not in fetched_list]
@@ -52,7 +53,7 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
             self.client.delete_security_group(sg['id'])
             self.client.wait_for_resource_deletion(sg['id'])
         # Now check if all the created Security Groups are deleted
-        fetched_list = self.client.list_security_groups()
+        fetched_list = self.client.list_security_groups()['security_groups']
         deleted_sgs = \
             [sg for sg in security_group_list if sg in fetched_list]
         self.assertFalse(deleted_sgs,
@@ -60,7 +61,6 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
                          "list" % ', '.join(m_group['name']
                                             for m_group in deleted_sgs))
 
-    @test.attr(type='smoke')
     @test.idempotent_id('ecc0da4a-2117-48af-91af-993cca39a615')
     @test.services('network')
     def test_security_group_create_get_delete(self):
@@ -75,15 +75,14 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
                          "The created Security Group name is "
                          "not equal to the requested name")
         # Now fetch the created Security Group by its 'id'
-        fetched_group = \
-            self.client.get_security_group(securitygroup['id'])
+        fetched_group = (self.client.show_security_group(securitygroup['id'])
+                         ['security_group'])
         self.assertEqual(securitygroup, fetched_group,
                          "The fetched Security Group is different "
                          "from the created Group")
         self.client.delete_security_group(securitygroup['id'])
         self.client.wait_for_resource_deletion(securitygroup['id'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('fe4abc0d-83f5-4c50-ad11-57a1127297a2')
     @test.services('network')
     def test_server_security_groups(self):
@@ -99,7 +98,8 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
         server_name = data_utils.rand_name('server')
         server = self.create_test_server(name=server_name)
         server_id = server['id']
-        self.servers_client.wait_for_server_status(server_id, 'ACTIVE')
+        waiters.wait_for_server_status(self.servers_client, server_id,
+                                       'ACTIVE')
         self.servers_client.add_security_group(server_id, sg['name'])
 
         # Check that we are not able to delete the security
@@ -109,8 +109,9 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
                           sg['id'])
 
         # Reboot and add the other security group
-        self.servers_client.reboot(server_id, 'HARD')
-        self.servers_client.wait_for_server_status(server_id, 'ACTIVE')
+        self.servers_client.reboot_server(server_id, 'HARD')
+        waiters.wait_for_server_status(self.servers_client, server_id,
+                                       'ACTIVE')
         self.servers_client.add_security_group(server_id, sg2['name'])
 
         # Check that we are not able to delete the other security
@@ -122,12 +123,11 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
         # Shutdown the server and then verify we can destroy the
         # security groups, since no active server instance is using them
         self.servers_client.delete_server(server_id)
-        self.servers_client.wait_for_server_termination(server_id)
+        waiters.wait_for_server_termination(self.servers_client, server_id)
 
         self.client.delete_security_group(sg['id'])
         self.client.delete_security_group(sg2['id'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('7d4e1d3c-3209-4d6d-b020-986304ebad1f')
     @test.services('network')
     def test_update_security_groups(self):
@@ -143,7 +143,7 @@ class SecurityGroupsTestJSON(base.BaseSecurityGroupsTest):
                                           name=s_new_name,
                                           description=s_new_des)
         # get the security group
-        fetched_group = \
-            self.client.get_security_group(securitygroup_id)
+        fetched_group = (self.client.show_security_group(securitygroup_id)
+                         ['security_group'])
         self.assertEqual(s_new_name, fetched_group['name'])
         self.assertEqual(s_new_des, fetched_group['description'])

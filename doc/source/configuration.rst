@@ -6,7 +6,8 @@ Tempest Configuration Guide
 This guide is a starting point for configuring tempest. It aims to elaborate
 on and explain some of the mandatory and common configuration settings and how
 they are used in conjunction. The source of truth on each option is the sample
-config file which explains the purpose of each individual option.
+config file which explains the purpose of each individual option. You can see
+the sample config file here: :ref:`tempest-sampleconf`
 
 Lock Path
 ---------
@@ -24,7 +25,7 @@ Auth/Credentials
 Tempest currently has 2 different ways in configuration to provide credentials
 to use when running tempest. One is a traditional set of configuration options
 in the tempest.conf file. These options are in the identity section and let you
-specify a regular user, a global admin user, and a alternate user set of
+specify a regular user, a global admin user, and an alternate user set of
 credentials. (which consist of a username, password, and project/tenant name)
 These options should be clearly labelled in the sample config file in the
 identity section.
@@ -112,8 +113,10 @@ To enable and use locking test accounts you need do a few things:
     available in the file. (if running serially the worker count is 1)
 
     You can check the sample file packaged in tempest for the yaml format
- #. Provide tempest with the location of you accounts.yaml file with the
+ #. Provide tempest with the location of your accounts.yaml file with the
     test_accounts_file option in the auth section
+
+ #. Set allow_tenant_isolation = False in the auth group
 
 It is worth pointing out that each set of credentials in the accounts.yaml
 should have a unique tenant. This is required to provide proper isolation
@@ -139,6 +142,11 @@ options in the identity section:
  #. alt_username
  #. alt_password
  #. alt_tenant_name
+
+And in the auth section:
+
+ #. allow_tenant_isolation = False
+ #. comment out 'test_accounts_file' or keep it as empty
 
 It only makes sense to use it if parallel execution isn't needed, since tempest
 won't be able to properly isolate tests using this. Additionally, using the
@@ -180,7 +188,7 @@ servers. There are 2 options in the compute section just like with flavors:
  #. image_ref_alt
 
 Both options are expecting an image id (not name) from nova. The *image_ref*
-option is what what will be used for booting the majority of servers in tempest.
+option is what will be used for booting the majority of servers in tempest.
 *image_ref_alt* is used for tests that require 2 images such as rebuild. If 2
 images are not available you can set both options to the same image_ref and
 those tests will be skipped.
@@ -302,6 +310,12 @@ file, if you specify a fixed network name while using neutron and tenant
 isolation it will enable running tests which require a static network and it
 will additionally be used as a fallback for server creation. However, unlike
 accounts.yaml this should never be triggered.
+
+However, there is an option *create_isolated_networks* to disable tenant
+isolation's automatic provisioning of network resources. If this option is
+used you will have to either rely on there only being a single/default network
+available for the server creation, or use *fixed_network_name* to inform
+Tempest which network to use.
 
 Configuring Available Services
 ------------------------------

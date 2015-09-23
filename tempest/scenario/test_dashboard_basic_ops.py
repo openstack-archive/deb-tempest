@@ -12,9 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import HTMLParser
-import urllib
-import urllib2
+from six.moves import html_parser as HTMLParser
+from six.moves.urllib import parse
+from six.moves.urllib import request
 
 from tempest import config
 from tempest.scenario import manager
@@ -26,6 +26,7 @@ CONF = config.CONF
 class HorizonHTMLParser(HTMLParser.HTMLParser):
     csrf_token = None
     region = None
+    login = None
 
     def _find_name(self, attrs, name):
         for attrpair in attrs:
@@ -39,12 +40,20 @@ class HorizonHTMLParser(HTMLParser.HTMLParser):
                 return attrpair[1]
         return None
 
+    def _find_attr_value(self, attrs, attr_name):
+        for attrpair in attrs:
+            if attrpair[0] == attr_name:
+                return attrpair[1]
+        return None
+
     def handle_starttag(self, tag, attrs):
         if tag == 'input':
             if self._find_name(attrs, 'csrfmiddlewaretoken'):
                 self.csrf_token = self._find_value(attrs)
             if self._find_name(attrs, 'region'):
                 self.region = self._find_value(attrs)
+        if tag == 'form':
+            self.login = self._find_attr_value(attrs, 'action')
 
 
 class TestDashboardBasicOps(manager.ScenarioTest):
@@ -68,26 +77,30 @@ class TestDashboardBasicOps(manager.ScenarioTest):
         super(TestDashboardBasicOps, cls).setup_credentials()
 
     def check_login_page(self):
-        response = urllib2.urlopen(CONF.dashboard.dashboard_url)
+        response = request.urlopen(CONF.dashboard.dashboard_url)
         self.assertIn("id_username", response.read())
 
     def user_login(self, username, password):
-        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor())
+        self.opener = request.build_opener(request.HTTPCookieProcessor())
         response = self.opener.open(CONF.dashboard.dashboard_url).read()
 
         # Grab the CSRF token and default region
         parser = HorizonHTMLParser()
         parser.feed(response)
 
+        # construct login url for dashboard, discovery accommodates non-/ web
+        # root for dashboard
+        login_url = CONF.dashboard.dashboard_url + parser.login[1:]
+
         # Prepare login form request
-        req = urllib2.Request(CONF.dashboard.login_url)
+        req = request.Request(login_url)
         req.add_header('Content-type', 'application/x-www-form-urlencoded')
         req.add_header('Referer', CONF.dashboard.dashboard_url)
         params = {'username': username,
                   'password': password,
                   'region': parser.region,
                   'csrfmiddlewaretoken': parser.csrf_token}
-        self.opener.open(req, urllib.urlencode(params))
+        self.opener.open(req, parse.urlencode(params))
 
     def check_home_page(self):
         response = self.opener.open(CONF.dashboard.dashboard_url)

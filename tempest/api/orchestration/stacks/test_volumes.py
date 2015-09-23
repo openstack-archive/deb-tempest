@@ -12,10 +12,10 @@
 
 import logging
 
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.orchestration import base
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -34,7 +34,7 @@ class CinderResourcesTest(base.BaseOrchestrationTest):
 
     def _cinder_verify(self, volume_id, template):
         self.assertIsNotNone(volume_id)
-        volume = self.volumes_client.show_volume(volume_id)
+        volume = self.volumes_client.show_volume(volume_id)['volume']
         self.assertEqual('available', volume.get('status'))
         self.assertEqual(template['resources']['volume']['properties'][
             'size'], volume.get('size'))

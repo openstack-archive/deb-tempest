@@ -13,10 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.compute import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -49,7 +49,7 @@ class ImagesMetadataTestJSON(base.BaseV2ComputeTest):
     def test_get_nonexistent_image_metadata_item(self):
         # Negative test: Get on non-existent image should not happen
         self.assertRaises(lib_exc.NotFound,
-                          self.client.get_image_metadata_item,
+                          self.client.show_image_metadata_item,
                           data_utils.rand_uuid(), 'os_version')
 
     @test.attr(type=['negative'])

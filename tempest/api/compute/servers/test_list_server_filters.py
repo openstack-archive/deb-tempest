@@ -13,13 +13,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
-from tempest_lib import decorators
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.compute import base
 from tempest.api import utils
 from tempest.common import fixed_network
+from tempest.common.utils import data_utils
+from tempest.common import waiters
 from tempest import config
 from tempest import test
 
@@ -44,7 +44,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
 
         # Check to see if the alternate image ref actually exists...
         images_client = cls.images_client
-        images = images_client.list_images()
+        images = images_client.list_images()['images']
 
         if cls.image_ref != cls.image_ref_alt and \
             any([image for image in images
@@ -56,23 +56,20 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         # Do some sanity checks here. If one of the images does
         # not exist, fail early since the tests won't work...
         try:
-            cls.images_client.get_image(cls.image_ref)
+            cls.images_client.show_image(cls.image_ref)
         except lib_exc.NotFound:
             raise RuntimeError("Image %s (image_ref) was not found!" %
                                cls.image_ref)
 
         try:
-            cls.images_client.get_image(cls.image_ref_alt)
+            cls.images_client.show_image(cls.image_ref_alt)
         except lib_exc.NotFound:
             raise RuntimeError("Image %s (image_ref_alt) was not found!" %
                                cls.image_ref_alt)
 
         network = cls.get_tenant_network()
         if network:
-            if network.get('name'):
-                cls.fixed_network_name = network['name']
-            else:
-                cls.fixed_network_name = None
+            cls.fixed_network_name = network.get('name')
         else:
             cls.fixed_network_name = None
         network_kwargs = fixed_network.set_networks_kwarg(network)
@@ -96,7 +93,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_filter_by_image(self):
         # Filter the list of servers by image
         params = {'image': self.image_ref}
-        body = self.client.list_servers(params)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertIn(self.s1['id'], map(lambda x: x['id'], servers))
@@ -107,7 +104,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_filter_by_flavor(self):
         # Filter the list of servers by flavor
         params = {'flavor': self.flavor_ref_alt}
-        body = self.client.list_servers(params)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertNotIn(self.s1['id'], map(lambda x: x['id'], servers))
@@ -118,7 +115,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_filter_by_server_name(self):
         # Filter the list of servers by server name
         params = {'name': self.s1_name}
-        body = self.client.list_servers(params)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
@@ -129,7 +126,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_filter_by_server_status(self):
         # Filter the list of servers by server status
         params = {'status': 'active'}
-        body = self.client.list_servers(params)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertIn(self.s1['id'], map(lambda x: x['id'], servers))
@@ -140,13 +137,13 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_filter_by_shutoff_status(self):
         # Filter the list of servers by server shutoff status
         params = {'status': 'shutoff'}
-        self.client.stop(self.s1['id'])
-        self.client.wait_for_server_status(self.s1['id'],
-                                           'SHUTOFF')
-        body = self.client.list_servers(params)
-        self.client.start(self.s1['id'])
-        self.client.wait_for_server_status(self.s1['id'],
-                                           'ACTIVE')
+        self.client.stop_server(self.s1['id'])
+        waiters.wait_for_server_status(self.client, self.s1['id'],
+                                       'SHUTOFF')
+        body = self.client.list_servers(**params)
+        self.client.start_server(self.s1['id'])
+        waiters.wait_for_server_status(self.client, self.s1['id'],
+                                       'ACTIVE')
         servers = body['servers']
 
         self.assertIn(self.s1['id'], map(lambda x: x['id'], servers))
@@ -157,21 +154,21 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_filter_by_limit(self):
         # Verify only the expected number of servers are returned
         params = {'limit': 1}
-        servers = self.client.list_servers(params)
+        servers = self.client.list_servers(**params)
         self.assertEqual(1, len([x for x in servers['servers'] if 'id' in x]))
 
     @test.idempotent_id('b1495414-2d93-414c-8019-849afe8d319e')
     def test_list_servers_filter_by_zero_limit(self):
         # Verify only the expected number of servers are returned
         params = {'limit': 0}
-        servers = self.client.list_servers(params)
+        servers = self.client.list_servers(**params)
         self.assertEqual(0, len(servers['servers']))
 
     @test.idempotent_id('37791bbd-90c0-4de0-831e-5f38cba9c6b3')
     def test_list_servers_filter_by_exceed_limit(self):
         # Verify only the expected number of servers are returned
         params = {'limit': 100000}
-        servers = self.client.list_servers(params)
+        servers = self.client.list_servers(**params)
         all_servers = self.client.list_servers()
         self.assertEqual(len([x for x in all_servers['servers'] if 'id' in x]),
                          len([x for x in servers['servers'] if 'id' in x]))
@@ -181,7 +178,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_detailed_filter_by_image(self):
         # Filter the detailed list of servers by image
         params = {'image': self.image_ref}
-        body = self.client.list_servers_with_detail(params)
+        body = self.client.list_servers(detail=True, **params)
         servers = body['servers']
 
         self.assertIn(self.s1['id'], map(lambda x: x['id'], servers))
@@ -192,7 +189,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_detailed_filter_by_flavor(self):
         # Filter the detailed list of servers by flavor
         params = {'flavor': self.flavor_ref_alt}
-        body = self.client.list_servers_with_detail(params)
+        body = self.client.list_servers(detail=True, **params)
         servers = body['servers']
 
         self.assertNotIn(self.s1['id'], map(lambda x: x['id'], servers))
@@ -203,7 +200,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_detailed_filter_by_server_name(self):
         # Filter the detailed list of servers by server name
         params = {'name': self.s1_name}
-        body = self.client.list_servers_with_detail(params)
+        body = self.client.list_servers(detail=True, **params)
         servers = body['servers']
 
         self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
@@ -214,7 +211,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_detailed_filter_by_server_status(self):
         # Filter the detailed list of servers by server status
         params = {'status': 'active'}
-        body = self.client.list_servers_with_detail(params)
+        body = self.client.list_servers(detail=True, **params)
         servers = body['servers']
         test_ids = [s['id'] for s in (self.s1, self.s2, self.s3)]
 
@@ -228,7 +225,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
     def test_list_servers_filtered_by_name_wildcard(self):
         # List all servers that contains '-instance' in name
         params = {'name': '-instance'}
-        body = self.client.list_servers(params)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
@@ -239,7 +236,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         part_name = self.s1_name[6:-1]
 
         params = {'name': part_name}
-        body = self.client.list_servers(params)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
@@ -252,7 +249,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         regexes = ['^.*\-instance\-[0-9]+$', '^.*\-instance\-.*$']
         for regex in regexes:
             params = {'name': regex}
-            body = self.client.list_servers(params)
+            body = self.client.list_servers(**params)
             servers = body['servers']
 
             self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
@@ -263,7 +260,7 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         part_name = self.s1_name[-10:]
 
         params = {'name': part_name}
-        body = self.client.list_servers(params)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
@@ -277,18 +274,22 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         if not self.fixed_network_name:
             msg = 'fixed_network_name needs to be configured to run this test'
             raise self.skipException(msg)
-        self.s1 = self.client.get_server(self.s1['id'])
-        ip = self.s1['addresses'][self.fixed_network_name][0]['addr']
-        params = {'ip': ip}
-        body = self.client.list_servers(params)
+        self.s1 = self.client.show_server(self.s1['id'])
+        for addr_spec in self.s1['addresses'][self.fixed_network_name]:
+            ip = addr_spec['addr']
+            if addr_spec['version'] == 4:
+                params = {'ip': ip}
+                break
+        else:
+            msg = "Skipped until bug 1450859 is resolved"
+            raise self.skipException(msg)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
         self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
         self.assertNotIn(self.s2_name, map(lambda x: x['name'], servers))
         self.assertNotIn(self.s3_name, map(lambda x: x['name'], servers))
 
-    @decorators.skip_because(bug="1182883",
-                             condition=CONF.service_available.neutron)
     @test.idempotent_id('a905e287-c35e-42f2-b132-d02b09f3654a')
     def test_list_servers_filtered_by_ip_regex(self):
         # Filter servers by regex ip
@@ -297,19 +298,31 @@ class ListServerFiltersTestJSON(base.BaseV2ComputeTest):
         if not self.fixed_network_name:
             msg = 'fixed_network_name needs to be configured to run this test'
             raise self.skipException(msg)
-        self.s1 = self.client.get_server(self.s1['id'])
-        ip = self.s1['addresses'][self.fixed_network_name][0]['addr'][0:-3]
-        params = {'ip': ip}
-        body = self.client.list_servers(params)
+        self.s1 = self.client.show_server(self.s1['id'])
+        addr_spec = self.s1['addresses'][self.fixed_network_name][0]
+        ip = addr_spec['addr'][0:-3]
+        if addr_spec['version'] == 4:
+            params = {'ip': ip}
+        else:
+            params = {'ip6': ip}
+        # capture all servers in case something goes wrong
+        all_servers = self.client.list_servers(detail=True)
+        body = self.client.list_servers(**params)
         servers = body['servers']
 
-        self.assertIn(self.s1_name, map(lambda x: x['name'], servers))
-        self.assertIn(self.s2_name, map(lambda x: x['name'], servers))
-        self.assertIn(self.s3_name, map(lambda x: x['name'], servers))
+        self.assertIn(self.s1_name, map(lambda x: x['name'], servers),
+                      "%s not found in %s, all servers %s" %
+                      (self.s1_name, servers, all_servers))
+        self.assertIn(self.s2_name, map(lambda x: x['name'], servers),
+                      "%s not found in %s, all servers %s" %
+                      (self.s2_name, servers, all_servers))
+        self.assertIn(self.s3_name, map(lambda x: x['name'], servers),
+                      "%s not found in %s, all servers %s" %
+                      (self.s3_name, servers, all_servers))
 
     @test.idempotent_id('67aec2d0-35fe-4503-9f92-f13272b867ed')
     def test_list_servers_detailed_limit_results(self):
         # Verify only the expected number of detailed results are returned
         params = {'limit': 1}
-        servers = self.client.list_servers_with_detail(params)
+        servers = self.client.list_servers(detail=True, **params)
         self.assertEqual(1, len(servers['servers']))

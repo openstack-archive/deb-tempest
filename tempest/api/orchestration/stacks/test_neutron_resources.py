@@ -14,10 +14,10 @@
 import logging
 
 import netaddr
-from tempest_lib.common.utils import data_utils
 
 from tempest.api.orchestration import base
 from tempest import clients
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import exceptions
 from tempest import test
@@ -75,7 +75,8 @@ class NeutronResourcesTestJSON(base.BaseOrchestrationTest):
         cls.stack_id = cls.stack_identifier.split('/')[1]
         try:
             cls.client.wait_for_stack_status(cls.stack_id, 'CREATE_COMPLETE')
-            resources = cls.client.list_resources(cls.stack_identifier)
+            resources = (cls.client.list_resources(cls.stack_identifier)
+                         ['resources'])
         except exceptions.TimeoutException as e:
             if CONF.compute_feature_enabled.console_output:
                 # attempt to log the server console to help with debugging
@@ -183,7 +184,7 @@ class NeutronResourcesTestJSON(base.BaseOrchestrationTest):
     def test_created_server(self):
         """Verifies created sever."""
         server_id = self.test_resources.get('Server')['physical_resource_id']
-        server = self.servers_client.get_server(server_id)
+        server = self.servers_client.show_server(server_id)
         self.assertEqual(self.keypair_name, server['key_name'])
         self.assertEqual('ACTIVE', server['status'])
         network = server['addresses'][self.neutron_basic_template['resources'][

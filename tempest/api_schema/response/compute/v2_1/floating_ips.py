@@ -12,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from tempest.api_schema.response.compute.v2_1 import parameter_types
+
 common_floating_ip_info = {
     'type': 'object',
     'properties': {
@@ -21,15 +23,10 @@ common_floating_ip_info = {
         'id': {'type': ['integer', 'string']},
         'pool': {'type': ['string', 'null']},
         'instance_id': {'type': ['string', 'null']},
-        'ip': {
-            'type': 'string',
-            'format': 'ip-address'
-        },
-        'fixed_ip': {
-            'type': ['string', 'null'],
-            'format': 'ip-address'
-        }
+        'ip': parameter_types.ip_address,
+        'fixed_ip': parameter_types.ip_address
     },
+    'additionalProperties': False,
     'required': ['id', 'pool', 'instance_id',
                  'ip', 'fixed_ip'],
 
@@ -44,22 +41,24 @@ list_floating_ips = {
                 'items': common_floating_ip_info
             },
         },
+        'additionalProperties': False,
         'required': ['floating_ips'],
     }
 }
 
-floating_ip = {
+create_get_floating_ip = {
     'status_code': [200],
     'response_body': {
         'type': 'object',
         'properties': {
             'floating_ip': common_floating_ip_info
         },
+        'additionalProperties': False,
         'required': ['floating_ip'],
     }
 }
 
-floating_ip_pools = {
+list_floating_ip_pools = {
     'status_code': [200],
     'response_body': {
         'type': 'object',
@@ -71,10 +70,12 @@ floating_ip_pools = {
                     'properties': {
                         'name': {'type': 'string'}
                     },
+                    'additionalProperties': False,
                     'required': ['name'],
                 }
             }
         },
+        'additionalProperties': False,
         'required': ['floating_ip_pools'],
     }
 }
@@ -95,9 +96,11 @@ create_floating_ips_bulk = {
                     'ip_range': {'type': 'string'},
                     'pool': {'type': ['string', 'null']},
                 },
+                'additionalProperties': False,
                 'required': ['interface', 'ip_range', 'pool'],
             }
         },
+        'additionalProperties': False,
         'required': ['floating_ips_bulk_create'],
     }
 }
@@ -109,6 +112,7 @@ delete_floating_ips_bulk = {
         'properties': {
             'floating_ips_bulk_delete': {'type': 'string'}
         },
+        'additionalProperties': False,
         'required': ['floating_ips_bulk_delete'],
     }
 }
@@ -123,19 +127,14 @@ list_floating_ips_bulk = {
                 'items': {
                     'type': 'object',
                     'properties': {
-                        'address': {
-                            'type': 'string',
-                            'format': 'ip-address'
-                        },
+                        'address': parameter_types.ip_address,
                         'instance_uuid': {'type': ['string', 'null']},
                         'interface': {'type': ['string', 'null']},
                         'pool': {'type': ['string', 'null']},
                         'project_id': {'type': ['string', 'null']},
-                        'fixed_ip': {
-                            'type': ['string', 'null'],
-                            'format': 'ip-address'
-                        }
+                        'fixed_ip': parameter_types.ip_address
                     },
+                    'additionalProperties': False,
                     # NOTE: fixed_ip is introduced after JUNO release,
                     # So it is not defined as 'required'.
                     'required': ['address', 'instance_uuid', 'interface',
@@ -143,6 +142,7 @@ list_floating_ips_bulk = {
                 }
             }
         },
+        'additionalProperties': False,
         'required': ['floating_ip_info'],
     }
 }

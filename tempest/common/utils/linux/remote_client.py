@@ -14,23 +14,26 @@ import netaddr
 import re
 import time
 
+from oslo_log import log as logging
 import six
+from tempest_lib.common import ssh
 
-from tempest.common import ssh
 from tempest import config
 from tempest import exceptions
 
 CONF = config.CONF
+
+LOG = logging.getLogger(__name__)
 
 
 class RemoteClient(object):
 
     # NOTE(afazekas): It should always get an address instead of server
     def __init__(self, server, username, password=None, pkey=None):
-        ssh_timeout = CONF.compute.ssh_timeout
+        ssh_timeout = CONF.validation.ssh_timeout
         network = CONF.compute.network_for_ssh
-        ip_version = CONF.compute.ip_version_for_ssh
-        ssh_channel_timeout = CONF.compute.ssh_channel_timeout
+        ip_version = CONF.validation.ip_version_for_ssh
+        connect_timeout = CONF.validation.connect_timeout
         if isinstance(server, six.string_types):
             ip_address = server
         else:
@@ -43,9 +46,13 @@ class RemoteClient(object):
                 raise exceptions.ServerUnreachable()
         self.ssh_client = ssh.Client(ip_address, username, password,
                                      ssh_timeout, pkey=pkey,
-                                     channel_timeout=ssh_channel_timeout)
+                                     channel_timeout=connect_timeout)
 
     def exec_command(self, cmd):
+        # Shell options below add more clearness on failures,
+        # path is extended for some non-cirros guest oses (centos7)
+        cmd = CONF.compute.ssh_shell_prologue + " " + cmd
+        LOG.debug("Remote command: %s" % cmd)
         return self.ssh_client.exec_command(cmd)
 
     def validate_authentication(self):
@@ -65,8 +72,7 @@ class RemoteClient(object):
             return output.split()[1]
 
     def get_number_of_vcpus(self):
-        command = 'cat /proc/cpuinfo | grep processor | wc -l'
-        output = self.exec_command(command)
+        output = self.exec_command('grep -c processor /proc/cpuinfo')
         return int(output)
 
     def get_partitions(self):
@@ -95,26 +101,27 @@ class RemoteClient(object):
         return self.exec_command(cmd)
 
     def get_mac_address(self):
-        cmd = "/bin/ip addr | awk '/ether/ {print $2}'"
+        cmd = "ip addr | awk '/ether/ {print $2}'"
         return self.exec_command(cmd)
 
     def get_nic_name(self, address):
-        cmd = "/bin/ip -o addr | awk '/%s/ {print $2}'" % address
-        return self.exec_command(cmd)
+        cmd = "ip -o addr | awk '/%s/ {print $2}'" % address
+        nic = self.exec_command(cmd)
+        return nic.strip().strip(":").lower()
 
     def get_ip_list(self):
-        cmd = "/bin/ip address"
+        cmd = "ip address"
         return self.exec_command(cmd)
 
     def assign_static_ip(self, nic, addr):
-        cmd = "sudo /bin/ip addr add {ip}/{mask} dev {nic}".format(
+        cmd = "sudo ip addr add {ip}/{mask} dev {nic}".format(
             ip=addr, mask=CONF.network.tenant_network_mask_bits,
             nic=nic
         )
         return self.exec_command(cmd)
 
     def turn_nic_on(self, nic):
-        cmd = "sudo /bin/ip link set {nic} up".format(nic=nic)
+        cmd = "sudo ip link set {nic} up".format(nic=nic)
         return self.exec_command(cmd)
 
     def get_pids(self, pr_name):
@@ -138,7 +145,6 @@ class RemoteClient(object):
         """Renews DHCP lease via udhcpc client. """
         file_path = '/var/run/udhcpc.'
         nic_name = self.get_nic_name(fixed_ip)
-        nic_name = nic_name.strip().lower()
         pid = self.exec_command('cat {path}{nic}.pid'.
                                 format(path=file_path, nic=nic_name))
         pid = pid.strip()

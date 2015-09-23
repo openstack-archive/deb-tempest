@@ -12,11 +12,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.object_storage import base
-from tempest import clients
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -25,12 +24,14 @@ CONF = config.CONF
 
 class ObjectACLsNegativeTest(base.BaseObjectTest):
 
+    credentials = [['operator', CONF.object_storage.operator_role],
+                   ['operator_alt', CONF.object_storage.operator_role]]
+
     @classmethod
     def setup_credentials(cls):
         super(ObjectACLsNegativeTest, cls).setup_credentials()
-        cls.os_operator = clients.Manager(
-            cls.isolated_creds.get_creds_by_roles(
-                roles=[CONF.object_storage.operator_role], force_new=True))
+        cls.os = cls.os_roles_operator
+        cls.os_operator = cls.os_roles_operator_alt
 
     @classmethod
     def resource_setup(cls):
@@ -128,7 +129,7 @@ class ObjectACLsNegativeTest(base.BaseObjectTest):
                           self.object_client.delete_object,
                           self.container_name, object_name)
 
-    @test.attr(type=['negative', 'smoke'])
+    @test.attr(type=['negative'])
     @test.idempotent_id('9ed01334-01e9-41ea-87ea-e6f465582823')
     def test_read_object_without_rights(self):
         # attempt to read object using non-authorized user
@@ -152,7 +153,7 @@ class ObjectACLsNegativeTest(base.BaseObjectTest):
                           self.object_client.get_object,
                           self.container_name, object_name)
 
-    @test.attr(type=['negative', 'smoke'])
+    @test.attr(type=['negative'])
     @test.idempotent_id('a3a585a7-d8cf-4b65-a1a0-edc2b1204f85')
     def test_write_object_without_rights(self):
         # attempt to write object using non-authorized user
@@ -173,7 +174,7 @@ class ObjectACLsNegativeTest(base.BaseObjectTest):
                           self.container_name,
                           object_name, 'data', headers={})
 
-    @test.attr(type=['negative', 'smoke'])
+    @test.attr(type=['negative'])
     @test.idempotent_id('8ba512ad-aa6e-444e-b882-2906a0ea2052')
     def test_write_object_without_write_rights(self):
         # attempt to write object using non-authorized user
@@ -198,7 +199,7 @@ class ObjectACLsNegativeTest(base.BaseObjectTest):
                           self.container_name,
                           object_name, 'data', headers={})
 
-    @test.attr(type=['negative', 'smoke'])
+    @test.attr(type=['negative'])
     @test.idempotent_id('b4e366f8-f185-47ab-b789-df4416f9ecdb')
     def test_delete_object_without_write_rights(self):
         # attempt to delete object using non-authorized user

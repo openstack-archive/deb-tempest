@@ -14,10 +14,10 @@
 #    under the License.
 
 from six import moves
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.identity import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -30,7 +30,6 @@ class ServicesTestJSON(base.BaseIdentityV2AdminTest):
         self.assertRaises(lib_exc.NotFound, self.client.get_service,
                           service_id)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('84521085-c6e6-491c-9a08-ec9f70f90110')
     def test_create_get_delete_service(self):
         # GET Service

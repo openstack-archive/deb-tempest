@@ -12,10 +12,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.compute import base
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -41,5 +41,5 @@ class ListImageFiltersNegativeTestJSON(base.BaseV2ComputeTest):
     def test_get_nonexistent_image(self):
         # Check raises a NotFound
         nonexistent_image = data_utils.rand_uuid()
-        self.assertRaises(lib_exc.NotFound, self.client.get_image,
+        self.assertRaises(lib_exc.NotFound, self.client.show_image,
                           nonexistent_image)

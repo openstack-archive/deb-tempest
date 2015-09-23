@@ -12,9 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
-
 from tempest.api.network import base
+from tempest.common.utils import data_utils
 from tempest import exceptions
 from tempest import test
 
@@ -27,6 +26,7 @@ AGENT_MODES = (
 
 class L3AgentSchedulerTestJSON(base.BaseAdminNetworkTest):
     _agent_mode = 'legacy'
+    is_dvr_router = False
 
     """
     Tests the following operations in the Neutron API using the REST client for
@@ -72,21 +72,26 @@ class L3AgentSchedulerTestJSON(base.BaseAdminNetworkTest):
         # query and setup steps are only required if the extension is available
         # and only if the router's default type is distributed.
         if test.is_extension_enabled('dvr', 'network'):
-            is_dvr_router = cls.admin_client.show_router(
+            cls.is_dvr_router = cls.admin_client.show_router(
                 cls.router['id'])['router'].get('distributed', False)
-            if is_dvr_router:
+            if cls.is_dvr_router:
                 cls.network = cls.create_network()
-                cls.create_subnet(cls.network)
+                cls.subnet = cls.create_subnet(cls.network)
                 cls.port = cls.create_port(cls.network)
                 cls.client.add_router_interface_with_port_id(
                     cls.router['id'], cls.port['id'])
 
-    @test.attr(type='smoke')
+    @classmethod
+    def resource_cleanup(cls):
+        if cls.is_dvr_router:
+            cls.client.remove_router_interface_with_port_id(
+                cls.router['id'], cls.port['id'])
+        super(L3AgentSchedulerTestJSON, cls).resource_cleanup()
+
     @test.idempotent_id('b7ce6e89-e837-4ded-9b78-9ed3c9c6a45a')
     def test_list_routers_on_l3_agent(self):
         self.admin_client.list_routers_on_l3_agent(self.agent['id'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('9464e5e7-8625-49c3-8fd1-89c52be59d66')
     def test_add_list_remove_router_on_l3_agent(self):
         l3_agent_ids = list()

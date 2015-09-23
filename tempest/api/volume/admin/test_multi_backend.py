@@ -11,9 +11,9 @@
 #    under the License.
 
 from oslo_log import log as logging
-from tempest_lib.common.utils import data_utils
 
 from tempest.api.volume import base
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -66,12 +66,13 @@ class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
         else:
             extra_specs = {spec_key_without_prefix: backend_name_key}
         self.type = self.volume_types_client.create_volume_type(
-            type_name, extra_specs=extra_specs)
+            type_name, extra_specs=extra_specs)['volume_type']
         self.volume_type_id_list.append(self.type['id'])
 
         params = {self.name_field: vol_name, 'volume_type': type_name}
 
-        self.volume = self.admin_volume_client.create_volume(**params)
+        self.volume = self.admin_volume_client.create_volume(
+            **params)['volume']
         if with_prefix:
             self.volume_id_list_with_prefix.append(self.volume['id'])
         else:
@@ -100,14 +101,12 @@ class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
 
         super(VolumeMultiBackendV2Test, cls).resource_cleanup()
 
-    @test.attr(type='smoke')
     @test.idempotent_id('c1a41f3f-9dad-493e-9f09-3ff197d477cc')
     def test_backend_name_reporting(self):
         # get volume id which created by type without prefix
         volume_id = self.volume_id_list_without_prefix[0]
         self._test_backend_name_reporting_by_volume_id(volume_id)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('f38e647f-ab42-4a31-a2e7-ca86a6485215')
     def test_backend_name_reporting_with_prefix(self):
         # get volume id which created by type with prefix
@@ -137,7 +136,7 @@ class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
         # the multi backend feature has been enabled
         # if multi-backend is enabled: os-vol-attr:host should be like:
         # host@backend_name
-        volume = self.admin_volume_client.show_volume(volume_id)
+        volume = self.admin_volume_client.show_volume(volume_id)['volume']
 
         volume1_host = volume['os-vol-host-attr:host']
         msg = ("multi-backend reporting incorrect values for volume %s" %
@@ -148,10 +147,10 @@ class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
         # this test checks that the two volumes created at setUp don't
         # belong to the same backend (if they are, than the
         # volume backend distinction is not working properly)
-        volume = self.admin_volume_client.show_volume(volume1_id)
+        volume = self.admin_volume_client.show_volume(volume1_id)['volume']
         volume1_host = volume['os-vol-host-attr:host']
 
-        volume = self.admin_volume_client.show_volume(volume2_id)
+        volume = self.admin_volume_client.show_volume(volume2_id)['volume']
         volume2_host = volume['os-vol-host-attr:host']
 
         msg = ("volumes %s and %s were created in the same backend" %

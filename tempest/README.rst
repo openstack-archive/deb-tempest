@@ -14,7 +14,6 @@ to make this clear.
 
 | tempest/
 |    api/ - API tests
-|    cli/ - CLI tests
 |    scenario/ - complex scenario tests
 |    stress/ - stress tests
 |    thirdparty/ - 3rd party api tests
@@ -38,16 +37,6 @@ projects themselves, possibly as functional tests in their unit test
 frameworks.
 
 
-:ref:`cli_field_guide`
-----------------------
-
-CLI tests use the openstack CLI to interact with the OpenStack
-cloud. CLI testing in unit tests is somewhat difficult because unlike
-server testing, there is no access to server code to
-instantiate. Tempest seems like a logical place for this, as it
-prereqs having a running OpenStack cloud.
-
-
 :ref:`scenario_field_guide`
 ---------------------------
 
@@ -68,7 +57,7 @@ several test jobs in parallel and can run any existing test in Tempest as a
 stress job.
 
 :ref:`third_party_field_guide`
------------------------------
+------------------------------
 
 Many openstack components include 3rdparty API support. It is
 completely legitimate for Tempest to include tests of 3rdparty APIs,

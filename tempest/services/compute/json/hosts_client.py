@@ -12,16 +12,16 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import json
-import urllib
+from oslo_serialization import jsonutils as json
+from six.moves.urllib import parse as urllib
 
 from tempest.api_schema.response.compute.v2_1 import hosts as schema
 from tempest.common import service_client
 
 
-class HostsClientJSON(service_client.ServiceClient):
+class HostsClient(service_client.ServiceClient):
 
-    def list_hosts(self, params=None):
+    def list_hosts(self, **params):
         """Lists all hosts."""
 
         url = 'os-hosts'
@@ -31,15 +31,15 @@ class HostsClientJSON(service_client.ServiceClient):
         resp, body = self.get(url)
         body = json.loads(body)
         self.validate_response(schema.list_hosts, resp, body)
-        return service_client.ResponseBodyList(resp, body['hosts'])
+        return service_client.ResponseBody(resp, body)
 
-    def show_host_detail(self, hostname):
+    def show_host(self, hostname):
         """Show detail information for the host."""
 
-        resp, body = self.get("os-hosts/%s" % str(hostname))
+        resp, body = self.get("os-hosts/%s" % hostname)
         body = json.loads(body)
         self.validate_response(schema.get_host_detail, resp, body)
-        return service_client.ResponseBodyList(resp, body['host'])
+        return service_client.ResponseBody(resp, body)
 
     def update_host(self, hostname, **kwargs):
         """Update a host."""
@@ -51,7 +51,7 @@ class HostsClientJSON(service_client.ServiceClient):
         request_body.update(**kwargs)
         request_body = json.dumps(request_body)
 
-        resp, body = self.put("os-hosts/%s" % str(hostname), request_body)
+        resp, body = self.put("os-hosts/%s" % hostname, request_body)
         body = json.loads(body)
         self.validate_response(schema.update_host, resp, body)
         return service_client.ResponseBody(resp, body)
@@ -59,23 +59,23 @@ class HostsClientJSON(service_client.ServiceClient):
     def startup_host(self, hostname):
         """Startup a host."""
 
-        resp, body = self.get("os-hosts/%s/startup" % str(hostname))
+        resp, body = self.get("os-hosts/%s/startup" % hostname)
         body = json.loads(body)
         self.validate_response(schema.startup_host, resp, body)
-        return service_client.ResponseBody(resp, body['host'])
+        return service_client.ResponseBody(resp, body)
 
     def shutdown_host(self, hostname):
         """Shutdown a host."""
 
-        resp, body = self.get("os-hosts/%s/shutdown" % str(hostname))
+        resp, body = self.get("os-hosts/%s/shutdown" % hostname)
         body = json.loads(body)
         self.validate_response(schema.shutdown_host, resp, body)
-        return service_client.ResponseBody(resp, body['host'])
+        return service_client.ResponseBody(resp, body)
 
     def reboot_host(self, hostname):
         """reboot a host."""
 
-        resp, body = self.get("os-hosts/%s/reboot" % str(hostname))
+        resp, body = self.get("os-hosts/%s/reboot" % hostname)
         body = json.loads(body)
         self.validate_response(schema.reboot_host, resp, body)
-        return service_client.ResponseBody(resp, body['host'])
+        return service_client.ResponseBody(resp, body)

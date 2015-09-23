@@ -13,40 +13,38 @@
 #    under the License.
 
 
-import json
 import re
 import string
 import unicodedata
 
+from oslo_serialization import jsonutils as json
 from tempest_lib.common.utils import misc
 import testscenarios
 import testtools
 
 from tempest import clients
-from tempest.common import cred_provider
+from tempest.common import credentials
 from tempest import config
 from tempest import exceptions
 
 CONF = config.CONF
 
 
-@misc.singleton
 class ImageUtils(object):
 
     default_ssh_user = 'root'
 
-    def __init__(self):
+    def __init__(self, os):
         # Load configuration items
         self.ssh_users = json.loads(CONF.input_scenario.ssh_user_regex)
         self.non_ssh_image_pattern = \
             CONF.input_scenario.non_ssh_image_regex
         # Setup clients
-        os = clients.Manager()
         self.images_client = os.images_client
         self.flavors_client = os.flavors_client
 
     def ssh_user(self, image_id):
-        _image = self.images_client.get_image(image_id)
+        _image = self.images_client.show_image(image_id)['image']
         for regex, user in self.ssh_users:
             # First match wins
             if re.match(regex, _image['name']) is not None:
@@ -59,15 +57,15 @@ class ImageUtils(object):
                              string=str(image['name']))
 
     def is_sshable_image(self, image_id):
-        _image = self.images_client.get_image(image_id)
+        _image = self.images_client.show_image(image_id)['image']
         return self._is_sshable_image(_image)
 
     def _is_flavor_enough(self, flavor, image):
         return image['minDisk'] <= flavor['disk']
 
     def is_flavor_enough(self, flavor_id, image_id):
-        _image = self.images_client.get_image(image_id)
-        _flavor = self.flavors_client.get_flavor_details(flavor_id)
+        _image = self.images_client.show_image(image_id)['image']
+        _flavor = self.flavors_client.show_flavor(flavor_id)['flavor']
         return self._is_flavor_enough(_flavor, _image)
 
 
@@ -100,8 +98,17 @@ class InputScenarioUtils(object):
                                             digit=string.digits)
 
     def __init__(self):
-        os = clients.Manager(
-            cred_provider.get_configured_credentials('user', fill_in=False))
+        network_resources = {
+            'network': False,
+            'router': False,
+            'subnet': False,
+            'dhcp': False,
+        }
+        self.isolated_creds = credentials.get_isolated_credentials(
+            name='InputScenarioUtils',
+            identity_version=CONF.identity.auth_version,
+            network_resources=network_resources)
+        os = clients.Manager(self.isolated_creds.get_primary_creds())
         self.images_client = os.images_client
         self.flavors_client = os.flavors_client
         self.image_pattern = CONF.input_scenario.image_regex
@@ -112,6 +119,9 @@ class InputScenarioUtils(object):
         nname = ''.join(c for c in nname if c in self.validchars)
         return nname
 
+    def clear_creds(self):
+        self.isolated_creds.clear_isolated_creds()
+
     @property
     def scenario_images(self):
         """
@@ -121,7 +131,7 @@ class InputScenarioUtils(object):
             return []
         if not hasattr(self, '_scenario_images'):
             try:
-                images = self.images_client.list_images()
+                images = self.images_client.list_images()['images']
                 self._scenario_images = [
                     (self._normalize_name(i['name']), dict(image_ref=i['id']))
                     for i in images if re.search(self.image_pattern,
@@ -138,7 +148,7 @@ class InputScenarioUtils(object):
         """
         if not hasattr(self, '_scenario_flavors'):
             try:
-                flavors = self.flavors_client.list_flavors()
+                flavors = self.flavors_client.list_flavors()['flavors']
                 self._scenario_flavors = [
                     (self._normalize_name(f['name']), dict(flavor_ref=f['id']))
                     for f in flavors if re.search(self.flavor_pattern,
@@ -158,12 +168,19 @@ def load_tests_input_scenario_utils(*args):
         loader, standard_tests, pattern = args
     else:
         standard_tests, module, loader = args
+    output = None
+    scenario_utils = None
     try:
         scenario_utils = InputScenarioUtils()
         scenario_flavor = scenario_utils.scenario_flavors
         scenario_image = scenario_utils.scenario_images
-    except exceptions.InvalidConfiguration:
-        return standard_tests
+    except (exceptions.InvalidConfiguration, TypeError):
+        output = standard_tests
+    finally:
+        if scenario_utils:
+            scenario_utils.clear_creds()
+    if output is not None:
+        return output
     for test in testtools.iterate_tests(standard_tests):
         setattr(test, 'scenarios', testscenarios.multiply_scenarios(
             scenario_image,

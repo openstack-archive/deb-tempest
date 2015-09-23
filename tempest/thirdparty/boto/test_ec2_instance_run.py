@@ -14,8 +14,8 @@
 #    under the License.
 
 from oslo_log import log as logging
-from tempest_lib.common.utils import data_utils
 
+from tempest.common.utils import data_utils
 from tempest.common.utils.linux import remote_client
 from tempest import config
 from tempest import exceptions
@@ -283,7 +283,17 @@ class InstanceRunTest(boto_test.BotoTestCase):
                                          CONF.compute.ssh_user,
                                          pkey=self.keypair.material)
         text = data_utils.rand_name("Pattern text for console output")
-        resp = ssh.write_to_console(text)
+        try:
+            resp = ssh.write_to_console(text)
+        except Exception:
+            if not CONF.compute_feature_enabled.console_output:
+                LOG.debug('Console output not supported, cannot log')
+            else:
+                console_output = instance.get_console_output().output
+                LOG.debug('Console output for %s\nbody=\n%s',
+                          instance.id, console_output)
+            raise
+
         self.assertFalse(resp)
 
         def _output():
@@ -338,7 +348,7 @@ class InstanceRunTest(boto_test.BotoTestCase):
 
         instance.stop()
         address.disassociate()
-        self.assertAddressDissasociatedWait(address)
+        self.assertAddressDisassociatedWait(address)
         self.cancelResourceCleanUp(rcuk_da)
         address.release()
         self.assertAddressReleasedWait(address)

@@ -14,9 +14,11 @@
 #    under the License.
 
 from oslo_log import log as logging
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
+from tempest.common import fixed_network
+from tempest.common.utils import data_utils
+from tempest.common import waiters
 from tempest import config
 from tempest.scenario import manager
 from tempest import test
@@ -75,7 +77,8 @@ class TestLargeOpsScenario(manager.ScenarioTest):
         for server in self.servers:
             # Make sure nova list keeps working throughout the build process
             self.servers_client.list_servers()
-            self.servers_client.wait_for_server_status(server['id'], status)
+            waiters.wait_for_server_status(self.servers_client,
+                                           server['id'], status)
 
     def nova_boot(self):
         name = data_utils.rand_name('scenario-server')
@@ -84,25 +87,31 @@ class TestLargeOpsScenario(manager.ScenarioTest):
         # Since no traffic is tested, we don't need to actually add rules to
         # secgroup
         secgroup = self.security_groups_client.create_security_group(
-            'secgroup-%s' % name, 'secgroup-desc-%s' % name)
+            name='secgroup-%s' % name,
+            description='secgroup-desc-%s' % name)['security_group']
         self.addCleanupClass(self.security_groups_client.delete_security_group,
                              secgroup['id'])
-
+        create_kwargs = {
+            'min_count': CONF.scenario.large_ops_number,
+            'security_groups': [{'name': secgroup['name']}]
+            }
+        network = self.get_tenant_network()
+        create_kwargs = fixed_network.set_networks_kwarg(network,
+                                                         create_kwargs)
         self.servers_client.create_server(
             name,
             self.image,
             flavor_id,
-            min_count=CONF.scenario.large_ops_number,
-            security_groups=[{'name': secgroup['name']}])
+            **create_kwargs)
         # needed because of bug 1199788
         params = {'name': name}
-        server_list = self.servers_client.list_servers(params)
+        server_list = self.servers_client.list_servers(**params)
         self.servers = server_list['servers']
         for server in self.servers:
             # after deleting all servers - wait for all servers to clear
             # before cleanup continues
-            self.addCleanupClass(self.servers_client.
-                                 wait_for_server_termination,
+            self.addCleanupClass(waiters.wait_for_server_termination,
+                                 self.servers_client,
                                  server['id'])
         for server in self.servers:
             self.addCleanupClass(self.servers_client.delete_server,

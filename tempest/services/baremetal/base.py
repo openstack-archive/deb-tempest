@@ -11,10 +11,10 @@
 #    under the License.
 
 import functools
-import json
-import urllib
 
+from oslo_serialization import jsonutils as json
 import six
+from six.moves.urllib import parse as urllib
 
 from tempest.common import service_client
 

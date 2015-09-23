@@ -17,6 +17,7 @@ import os
 
 from oslo_concurrency import lockutils
 from oslo_log import log as logging
+import six
 import yaml
 
 from tempest import clients
@@ -30,8 +31,8 @@ LOG = logging.getLogger(__name__)
 
 
 def read_accounts_yaml(path):
-    yaml_file = open(path, 'r')
-    accounts = yaml.load(yaml_file)
+    with open(path, 'r') as yaml_file:
+        accounts = yaml.load(yaml_file)
     return accounts
 
 
@@ -75,7 +76,7 @@ class Accounts(cred_provider.CredentialProvider):
             if 'resources' in account:
                 resources = account.pop('resources')
             temp_hash = hashlib.md5()
-            temp_hash.update(str(account))
+            temp_hash.update(six.text_type(account).encode('utf-8'))
             temp_hash_key = temp_hash.hexdigest()
             hash_dict['creds'][temp_hash_key] = account
             for role in roles:
@@ -215,7 +216,7 @@ class Accounts(cred_provider.CredentialProvider):
             if ('user_domain_name' in init_attributes and 'user_domain_name'
                     not in hash_attributes):
                 # Allow for the case of domain_name populated from config
-                domain_name = CONF.identity.admin_domain_name
+                domain_name = CONF.auth.default_credentials_domain_name
                 hash_attributes['user_domain_name'] = domain_name
             if all([getattr(creds, k) == hash_attributes[k] for
                    k in init_attributes]):
@@ -244,17 +245,19 @@ class Accounts(cred_provider.CredentialProvider):
 
     def get_creds_by_roles(self, roles, force_new=False):
         roles = list(set(roles))
-        exist_creds = self.isolated_creds.get(str(roles), None)
+        exist_creds = self.isolated_creds.get(six.text_type(roles).encode(
+            'utf-8'), None)
         # The force kwarg is used to allocate an additional set of creds with
         # the same role list. The index used for the previously allocation
         # in the isolated_creds dict will be moved.
         if exist_creds and not force_new:
             return exist_creds
         elif exist_creds and force_new:
-            new_index = str(roles) + '-' + str(len(self.isolated_creds))
+            new_index = six.text_type(roles).encode('utf-8') + '-' + \
+                six.text_type(len(self.isolated_creds)).encode('utf-8')
             self.isolated_creds[new_index] = exist_creds
         net_creds = self._get_creds(roles=roles)
-        self.isolated_creds[str(roles)] = net_creds
+        self.isolated_creds[six.text_type(roles).encode('utf-8')] = net_creds
         return net_creds
 
     def clear_isolated_creds(self):
@@ -283,8 +286,11 @@ class Accounts(cred_provider.CredentialProvider):
         net_clients = clients.Manager(credentials=credential)
         compute_network_client = net_clients.networks_client
         net_name = self.hash_dict['networks'].get(hash, None)
-        network = fixed_network.get_network_from_name(
-            net_name, compute_network_client)
+        try:
+            network = fixed_network.get_network_from_name(
+                net_name, compute_network_client)
+        except exceptions.InvalidConfiguration:
+            network = {}
         net_creds.set_resources(network=network)
         return net_creds
 

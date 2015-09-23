@@ -10,13 +10,21 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import json
+from oslo_serialization import jsonutils as json
 from tempest_lib import exceptions as lib_exc
 
 from tempest.common import service_client
 
 
-class IdentityClientJSON(service_client.ServiceClient):
+class IdentityClient(service_client.ServiceClient):
+    api_version = "v2.0"
+
+    def get_api_description(self):
+        """Retrieves info about the v2.0 Identity API"""
+        url = ''
+        resp, body = self.get(url)
+        self.expected_success([200, 203], resp.status)
+        return service_client.ResponseBody(resp, self._parse_resp(body))
 
     def has_admin_extensions(self):
         """
@@ -48,7 +56,7 @@ class IdentityClientJSON(service_client.ServiceClient):
         resp, body = self.get('OS-KSADM/roles/%s' % role_id)
         self.expected_success(200, resp.status)
         body = json.loads(body)
-        return service_client.ResponseBody(resp, body['role'])
+        return service_client.ResponseBody(resp, body)
 
     def create_tenant(self, name, **kwargs):
         """
@@ -117,10 +125,10 @@ class IdentityClientJSON(service_client.ServiceClient):
         resp, body = self.get('tenants')
         self.expected_success(200, resp.status)
         body = json.loads(body)
-        return service_client.ResponseBodyList(resp, body['tenants'])
+        return service_client.ResponseBody(resp, body)
 
     def get_tenant_by_name(self, tenant_name):
-        tenants = self.list_tenants()
+        tenants = self.list_tenants()['tenants']
         for tenant in tenants:
             if tenant['name'] == tenant_name:
                 return tenant
@@ -251,6 +259,33 @@ class IdentityClientJSON(service_client.ServiceClient):
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp, body)
 
+    def create_endpoint(self, service_id, region_id, **kwargs):
+        """Create an endpoint for service."""
+        post_body = {
+            'service_id': service_id,
+            'region': region_id,
+            'publicurl': kwargs.get('publicurl'),
+            'adminurl': kwargs.get('adminurl'),
+            'internalurl': kwargs.get('internalurl')
+        }
+        post_body = json.dumps({'endpoint': post_body})
+        resp, body = self.post('/endpoints', post_body)
+        self.expected_success(200, resp.status)
+        return service_client.ResponseBody(resp, self._parse_resp(body))
+
+    def list_endpoints(self):
+        """List Endpoints - Returns Endpoints."""
+        resp, body = self.get('/endpoints')
+        self.expected_success(200, resp.status)
+        return service_client.ResponseBodyList(resp, self._parse_resp(body))
+
+    def delete_endpoint(self, endpoint_id):
+        """Delete an endpoint."""
+        url = '/endpoints/%s' % endpoint_id
+        resp, body = self.delete(url)
+        self.expected_success(204, resp.status)
+        return service_client.ResponseBody(resp, body)
+
     def update_user_password(self, user_id, new_pass):
         """Update User Password."""
         put_body = {
@@ -259,6 +294,17 @@ class IdentityClientJSON(service_client.ServiceClient):
         }
         put_body = json.dumps({'user': put_body})
         resp, body = self.put('users/%s/OS-KSADM/password' % user_id, put_body)
+        self.expected_success(200, resp.status)
+        return service_client.ResponseBody(resp, self._parse_resp(body))
+
+    def update_user_own_password(self, user_id, new_pass, old_pass):
+        """User updates own password"""
+        patch_body = {
+            "password": new_pass,
+            "original_password": old_pass
+        }
+        patch_body = json.dumps({'user': patch_body})
+        resp, body = self.patch('OS-KSCRUD/users/%s' % user_id, patch_body)
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, self._parse_resp(body))
 

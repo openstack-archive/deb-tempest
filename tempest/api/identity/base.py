@@ -14,10 +14,10 @@
 #    under the License.
 
 from oslo_log import log as logging
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.common import cred_provider
+from tempest.common.utils import data_utils
 from tempest import config
 import tempest.test
 
@@ -48,8 +48,12 @@ class BaseIdentityTest(tempest.test.BaseTestCase):
     def get_tenant_by_name(cls, name):
         try:
             tenants = cls.client.list_tenants()
+            # TODO(jswarren): always retrieve 'tenants' value
+            # once both clients return full response objects
+            if 'tenants' in tenants:
+                tenants = tenants['tenants']
         except AttributeError:
-            tenants = cls.client.list_projects()
+            tenants = cls.client.list_projects()['projects']
         tenant = [t for t in tenants if t['name'] == name]
         if len(tenant) > 0:
             return tenant[0]
@@ -66,21 +70,14 @@ class BaseIdentityV2Test(BaseIdentityTest):
 
     credentials = ['primary']
 
-    @classmethod
-    def setup_credentials(cls):
-        super(BaseIdentityV2Test, cls).setup_credentials()
-        cls.os = cls.get_client_manager(identity_version='v2')
-
-    @classmethod
-    def skip_checks(cls):
-        super(BaseIdentityV2Test, cls).skip_checks()
-        if not CONF.identity_feature_enabled.api_v2:
-            raise cls.skipException("Identity api v2 is not enabled")
+    # identity v2 tests should obtain tokens and create accounts via v2
+    # regardless of the configured CONF.identity.auth_version
+    identity_version = 'v2'
 
     @classmethod
     def setup_clients(cls):
         super(BaseIdentityV2Test, cls).setup_clients()
-        cls.non_admin_client = cls.os.identity_client
+        cls.non_admin_client = cls.os.identity_public_client
         cls.non_admin_token_client = cls.os.token_client
 
     @classmethod
@@ -94,12 +91,13 @@ class BaseIdentityV2Test(BaseIdentityTest):
 
 class BaseIdentityV2AdminTest(BaseIdentityV2Test):
 
-    credentials = ['admin']
+    credentials = ['primary', 'admin']
 
     @classmethod
     def setup_clients(cls):
         super(BaseIdentityV2AdminTest, cls).setup_clients()
         cls.client = cls.os_adm.identity_client
+        cls.non_admin_client = cls.os.identity_client
         cls.token_client = cls.os_adm.token_client
 
     @classmethod
@@ -117,16 +115,9 @@ class BaseIdentityV3Test(BaseIdentityTest):
 
     credentials = ['primary']
 
-    @classmethod
-    def setup_credentials(cls):
-        super(BaseIdentityV3Test, cls).setup_credentials()
-        cls.os = cls.get_client_manager(identity_version='v3')
-
-    @classmethod
-    def skip_checks(cls):
-        super(BaseIdentityV3Test, cls).skip_checks()
-        if not CONF.identity_feature_enabled.api_v3:
-            raise cls.skipException("Identity api v3 is not enabled")
+    # identity v3 tests should obtain tokens and create accounts via v3
+    # regardless of the configured CONF.identity.auth_version
+    identity_version = 'v3'
 
     @classmethod
     def setup_clients(cls):
@@ -146,7 +137,7 @@ class BaseIdentityV3Test(BaseIdentityTest):
 
 class BaseIdentityV3AdminTest(BaseIdentityV3Test):
 
-    credentials = ['admin']
+    credentials = ['primary', 'admin']
 
     @classmethod
     def setup_clients(cls):
@@ -167,24 +158,30 @@ class BaseIdentityV3AdminTest(BaseIdentityV3Test):
 
     @classmethod
     def get_user_by_name(cls, name):
-        users = cls.client.get_users()
+        users = cls.client.get_users()['users']
         user = [u for u in users if u['name'] == name]
         if len(user) > 0:
             return user[0]
 
     @classmethod
     def get_tenant_by_name(cls, name):
-        tenants = cls.client.list_projects()
+        tenants = cls.client.list_projects()['projects']
         tenant = [t for t in tenants if t['name'] == name]
         if len(tenant) > 0:
             return tenant[0]
 
     @classmethod
     def get_role_by_name(cls, name):
-        roles = cls.client.list_roles()
+        roles = cls.client.list_roles()['roles']
         role = [r for r in roles if r['name'] == name]
         if len(role) > 0:
             return role[0]
+
+    def delete_domain(self, domain_id):
+        # NOTE(mpavlase) It is necessary to disable the domain before deleting
+        # otherwise it raises Forbidden exception
+        self.client.update_domain(domain_id, enabled=False)
+        self.client.delete_domain(domain_id)
 
 
 class DataGenerator(object):
@@ -245,7 +242,7 @@ class DataGenerator(object):
                 self.test_user,
                 password=self.test_password,
                 project_id=self.project['id'],
-                email=self.test_email)
+                email=self.test_email)['user']
             self.v3_users.append(self.v3_user)
 
         def setup_test_project(self):
@@ -254,13 +251,13 @@ class DataGenerator(object):
             self.test_description = data_utils.rand_name('desc')
             self.project = self.client.create_project(
                 name=self.test_project,
-                description=self.test_description)
+                description=self.test_description)['project']
             self.projects.append(self.project)
 
         def setup_test_v3_role(self):
             """Set up a test v3 role."""
             self.test_role = data_utils.rand_name('role')
-            self.v3_role = self.client.create_role(self.test_role)
+            self.v3_role = self.client.create_role(self.test_role)['role']
             self.v3_roles.append(self.v3_role)
 
         def setup_test_domain(self):
@@ -269,7 +266,7 @@ class DataGenerator(object):
             self.test_description = data_utils.rand_name('desc')
             self.domain = self.client.create_domain(
                 name=self.test_domain,
-                description=self.test_description)
+                description=self.test_description)['domain']
             self.domains.append(self.domain)
 
         @staticmethod

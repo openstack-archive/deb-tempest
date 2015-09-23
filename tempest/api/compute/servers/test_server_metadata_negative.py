@@ -13,10 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.compute import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -137,7 +137,7 @@ class ServerMetadataNegativeTestJSON(base.BaseV2ComputeTest):
         # A 403 Forbidden or 413 Overlimit (old behaviour) exception
         # will be raised while exceeding metadata items limit for
         # tenant.
-        quota_set = self.quotas.get_quota_set(self.tenant_id)
+        quota_set = self.quotas.show_quota_set(self.tenant_id)['quota_set']
         quota_metadata = quota_set['metadata_items']
         if quota_metadata == -1:
             raise self.skipException("No limit for metadata_items")

@@ -13,10 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib.common.utils import data_utils
 from testtools import matchers
 
 from tempest.api.identity import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -40,7 +40,6 @@ class UsersTestJSON(base.BaseIdentityV2AdminTest):
         self.data.users.append(user)
         self.assertEqual(self.alt_user, user['name'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('89d9fdb8-15c2-4304-a429-48715d0af33d')
     def test_create_user_with_enabled(self):
         # Create a user with enabled : False
@@ -51,10 +50,9 @@ class UsersTestJSON(base.BaseIdentityV2AdminTest):
                                        self.alt_email, enabled=False)
         self.data.users.append(user)
         self.assertEqual(name, user['name'])
-        self.assertEqual('false', str(user['enabled']).lower())
+        self.assertEqual(False, user['enabled'])
         self.assertEqual(self.alt_email, user['email'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('39d05857-e8a5-4ed4-ba83-0b52d3ab97ee')
     def test_update_user(self):
         # Test case to check if updating of user attributes is successful.
@@ -73,15 +71,14 @@ class UsersTestJSON(base.BaseIdentityV2AdminTest):
                                               enabled=False)
         self.assertEqual(u_name2, update_user['name'])
         self.assertEqual(u_email2, update_user['email'])
-        self.assertEqual('false', str(update_user['enabled']).lower())
+        self.assertEqual(False, update_user['enabled'])
         # GET by id after updating
         updated_user = self.client.get_user(user['id'])
         # Assert response body of GET after updating
         self.assertEqual(u_name2, updated_user['name'])
         self.assertEqual(u_email2, updated_user['email'])
-        self.assertEqual('false', str(updated_user['enabled']).lower())
+        self.assertEqual(False, update_user['enabled'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('29ed26f4-a74e-4425-9a85-fdb49fa269d2')
     def test_delete_user(self):
         # Delete a user
@@ -92,7 +89,6 @@ class UsersTestJSON(base.BaseIdentityV2AdminTest):
                                        self.alt_email)
         self.client.delete_user(user['id'])
 
-    @test.attr(type='smoke')
     @test.idempotent_id('aca696c3-d645-4f45-b728-63646045beb1')
     def test_user_authentication(self):
         # Valid user's token is authenticated
@@ -121,7 +117,6 @@ class UsersTestJSON(base.BaseIdentityV2AdminTest):
                                self.data.test_tenant)
         self.client.auth_provider.clear_auth()
 
-    @test.attr(type='smoke')
     @test.idempotent_id('a149c02e-e5e0-4b89-809e-7e8faf33ccda')
     def test_get_users(self):
         # Get a list of users and find the test user
@@ -196,7 +191,6 @@ class UsersTestJSON(base.BaseIdentityV2AdminTest):
                          "Failed to find user %s in fetched list" %
                          ', '.join(m_user for m_user in missing_users))
 
-    @test.attr(type='smoke')
     @test.idempotent_id('1aeb25ac-6ec5-4d8b-97cb-7ac3567a989f')
     def test_update_user_password(self):
         # Test case to check if updating of user password is successful.

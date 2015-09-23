@@ -14,8 +14,8 @@
 # limitations under the License.
 
 from oslo_log import log as logging
-from tempest_lib.common.utils import data_utils
 
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -112,20 +112,6 @@ class BaseMessagingTest(test.BaseTestCase):
     def list_messages(cls, queue_name):
         """Wrapper utility that lists the messages in a queue."""
         resp, body = cls.client.list_messages(queue_name)
-
-        return resp, body
-
-    @classmethod
-    def get_single_message(cls, message_uri):
-        """Wrapper utility that gets a single message."""
-        resp, body = cls.client.show_single_message(message_uri)
-
-        return resp, body
-
-    @classmethod
-    def get_multiple_messages(cls, message_uri):
-        """Wrapper utility that gets multiple messages."""
-        resp, body = cls.client.show_multiple_messages(message_uri)
 
         return resp, body
 

@@ -12,14 +12,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import urllib
-
 from oslo_serialization import jsonutils
+from six.moves.urllib import parse as urllib
 
 from tempest.common import service_client
 
 
-class BaseVolumeQuotasClientJSON(service_client.ServiceClient):
+class BaseVolumeQuotasClient(service_client.ServiceClient):
     """
     Client class to send CRUD Volume Quotas API requests to a Cinder endpoint
     """
@@ -76,7 +75,7 @@ class BaseVolumeQuotasClientJSON(service_client.ServiceClient):
         return service_client.ResponseBody(resp, body)
 
 
-class VolumeQuotasClientJSON(BaseVolumeQuotasClientJSON):
+class VolumeQuotasClient(BaseVolumeQuotasClient):
     """
     Client class to send CRUD Volume Type API V1 requests to a Cinder endpoint
     """

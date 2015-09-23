@@ -18,13 +18,15 @@ import subprocess
 
 import netaddr
 from oslo_log import log
+from oslo_serialization import jsonutils as json
 import six
-from tempest_lib.common.utils import data_utils
+from tempest_lib.common.utils import misc as misc_utils
 from tempest_lib import exceptions as lib_exc
 
-from tempest import clients
 from tempest.common import fixed_network
+from tempest.common.utils import data_utils
 from tempest.common.utils.linux import remote_client
+from tempest.common import waiters
 from tempest import config
 from tempest import exceptions
 from tempest.services.network import resources as net_resources
@@ -53,6 +55,8 @@ class ScenarioTest(tempest.test.BaseTestCase):
         cls.keypairs_client = cls.manager.keypairs_client
         # Nova security groups client
         cls.security_groups_client = cls.manager.security_groups_client
+        cls.security_group_rules_client = (
+            cls.manager.security_group_rules_client)
         cls.servers_client = cls.manager.servers_client
         cls.volumes_client = cls.manager.volumes_client
         cls.snapshots_client = cls.manager.snapshots_client
@@ -93,10 +97,11 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
     def addCleanup_with_wait(self, waiter_callable, thing_id, thing_id_param,
                              cleanup_callable, cleanup_args=None,
-                             cleanup_kwargs=None, ignore_error=True):
+                             cleanup_kwargs=None, waiter_client=None):
         """Adds wait for async resource deletion at the end of cleanups
 
         @param waiter_callable: callable to wait for the resource to delete
+            with the following waiter_client if specified.
         @param thing_id: the id of the resource to be cleaned-up
         @param thing_id_param: the name of the id param in the waiter
         @param cleanup_callable: method to load pass to self.addCleanup with
@@ -112,6 +117,8 @@ class ScenarioTest(tempest.test.BaseTestCase):
             'waiter_callable': waiter_callable,
             thing_id_param: thing_id
         }
+        if waiter_client:
+            wait_dict['client'] = waiter_client
         self.cleanup_waits.append(wait_dict)
 
     def _wait_for_cleanups(self):
@@ -137,9 +144,9 @@ class ScenarioTest(tempest.test.BaseTestCase):
             client = self.keypairs_client
         name = data_utils.rand_name(self.__class__.__name__)
         # We don't need to create a keypair by pubkey in scenario
-        body = client.create_keypair(name)
+        body = client.create_keypair(name=name)
         self.addCleanup(client.delete_keypair, name)
-        return body
+        return body['keypair']
 
     def create_server(self, name=None, image=None, flavor=None,
                       wait_on_boot=True, wait_on_delete=True,
@@ -169,20 +176,23 @@ class ScenarioTest(tempest.test.BaseTestCase):
         server = self.servers_client.create_server(name, image, flavor,
                                                    **create_kwargs)
         if wait_on_delete:
-            self.addCleanup(self.servers_client.wait_for_server_termination,
+            self.addCleanup(waiters.wait_for_server_termination,
+                            self.servers_client,
                             server['id'])
         self.addCleanup_with_wait(
-            waiter_callable=self.servers_client.wait_for_server_termination,
+            waiter_callable=waiters.wait_for_server_termination,
             thing_id=server['id'], thing_id_param='server_id',
             cleanup_callable=self.delete_wrapper,
-            cleanup_args=[self.servers_client.delete_server, server['id']])
+            cleanup_args=[self.servers_client.delete_server, server['id']],
+            waiter_client=self.servers_client)
         if wait_on_boot:
-            self.servers_client.wait_for_server_status(server_id=server['id'],
-                                                       status='ACTIVE')
+            waiters.wait_for_server_status(self.servers_client,
+                                           server_id=server['id'],
+                                           status='ACTIVE')
         # The instance retrieved on creation is missing network
         # details, necessitating retrieval after it becomes active to
         # ensure correct details.
-        server = self.servers_client.get_server(server['id'])
+        server = self.servers_client.show_server(server['id'])
         self.assertEqual(server['name'], name)
         return server
 
@@ -192,7 +202,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
             name = data_utils.rand_name(self.__class__.__name__)
         volume = self.volumes_client.create_volume(
             size=size, display_name=name, snapshot_id=snapshot_id,
-            imageRef=imageRef, volume_type=volume_type)
+            imageRef=imageRef, volume_type=volume_type)['volume']
 
         if wait_on_delete:
             self.addCleanup(self.volumes_client.wait_for_resource_deletion,
@@ -210,13 +220,14 @@ class ScenarioTest(tempest.test.BaseTestCase):
         self.volumes_client.wait_for_volume_status(volume['id'], 'available')
         # The volume retrieved on creation has a non-up-to-date status.
         # Retrieval after it becomes active ensures correct details.
-        volume = self.volumes_client.show_volume(volume['id'])
+        volume = self.volumes_client.show_volume(volume['id'])['volume']
         return volume
 
     def _create_loginable_secgroup_rule(self, secgroup_id=None):
         _client = self.security_groups_client
+        _client_rules = self.security_group_rules_client
         if secgroup_id is None:
-            sgs = _client.list_security_groups()
+            sgs = _client.list_security_groups()['security_groups']
             for sg in sgs:
                 if sg['name'] == 'default':
                     secgroup_id = sg['id']
@@ -228,14 +239,14 @@ class ScenarioTest(tempest.test.BaseTestCase):
         rulesets = [
             {
                 # ssh
-                'ip_proto': 'tcp',
+                'ip_protocol': 'tcp',
                 'from_port': 22,
                 'to_port': 22,
                 'cidr': '0.0.0.0/0',
             },
             {
                 # ping
-                'ip_proto': 'icmp',
+                'ip_protocol': 'icmp',
                 'from_port': -1,
                 'to_port': -1,
                 'cidr': '0.0.0.0/0',
@@ -243,10 +254,10 @@ class ScenarioTest(tempest.test.BaseTestCase):
         ]
         rules = list()
         for ruleset in rulesets:
-            sg_rule = _client.create_security_group_rule(secgroup_id,
-                                                         **ruleset)
+            sg_rule = _client_rules.create_security_group_rule(
+                parent_group_id=secgroup_id, **ruleset)['security_group_rule']
             self.addCleanup(self.delete_wrapper,
-                            _client.delete_security_group_rule,
+                            _client_rules.delete_security_group_rule,
                             sg_rule['id'])
             rules.append(sg_rule)
         return rules
@@ -256,7 +267,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
         sg_name = data_utils.rand_name(self.__class__.__name__)
         sg_desc = sg_name + " description"
         secgroup = self.security_groups_client.create_security_group(
-            sg_name, sg_desc)
+            name=sg_name, description=sg_desc)['security_group']
         self.assertEqual(secgroup['name'], sg_name)
         self.assertEqual(secgroup['description'], sg_desc)
         self.addCleanup(self.delete_wrapper,
@@ -308,9 +319,14 @@ class ScenarioTest(tempest.test.BaseTestCase):
                                                   password=password)
         try:
             linux_client.validate_authentication()
-        except Exception:
-            LOG.exception('Initializing SSH connection to %s failed' % ip)
-            # If we don't explicitely set for which servers we want to
+        except Exception as e:
+            message = ('Initializing SSH connection to %(ip)s failed. '
+                       'Error: %(error)s' % {'ip': ip, 'error': e})
+            caller = misc_utils.find_test_caller()
+            if caller:
+                message = '(%s) %s' % (caller, message)
+            LOG.exception(message)
+            # If we don't explicitly set for which servers we want to
             # log the console output then all the servers will be logged.
             # See the definition of _log_console_output()
             self._log_console_output(log_console_of_servers)
@@ -318,7 +334,8 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
         return linux_client
 
-    def _image_create(self, name, fmt, path, properties=None):
+    def _image_create(self, name, fmt, path,
+                      disk_format=None, properties=None):
         if properties is None:
             properties = {}
         name = data_utils.rand_name('%s-' % name)
@@ -327,11 +344,11 @@ class ScenarioTest(tempest.test.BaseTestCase):
         params = {
             'name': name,
             'container_format': fmt,
-            'disk_format': fmt,
+            'disk_format': disk_format or fmt,
             'is_public': 'False',
         }
-        params.update(properties)
-        image = self.image_client.create_image(**params)
+        params['properties'] = properties
+        image = self.image_client.create_image(**params)['image']
         self.addCleanup(self.image_client.delete_image, image['id'])
         self.assertEqual("queued", image['status'])
         self.image_client.update_image(image['id'], data=image_file)
@@ -344,23 +361,22 @@ class ScenarioTest(tempest.test.BaseTestCase):
         ami_img_path = CONF.scenario.img_dir + "/" + CONF.scenario.ami_img_file
         img_container_format = CONF.scenario.img_container_format
         img_disk_format = CONF.scenario.img_disk_format
+        img_properties = CONF.scenario.img_properties
         LOG.debug("paths: img: %s, container_fomat: %s, disk_format: %s, "
-                  "ami: %s, ari: %s, aki: %s" %
+                  "properties: %s, ami: %s, ari: %s, aki: %s" %
                   (img_path, img_container_format, img_disk_format,
-                   ami_img_path, ari_img_path, aki_img_path))
+                   img_properties, ami_img_path, ari_img_path, aki_img_path))
         try:
             self.image = self._image_create('scenario-img',
                                             img_container_format,
                                             img_path,
-                                            properties={'disk_format':
-                                                        img_disk_format})
+                                            disk_format=img_disk_format,
+                                            properties=img_properties)
         except IOError:
             LOG.debug("A qcow2 image was not found. Try to get a uec image.")
             kernel = self._image_create('scenario-aki', 'aki', aki_img_path)
             ramdisk = self._image_create('scenario-ari', 'ari', ari_img_path)
-            properties = {
-                'properties': {'kernel_id': kernel, 'ramdisk_id': ramdisk}
-            }
+            properties = {'kernel_id': kernel, 'ramdisk_id': ramdisk}
             self.image = self._image_create('scenario-ami', 'ami',
                                             path=ami_img_path,
                                             properties=properties)
@@ -381,7 +397,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
     def _log_net_info(self, exc):
         # network debug is called as part of ssh init
-        if not isinstance(exc, exceptions.SSHTimeout):
+        if not isinstance(exc, lib_exc.SSHTimeout):
             LOG.debug('Network information on a devstack host')
 
     def create_server_snapshot(self, server, name=None):
@@ -392,7 +408,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
         if name is None:
             name = data_utils.rand_name('scenario-snapshot')
         LOG.debug("Creating a snapshot image for server: %s", server['name'])
-        image = _images_client.create_image(server['id'], name)
+        image = _images_client.create_image(server['id'], name=name)
         image_id = image.response['location'].split('images/')[1]
         _image_client.wait_for_image_status(image_id, 'active')
         self.addCleanup_with_wait(
@@ -401,6 +417,21 @@ class ScenarioTest(tempest.test.BaseTestCase):
             cleanup_callable=self.delete_wrapper,
             cleanup_args=[_image_client.delete_image, image_id])
         snapshot_image = _image_client.get_image_meta(image_id)
+
+        bdm = snapshot_image.get('properties', {}).get('block_device_mapping')
+        if bdm:
+            bdm = json.loads(bdm)
+            if bdm and 'snapshot_id' in bdm[0]:
+                snapshot_id = bdm[0]['snapshot_id']
+                self.addCleanup(
+                    self.snapshots_client.wait_for_resource_deletion,
+                    snapshot_id)
+                self.addCleanup(
+                    self.delete_wrapper, self.snapshots_client.delete_snapshot,
+                    snapshot_id)
+                self.snapshots_client.wait_for_snapshot_status(snapshot_id,
+                                                               'available')
+
         image_name = snapshot_image['name']
         self.assertEqual(name, image_name)
         LOG.debug("Created snapshot image %s for server %s",
@@ -408,20 +439,20 @@ class ScenarioTest(tempest.test.BaseTestCase):
         return snapshot_image
 
     def nova_volume_attach(self):
-        # TODO(andreaf) Device should be here CONF.compute.volume_device_name
         volume = self.servers_client.attach_volume(
-            self.server['id'], self.volume['id'], '/dev/vdb')
+            self.server['id'], volumeId=self.volume['id'], device='/dev/%s'
+            % CONF.compute.volume_device_name)
         self.assertEqual(self.volume['id'], volume['id'])
         self.volumes_client.wait_for_volume_status(volume['id'], 'in-use')
         # Refresh the volume after the attachment
-        self.volume = self.volumes_client.show_volume(volume['id'])
+        self.volume = self.volumes_client.show_volume(volume['id'])['volume']
 
     def nova_volume_detach(self):
         self.servers_client.detach_volume(self.server['id'], self.volume['id'])
         self.volumes_client.wait_for_volume_status(self.volume['id'],
                                                    'available')
 
-        volume = self.volumes_client.show_volume(self.volume['id'])
+        volume = self.volumes_client.show_volume(self.volume['id'])['volume']
         self.assertEqual('available', volume['status'])
 
     def rebuild_server(self, server_id, image=None,
@@ -434,11 +465,13 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
         LOG.debug("Rebuilding server (id: %s, image: %s, preserve eph: %s)",
                   server_id, image, preserve_ephemeral)
-        self.servers_client.rebuild(server_id=server_id, image_ref=image,
-                                    preserve_ephemeral=preserve_ephemeral,
-                                    **rebuild_kwargs)
+        self.servers_client.rebuild_server(
+            server_id=server_id, image_ref=image,
+            preserve_ephemeral=preserve_ephemeral,
+            **rebuild_kwargs)
         if wait:
-            self.servers_client.wait_for_server_status(server_id, 'ACTIVE')
+            waiters.wait_for_server_status(self.servers_client,
+                                           server_id, 'ACTIVE')
 
     def ping_ip_address(self, ip_address, should_succeed=True,
                         ping_timeout=None):
@@ -505,7 +538,8 @@ class ScenarioTest(tempest.test.BaseTestCase):
         Nova clients
         """
 
-        floating_ip = self.floating_ips_client.create_floating_ip(pool_name)
+        floating_ip = (self.floating_ips_client.create_floating_ip(pool_name)
+                       ['floating_ip'])
         self.addCleanup(self.delete_wrapper,
                         self.floating_ips_client.delete_floating_ip,
                         floating_ip['id'])
@@ -554,27 +588,33 @@ class NetworkScenarioTest(ScenarioTest):
 
     def _list_networks(self, *args, **kwargs):
         """List networks using admin creds """
-        return self._admin_lister('networks')(*args, **kwargs)
+        networks_list = self.admin_manager.network_client.list_networks(
+            *args, **kwargs)
+        return networks_list['networks']
 
     def _list_subnets(self, *args, **kwargs):
         """List subnets using admin creds """
-        return self._admin_lister('subnets')(*args, **kwargs)
+        subnets_list = self.admin_manager.network_client.list_subnets(
+            *args, **kwargs)
+        return subnets_list['subnets']
 
     def _list_routers(self, *args, **kwargs):
         """List routers using admin creds """
-        return self._admin_lister('routers')(*args, **kwargs)
+        routers_list = self.admin_manager.network_client.list_routers(
+            *args, **kwargs)
+        return routers_list['routers']
 
     def _list_ports(self, *args, **kwargs):
         """List ports using admin creds """
-        return self._admin_lister('ports')(*args, **kwargs)
+        ports_list = self.admin_manager.network_client.list_ports(
+            *args, **kwargs)
+        return ports_list['ports']
 
-    def _admin_lister(self, resource_type):
-        def temp(*args, **kwargs):
-            temp_method = self.admin_manager.network_client.__getattr__(
-                'list_%s' % resource_type)
-            resource_list = temp_method(*args, **kwargs)
-            return resource_list[resource_type]
-        return temp
+    def _list_agents(self, *args, **kwargs):
+        """List agents using admin creds """
+        agents_list = self.admin_manager.network_client.list_agents(
+            *args, **kwargs)
+        return agents_list['agents']
 
     def _create_subnet(self, network, client=None, namestart='subnet-smoke',
                        **kwargs):
@@ -652,14 +692,18 @@ class NetworkScenarioTest(ScenarioTest):
     def _get_server_port_id_and_ip4(self, server, ip_addr=None):
         ports = self._list_ports(device_id=server['id'],
                                  fixed_ip=ip_addr)
-        self.assertEqual(len(ports), 1,
-                         "Unable to determine which port to target.")
         # it might happen here that this port has more then one ip address
         # as in case of dual stack- when this port is created on 2 subnets
-        for ip46 in ports[0]['fixed_ips']:
-            ip = ip46['ip_address']
-            if netaddr.valid_ipv4(ip):
-                return ports[0]['id'], ip
+        port_map = [(p["id"], fxip["ip_address"])
+                    for p in ports
+                    for fxip in p["fixed_ips"]
+                    if netaddr.valid_ipv4(fxip["ip_address"])]
+
+        self.assertEqual(len(port_map), 1,
+                         "Found multiple IPv4 addresses: %s. "
+                         "Unable to determine which port to target."
+                         % port_map)
+        return port_map[0]
 
     def _get_network_by_name(self, network_name):
         net = self._list_networks(name=network_name)
@@ -741,7 +785,7 @@ class NetworkScenarioTest(ScenarioTest):
         # The target login is assumed to have been configured for
         # key-based authentication by cloud-init.
         try:
-            for net_name, ip_addresses in server['addresses'].iteritems():
+            for net_name, ip_addresses in six.iteritems(server['addresses']):
                 for ip_address in ip_addresses:
                     self.check_vm_connectivity(ip_address['addr'],
                                                username,
@@ -766,7 +810,7 @@ class NetworkScenarioTest(ScenarioTest):
         def ping_remote():
             try:
                 source.ping_host(dest)
-            except exceptions.SSHExecCommandFailed:
+            except lib_exc.SSHExecCommandFailed:
                 LOG.warn('Failed to ping IP: %s via a ssh connection from: %s.'
                          % (dest, source.ssh_client.host))
                 return not should_succeed
@@ -929,41 +973,6 @@ class NetworkScenarioTest(ScenarioTest):
 
         return rules
 
-    def _create_pool(self, lb_method, protocol, subnet_id):
-        """Wrapper utility that returns a test pool."""
-        client = self.network_client
-        name = data_utils.rand_name('pool')
-        resp_pool = client.create_pool(protocol=protocol, name=name,
-                                       subnet_id=subnet_id,
-                                       lb_method=lb_method)
-        pool = net_resources.DeletablePool(client=client, **resp_pool['pool'])
-        self.assertEqual(pool['name'], name)
-        self.addCleanup(self.delete_wrapper, pool.delete)
-        return pool
-
-    def _create_member(self, address, protocol_port, pool_id):
-        """Wrapper utility that returns a test member."""
-        client = self.network_client
-        resp_member = client.create_member(protocol_port=protocol_port,
-                                           pool_id=pool_id,
-                                           address=address)
-        member = net_resources.DeletableMember(client=client,
-                                               **resp_member['member'])
-        self.addCleanup(self.delete_wrapper, member.delete)
-        return member
-
-    def _create_vip(self, protocol, protocol_port, subnet_id, pool_id):
-        """Wrapper utility that returns a test vip."""
-        client = self.network_client
-        name = data_utils.rand_name('vip')
-        resp_vip = client.create_vip(protocol=protocol, name=name,
-                                     subnet_id=subnet_id, pool_id=pool_id,
-                                     protocol_port=protocol_port)
-        vip = net_resources.DeletableVip(client=client, **resp_vip['vip'])
-        self.assertEqual(vip['name'], name)
-        self.addCleanup(self.delete_wrapper, vip.delete)
-        return vip
-
     def _ssh_to_server(self, server, private_key):
         ssh_login = CONF.compute.image_ssh_user
         return self.get_remote_client(server,
@@ -986,7 +995,7 @@ class NetworkScenarioTest(ScenarioTest):
         router_id = CONF.network.public_router_id
         network_id = CONF.network.public_network_id
         if router_id:
-            resp, body = client.show_router(router_id)
+            body = client.show_router(router_id)
             return net_resources.AttributeDict(**body['router'])
         elif network_id:
             router = self._create_router(client, tenant_id)
@@ -1107,6 +1116,7 @@ class NetworkScenarioTest(ScenarioTest):
                 ports.append({'port': port.id})
             if ports:
                 create_kwargs['networks'] = ports
+            self.ports = ports
 
         return super(NetworkScenarioTest, self).create_server(
             name=name, image=image, flavor=flavor,
@@ -1256,10 +1266,10 @@ class BaremetalScenarioTest(ScenarioTest):
                                      BaremetalProvisionStates.ACTIVE,
                                      timeout=CONF.baremetal.active_timeout)
 
-        self.servers_client.wait_for_server_status(self.instance['id'],
-                                                   'ACTIVE')
+        waiters.wait_for_server_status(self.servers_client,
+                                       self.instance['id'], 'ACTIVE')
         self.node = self.get_node(instance_id=self.instance['id'])
-        self.instance = self.servers_client.get_server(self.instance['id'])
+        self.instance = self.servers_client.show_server(self.instance['id'])
 
     def terminate_instance(self):
         self.servers_client.delete_server(self.instance['id'])
@@ -1301,7 +1311,7 @@ class EncryptionScenarioTest(ScenarioTest):
         randomized_name = data_utils.rand_name('scenario-type-' + name)
         LOG.debug("Creating a volume type: %s", randomized_name)
         body = client.create_volume_type(
-            randomized_name)
+            randomized_name)['volume_type']
         self.assertIn('id', body)
         self.addCleanup(client.delete_volume_type, body['id'])
         return body
@@ -1317,7 +1327,7 @@ class EncryptionScenarioTest(ScenarioTest):
         LOG.debug("Creating an encryption type for volume type: %s", type_id)
         client.create_encryption_type(
             type_id, provider=provider, key_size=key_size, cipher=cipher,
-            control_location=control_location)
+            control_location=control_location)['encryption']
 
 
 class SwiftScenarioTest(ScenarioTest):
@@ -1341,15 +1351,7 @@ class SwiftScenarioTest(ScenarioTest):
         cls.set_network_resources()
         super(SwiftScenarioTest, cls).setup_credentials()
         operator_role = CONF.object_storage.operator_role
-        if not cls.isolated_creds.is_role_available(operator_role):
-            skip_msg = ("%s skipped because the configured credential provider"
-                        " is not able to provide credentials with the %s role "
-                        "assigned." % (cls.__name__, operator_role))
-            raise cls.skipException(skip_msg)
-        else:
-            cls.os_operator = clients.Manager(
-                cls.isolated_creds.get_creds_by_roles(
-                    [operator_role]))
+        cls.os_operator = cls.get_client_manager(roles=[operator_role])
 
     @classmethod
     def setup_clients(cls):

@@ -12,9 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from tempest_lib.common.utils import data_utils
-
 from tempest.api.image import base
+from tempest.common.utils import data_utils
 from tempest import test
 
 
@@ -31,10 +30,10 @@ class ImagesTagsTest(base.BaseV2ImageTest):
 
         # Creating image tag and verify it.
         self.client.add_image_tag(image_id, tag)
-        body = self.client.get_image(image_id)
+        body = self.client.show_image(image_id)
         self.assertIn(tag, body['tags'])
 
         # Deleting image tag and verify it.
         self.client.delete_image_tag(image_id, tag)
-        body = self.client.get_image(image_id)
+        body = self.client.show_image(image_id)
         self.assertNotIn(tag, body['tags'])

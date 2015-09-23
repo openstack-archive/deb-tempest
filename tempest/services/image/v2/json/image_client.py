@@ -13,23 +13,22 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import json
-import urllib
-
 import jsonschema
+from oslo_serialization import jsonutils as json
+from six.moves.urllib import parse as urllib
 from tempest_lib import exceptions as lib_exc
 
 from tempest.common import glance_http
 from tempest.common import service_client
 
 
-class ImageClientV2JSON(service_client.ServiceClient):
+class ImageClientV2(service_client.ServiceClient):
 
     def __init__(self, auth_provider, catalog_type, region, endpoint_type=None,
                  build_interval=None, build_timeout=None,
                  disable_ssl_certificate_validation=None, ca_certs=None,
                  trace_requests=None):
-        super(ImageClientV2JSON, self).__init__(
+        super(ImageClientV2, self).__init__(
             auth_provider,
             catalog_type,
             region,
@@ -52,7 +51,7 @@ class ImageClientV2JSON(service_client.ServiceClient):
 
     def _validate_schema(self, body, type='image'):
         if type in ['image', 'images']:
-            schema = self.get_schema(type)
+            schema = self.show_schema(type)
         else:
             raise ValueError("%s is not a valid schema type" % type)
 
@@ -96,13 +95,25 @@ class ImageClientV2JSON(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
+    def deactivate_image(self, image_id):
+        url = 'v2/images/%s/actions/deactivate' % image_id
+        resp, body = self.post(url, None)
+        self.expected_success(204, resp.status)
+        return service_client.ResponseBody(resp, body)
+
+    def reactivate_image(self, image_id):
+        url = 'v2/images/%s/actions/reactivate' % image_id
+        resp, body = self.post(url, None)
+        self.expected_success(204, resp.status)
+        return service_client.ResponseBody(resp, body)
+
     def delete_image(self, image_id):
         url = 'v2/images/%s' % image_id
         resp, _ = self.delete(url)
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp)
 
-    def image_list(self, params=None):
+    def list_images(self, params=None):
         url = 'v2/images'
 
         if params:
@@ -112,9 +123,9 @@ class ImageClientV2JSON(service_client.ServiceClient):
         self.expected_success(200, resp.status)
         body = json.loads(body)
         self._validate_schema(body, type='images')
-        return service_client.ResponseBodyList(resp, body['images'])
+        return service_client.ResponseBody(resp, body)
 
-    def get_image(self, image_id):
+    def show_image(self, image_id):
         url = 'v2/images/%s' % image_id
         resp, body = self.get(url)
         self.expected_success(200, resp.status)
@@ -123,7 +134,7 @@ class ImageClientV2JSON(service_client.ServiceClient):
 
     def is_resource_deleted(self, id):
         try:
-            self.get_image(id)
+            self.show_image(id)
         except lib_exc.NotFound:
             return True
         return False
@@ -133,7 +144,7 @@ class ImageClientV2JSON(service_client.ServiceClient):
         """Returns the primary type of resource this client works with."""
         return 'image'
 
-    def store_image(self, image_id, data):
+    def store_image_file(self, image_id, data):
         url = 'v2/images/%s/file' % image_id
         headers = {'Content-Type': 'application/octet-stream'}
         resp, body = self.http.raw_request('PUT', url, headers=headers,
@@ -141,7 +152,7 @@ class ImageClientV2JSON(service_client.ServiceClient):
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def get_image_file(self, image_id):
+    def load_image_file(self, image_id):
         url = 'v2/images/%s/file' % image_id
         resp, body = self.get(url)
         self.expected_success(200, resp.status)
@@ -159,14 +170,14 @@ class ImageClientV2JSON(service_client.ServiceClient):
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp)
 
-    def get_image_membership(self, image_id):
+    def list_image_members(self, image_id):
         url = 'v2/images/%s/members' % image_id
         resp, body = self.get(url)
         self.expected_success(200, resp.status)
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def add_member(self, image_id, member_id):
+    def add_image_member(self, image_id, member_id):
         url = 'v2/images/%s/members' % image_id
         data = json.dumps({'member': member_id})
         resp, body = self.post(url, data)
@@ -174,28 +185,27 @@ class ImageClientV2JSON(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def update_member_status(self, image_id, member_id, status):
-        """Valid status are: ``pending``, ``accepted``,  ``rejected``."""
+    def update_image_member(self, image_id, member_id, body):
         url = 'v2/images/%s/members/%s' % (image_id, member_id)
-        data = json.dumps({'status': status})
+        data = json.dumps(body)
         resp, body = self.put(url, data)
         self.expected_success(200, resp.status)
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def get_member(self, image_id, member_id):
+    def show_image_member(self, image_id, member_id):
         url = 'v2/images/%s/members/%s' % (image_id, member_id)
         resp, body = self.get(url)
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, json.loads(body))
 
-    def remove_member(self, image_id, member_id):
+    def remove_image_member(self, image_id, member_id):
         url = 'v2/images/%s/members/%s' % (image_id, member_id)
         resp, _ = self.delete(url)
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp)
 
-    def get_schema(self, schema):
+    def show_schema(self, schema):
         url = 'v2/schemas/%s' % schema
         resp, body = self.get(url)
         self.expected_success(200, resp.status)

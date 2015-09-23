@@ -119,6 +119,13 @@ class HackingTestCase(base.TestCase):
         self.assertFalse(checks.service_tags_not_in_module_path(
             "@test.services('compute')", './tempest/api/image/fake_test.py'))
 
+    def test_no_hyphen_at_end_of_rand_name(self):
+        self.assertIsNone(checks.no_hyphen_at_end_of_rand_name(
+            'data_utils.rand_name("fake-resource")', './tempest/test_foo.py'))
+        self.assertEqual(2, len(list(checks.no_hyphen_at_end_of_rand_name(
+            'data_utils.rand_name("fake-resource-")', './tempest/test_foo.py')
+        )))
+
     def test_no_mutable_default_args(self):
         self.assertEqual(1, len(list(checks.no_mutable_default_args(
             " def function1(para={}):"))))
@@ -131,3 +138,11 @@ class HackingTestCase(base.TestCase):
 
         self.assertEqual(0, len(list(checks.no_mutable_default_args(
             "defined, undefined = [], {}"))))
+
+    def test_no_testtools_skip_decorator(self):
+        self.assertEqual(1, len(list(checks.no_testtools_skip_decorator(
+            " @testtools.skip('Bug xxx')"))))
+        self.assertEqual(0, len(list(checks.no_testtools_skip_decorator(
+            " @testtools.skipUnless(CONF.something, 'msg')"))))
+        self.assertEqual(0, len(list(checks.no_testtools_skip_decorator(
+            " @testtools.skipIf(CONF.something, 'msg')"))))

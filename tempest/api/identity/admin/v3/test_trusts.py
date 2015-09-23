@@ -14,12 +14,12 @@ import datetime
 import re
 
 from oslo_utils import timeutils
-from tempest_lib.common.utils import data_utils
 from tempest_lib import exceptions as lib_exc
 
 from tempest.api.identity import base
 from tempest import clients
 from tempest.common import cred_provider
+from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
@@ -34,7 +34,6 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
         if not CONF.identity_feature_enabled.trust:
             raise self.skipException("Trusts aren't enabled")
 
-        self.trustee_username = CONF.identity.alt_username
         self.trust_id = None
 
     def tearDown(self):
@@ -45,10 +44,11 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
         super(BaseTrustsV3Test, self).tearDown()
 
     def create_trustor_and_roles(self):
-        # Get trustor project ID, use the admin project
-        self.trustor_project_name = self.client.tenant_name
-        self.trustor_project_id = self.get_tenant_by_name(
-            self.trustor_project_name)['id']
+        # create a project that trusts will be granted on
+        self.trustor_project_name = data_utils.rand_name(name='project')
+        project = self.client.create_project(self.trustor_project_name,
+                                             domain_id='default')['project']
+        self.trustor_project_id = project['id']
         self.assertIsNotNone(self.trustor_project_id)
 
         # Create a trustor User
@@ -61,17 +61,18 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
             description=u_desc,
             password=self.trustor_password,
             email=u_email,
-            project_id=self.trustor_project_id)
+            project_id=self.trustor_project_id,
+            domain_id='default')['user']
         self.trustor_user_id = user['id']
 
         # And two roles, one we'll delegate and one we won't
         self.delegated_role = data_utils.rand_name('DelegatedRole')
         self.not_delegated_role = data_utils.rand_name('NotDelegatedRole')
 
-        role = self.client.create_role(self.delegated_role)
+        role = self.client.create_role(self.delegated_role)['role']
         self.delegated_role_id = role['id']
 
-        role = self.client.create_role(self.not_delegated_role)
+        role = self.client.create_role(self.not_delegated_role)['role']
         self.not_delegated_role_id = role['id']
 
         # Assign roles to trustor
@@ -89,15 +90,20 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
 
         # Initialize a new client with the trustor credentials
         creds = cred_provider.get_credentials(
+            identity_version='v3',
             username=self.trustor_username,
             password=self.trustor_password,
-            tenant_name=self.trustor_project_name)
+            user_domain_id='default',
+            tenant_name=self.trustor_project_name,
+            project_domain_id='default')
         os = clients.Manager(credentials=creds)
         self.trustor_client = os.identity_v3_client
 
     def cleanup_user_and_roles(self):
         if self.trustor_user_id:
             self.client.delete_user(self.trustor_user_id)
+        if self.trustor_project_id:
+            self.client.delete_project(self.trustor_project_id)
         if self.delegated_role_id:
             self.client.delete_role(self.delegated_role_id)
         if self.not_delegated_role_id:
@@ -111,7 +117,7 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
             project_id=self.trustor_project_id,
             role_names=[self.delegated_role],
             impersonation=impersonate,
-            expires_at=expires)
+            expires_at=expires)['trust']
         self.trust_id = trust_create['id']
         return trust_create
 
@@ -134,7 +140,7 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
             self.assertEqual(1, len(trust['roles']))
 
     def get_trust(self):
-        trust_get = self.trustor_client.get_trust(self.trust_id)
+        trust_get = self.trustor_client.get_trust(self.trust_id)['trust']
         return trust_get
 
     def validate_role(self, role):
@@ -150,12 +156,12 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
     def check_trust_roles(self):
         # Check we find the delegated role
         roles_get = self.trustor_client.get_trust_roles(
-            self.trust_id)
+            self.trust_id)['roles']
         self.assertEqual(1, len(roles_get))
         self.validate_role(roles_get[0])
 
         role_get = self.trustor_client.get_trust_role(
-            self.trust_id, self.delegated_role_id)
+            self.trust_id, self.delegated_role_id)['role']
         self.validate_role(role_get)
 
         role_get = self.trustor_client.check_trust_role(
@@ -187,7 +193,6 @@ class TrustsV3TestJSON(BaseTrustsV3Test):
         self.create_trustor_and_roles()
         self.addCleanup(self.cleanup_user_and_roles)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('5a0a91a4-baef-4a14-baba-59bf4d7fcace')
     def test_trust_impersonate(self):
         # Test case to check we can create, get and delete a trust
@@ -200,7 +205,6 @@ class TrustsV3TestJSON(BaseTrustsV3Test):
 
         self.check_trust_roles()
 
-    @test.attr(type='smoke')
     @test.idempotent_id('ed2a8779-a7ac-49dc-afd7-30f32f936ed2')
     def test_trust_noimpersonate(self):
         # Test case to check we can create, get and delete a trust
@@ -213,7 +217,6 @@ class TrustsV3TestJSON(BaseTrustsV3Test):
 
         self.check_trust_roles()
 
-    @test.attr(type='smoke')
     @test.idempotent_id('0ed14b66-cefd-4b5c-a964-65759453e292')
     def test_trust_expire(self):
         # Test case to check we can create, get and delete a trust
@@ -239,10 +242,9 @@ class TrustsV3TestJSON(BaseTrustsV3Test):
 
         self.check_trust_roles()
 
-    @test.attr(type='smoke')
     @test.idempotent_id('3e48f95d-e660-4fa9-85e0-5a3d85594384')
     def test_trust_expire_invalid(self):
-        # Test case to check we can check an invlaid expiry time
+        # Test case to check we can check an invalid expiry time
         # is rejected with the correct error
         # with an expiry specified
         expires_str = 'bad.123Z'
@@ -250,12 +252,11 @@ class TrustsV3TestJSON(BaseTrustsV3Test):
                           self.create_trust,
                           expires=expires_str)
 
-    @test.attr(type='smoke')
     @test.idempotent_id('6268b345-87ca-47c0-9ce3-37792b43403a')
     def test_get_trusts_query(self):
         self.create_trust()
         trusts_get = self.trustor_client.get_trusts(
-            trustor_user_id=self.trustor_user_id)
+            trustor_user_id=self.trustor_user_id)['trusts']
         self.assertEqual(1, len(trusts_get))
         self.validate_trust(trusts_get[0], summary=True)
 
@@ -263,7 +264,7 @@ class TrustsV3TestJSON(BaseTrustsV3Test):
     @test.idempotent_id('4773ebd5-ecbf-4255-b8d8-b63e6f72b65d')
     def test_get_trusts_all(self):
         self.create_trust()
-        trusts_get = self.client.get_trusts()
+        trusts_get = self.client.get_trusts()['trusts']
         trusts = [t for t in trusts_get
                   if t['id'] == self.trust_id]
         self.assertEqual(1, len(trusts))

@@ -12,9 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import json
 
 import mock
+from oslo_serialization import jsonutils as json
 from oslotest import mockpatch
 
 from tempest.cmd import verify_tempest_config
@@ -164,7 +164,7 @@ class TestDiscovery(base.TestCase):
 
     def test_verify_glance_version_no_v2_with_v1_1(self):
         def fake_get_versions():
-            return (['v1.1'])
+            return (None, ['v1.1'])
         fake_os = mock.MagicMock()
         fake_os.image_client.get_versions = fake_get_versions
         with mock.patch.object(verify_tempest_config,
@@ -175,7 +175,7 @@ class TestDiscovery(base.TestCase):
 
     def test_verify_glance_version_no_v2_with_v1_0(self):
         def fake_get_versions():
-            return (['v1.0'])
+            return (None, ['v1.0'])
         fake_os = mock.MagicMock()
         fake_os.image_client.get_versions = fake_get_versions
         with mock.patch.object(verify_tempest_config,
@@ -186,7 +186,7 @@ class TestDiscovery(base.TestCase):
 
     def test_verify_glance_version_no_v1(self):
         def fake_get_versions():
-            return (['v2.0'])
+            return (None, ['v2.0'])
         fake_os = mock.MagicMock()
         fake_os.image_client.get_versions = fake_get_versions
         with mock.patch.object(verify_tempest_config,

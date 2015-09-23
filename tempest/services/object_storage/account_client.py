@@ -13,9 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import json
-import urllib
 from xml.etree import ElementTree as etree
+
+from oslo_serialization import jsonutils as json
+from six.moves.urllib import parse as urllib
 
 from tempest.common import service_client
 
