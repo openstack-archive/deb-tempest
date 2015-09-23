@@ -49,6 +49,8 @@ override_dh_auto_install:
 	cp .testr.conf $(CURDIR)/debian/tempest/var/lib/tempest
 	install -D -m 775 debian/tempest_shell_wrapper $(CURDIR)/debian/tempest/usr/bin/tempest
 
+	rm -fr $(CURDIR)/debian/tempest/usr/etc
+
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 	rm -rf .testrepository
