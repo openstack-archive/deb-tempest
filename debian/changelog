@@ -1,3 +1,10 @@
+tempest (6-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Fixed (build-)depends for this release.
+
+ -- Thomas Goirand <zigo@debian.org>  Wed, 23 Sep 2015 09:32:43 +0200
+
 tempest (4-2) unstable; urgency=medium
 
   * Makes build reproducible (Closes: #789749). Thanks to Juan Picca for the
