@@ -3,6 +3,7 @@ tempest (6-1) unstable; urgency=medium
   * New upstream release.
   * Fixed (build-)depends for this release.
   * Generates config file using oslo-config-generator.
+  * Do not use verbose mode by default.
 
  -- Thomas Goirand <zigo@debian.org>  Wed, 23 Sep 2015 09:32:43 +0200
 

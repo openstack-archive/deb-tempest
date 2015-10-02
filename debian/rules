@@ -43,6 +43,10 @@ override_dh_auto_install:
 	sed -i 's/^[ \t#]*allow_tenant_isolation[ \t]*=.*/allow_tenant_isolation=true/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^[ \t#]*image_ssh_user=.*/image_ssh_user=debian/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 
+	# Do not use verbose by default: it is a way too verbose and not
+	# really helpful, as failed tests will anyway dump the trace.
+	sed -i 's/^[ \t#]*verbose[ \t]*=.*/verbose = false/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
+
 	# Package stuff in /var/lib/tempest, since we need read/write access
 	# to run the testr stuff
 	mkdir -p $(CURDIR)/debian/tempest/var/lib/tempest
