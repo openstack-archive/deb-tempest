@@ -1,3 +1,10 @@
+tempest (9-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Fixed (build-)depends for this release.
+
+ -- Thomas Goirand <zigo@debian.org>  Fri, 29 Jan 2016 18:39:30 +0800
+
 tempest (6-1) unstable; urgency=medium
 
   * New upstream release.
