@@ -117,7 +117,8 @@ class DeleteServersTestJSON(base.BaseV2ComputeTest):
         device = '/dev/%s' % CONF.compute.volume_device_name
         server = self.create_test_server(wait_until='ACTIVE')
 
-        volume = volumes_client.create_volume(size=CONF.volume.volume_size)
+        volume = (volumes_client.create_volume(size=CONF.volume.volume_size)
+                  ['volume'])
         self.addCleanup(volumes_client.delete_volume, volume['id'])
         waiters.wait_for_volume_status(volumes_client,
                                        volume['id'], 'available')
@@ -149,7 +150,7 @@ class DeleteServersAdminTestJSON(base.BaseV2ComputeAdminTest):
         server = self.create_test_server(wait_until='ACTIVE')
         self.admin_client.reset_state(server['id'], state='error')
         # Verify server's state
-        server = self.non_admin_client.show_server(server['id'])
+        server = self.non_admin_client.show_server(server['id'])['server']
         self.assertEqual(server['status'], 'ERROR')
         self.non_admin_client.delete_server(server['id'])
         waiters.wait_for_server_termination(self.servers_client,

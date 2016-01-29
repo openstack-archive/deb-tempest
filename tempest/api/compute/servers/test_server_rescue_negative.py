@@ -62,7 +62,7 @@ class ServerRescueNegativeTestJSON(base.BaseV2ComputeTest):
     def _create_volume(self):
         volume = self.volumes_extensions_client.create_volume(
             size=CONF.volume.volume_size, display_name=data_utils.rand_name(
-                self.__class__.__name__ + '_volume'))
+                self.__class__.__name__ + '_volume'))['volume']
         self.addCleanup(self.delete_volume, volume['id'])
         waiters.wait_for_volume_status(self.volumes_extensions_client,
                                        volume['id'], 'available')
@@ -101,7 +101,7 @@ class ServerRescueNegativeTestJSON(base.BaseV2ComputeTest):
     @test.idempotent_id('db22b618-f157-4566-a317-1b6d467a8094')
     def test_rescued_vm_reboot(self):
         self.assertRaises(lib_exc.Conflict, self.servers_client.reboot_server,
-                          self.rescue_id, 'HARD')
+                          self.rescue_id, type='HARD')
 
     @test.attr(type=['negative'])
     @test.idempotent_id('6dfc0a55-3a77-4564-a144-1587b7971dde')

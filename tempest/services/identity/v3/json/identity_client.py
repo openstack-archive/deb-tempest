@@ -22,7 +22,7 @@ from tempest.common import service_client
 class IdentityV3Client(service_client.ServiceClient):
     api_version = "v3"
 
-    def get_api_description(self):
+    def show_api_description(self):
         """Retrieves info about the v3 Identity API"""
         url = ''
         resp, body = self.get(url)
@@ -54,7 +54,7 @@ class IdentityV3Client(service_client.ServiceClient):
 
     def update_user(self, user_id, name, **kwargs):
         """Updates a user."""
-        body = self.get_user(user_id)['user']
+        body = self.show_user(user_id)['user']
         email = kwargs.get('email', body['email'])
         en = kwargs.get('enabled', body['enabled'])
         project_id = kwargs.get('project_id', body['project_id'])
@@ -81,13 +81,13 @@ class IdentityV3Client(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def update_user_password(self, user_id, password, original_password):
-        """Updates a user password."""
-        update_user = {
-            'password': password,
-            'original_password': original_password
-        }
-        update_user = json.dumps({'user': update_user})
+    def update_user_password(self, user_id, **kwargs):
+        """Update a user password
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-identity-v3.html#changeUserPassword
+        """
+        update_user = json.dumps({'user': kwargs})
         resp, _ = self.post('users/%s/password' % user_id, update_user)
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp)
@@ -99,7 +99,7 @@ class IdentityV3Client(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def get_users(self, params=None):
+    def list_users(self, params=None):
         """Get the list of users."""
         url = 'users'
         if params:
@@ -109,7 +109,7 @@ class IdentityV3Client(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def get_user(self, user_id):
+    def show_user(self, user_id):
         """GET a user."""
         resp, body = self.get("users/%s" % user_id)
         self.expected_success(200, resp.status)
@@ -191,7 +191,7 @@ class IdentityV3Client(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def get_role(self, role_id):
+    def show_role(self, role_id):
         """GET a Role."""
         resp, body = self.get('roles/%s' % str(role_id))
         self.expected_success(200, resp.status)
@@ -284,7 +284,7 @@ class IdentityV3Client(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def get_token(self, resp_token):
+    def show_token(self, resp_token):
         """Get token details."""
         headers = {'X-Subject-Token': resp_token}
         resp, body = self.get("auth/tokens", headers=headers)
@@ -299,83 +299,11 @@ class IdentityV3Client(service_client.ServiceClient):
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def create_group(self, name, **kwargs):
-        """Creates a group."""
-        description = kwargs.get('description', None)
-        domain_id = kwargs.get('domain_id', 'default')
-        project_id = kwargs.get('project_id', None)
-        post_body = {
-            'description': description,
-            'domain_id': domain_id,
-            'project_id': project_id,
-            'name': name
-        }
-        post_body = json.dumps({'group': post_body})
-        resp, body = self.post('groups', post_body)
-        self.expected_success(201, resp.status)
-        body = json.loads(body)
-        return service_client.ResponseBody(resp, body)
-
-    def get_group(self, group_id):
-        """Get group details."""
-        resp, body = self.get('groups/%s' % group_id)
-        self.expected_success(200, resp.status)
-        body = json.loads(body)
-        return service_client.ResponseBody(resp, body)
-
-    def list_groups(self):
-        """Lists the groups."""
-        resp, body = self.get('groups')
-        self.expected_success(200, resp.status)
-        body = json.loads(body)
-        return service_client.ResponseBody(resp, body)
-
-    def update_group(self, group_id, **kwargs):
-        """Updates a group."""
-        body = self.get_group(group_id)['group']
-        name = kwargs.get('name', body['name'])
-        description = kwargs.get('description', body['description'])
-        post_body = {
-            'name': name,
-            'description': description
-        }
-        post_body = json.dumps({'group': post_body})
-        resp, body = self.patch('groups/%s' % group_id, post_body)
-        self.expected_success(200, resp.status)
-        body = json.loads(body)
-        return service_client.ResponseBody(resp, body)
-
-    def delete_group(self, group_id):
-        """Delete a group."""
-        resp, body = self.delete('groups/%s' % str(group_id))
-        self.expected_success(204, resp.status)
-        return service_client.ResponseBody(resp, body)
-
-    def add_group_user(self, group_id, user_id):
-        """Add user into group."""
-        resp, body = self.put('groups/%s/users/%s' % (group_id, user_id),
-                              None)
-        self.expected_success(204, resp.status)
-        return service_client.ResponseBody(resp, body)
-
-    def list_group_users(self, group_id):
-        """List users in group."""
-        resp, body = self.get('groups/%s/users' % group_id)
-        self.expected_success(200, resp.status)
-        body = json.loads(body)
-        return service_client.ResponseBody(resp, body)
-
     def list_user_groups(self, user_id):
         """Lists groups which a user belongs to."""
         resp, body = self.get('users/%s/groups' % user_id)
         self.expected_success(200, resp.status)
         body = json.loads(body)
-        return service_client.ResponseBody(resp, body)
-
-    def delete_group_user(self, group_id, user_id):
-        """Delete user in group."""
-        resp, body = self.delete('groups/%s/users/%s' % (group_id, user_id))
-        self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp, body)
 
     def assign_user_role_on_project(self, project_id, user_id, role_id):
@@ -408,14 +336,14 @@ class IdentityV3Client(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def revoke_role_from_user_on_project(self, project_id, user_id, role_id):
+    def delete_role_from_user_on_project(self, project_id, user_id, role_id):
         """Delete role of a user on a project."""
         resp, body = self.delete('projects/%s/users/%s/roles/%s' %
                                  (project_id, user_id, role_id))
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def revoke_role_from_user_on_domain(self, domain_id, user_id, role_id):
+    def delete_role_from_user_on_domain(self, domain_id, user_id, role_id):
         """Delete role of a user on a domain."""
         resp, body = self.delete('domains/%s/users/%s/roles/%s' %
                                  (domain_id, user_id, role_id))
@@ -452,33 +380,27 @@ class IdentityV3Client(service_client.ServiceClient):
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def revoke_role_from_group_on_project(self, project_id, group_id, role_id):
+    def delete_role_from_group_on_project(self, project_id, group_id, role_id):
         """Delete role of a user on a project."""
         resp, body = self.delete('projects/%s/groups/%s/roles/%s' %
                                  (project_id, group_id, role_id))
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def revoke_role_from_group_on_domain(self, domain_id, group_id, role_id):
+    def delete_role_from_group_on_domain(self, domain_id, group_id, role_id):
         """Delete role of a user on a domain."""
         resp, body = self.delete('domains/%s/groups/%s/roles/%s' %
                                  (domain_id, group_id, role_id))
         self.expected_success(204, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def create_trust(self, trustor_user_id, trustee_user_id, project_id,
-                     role_names, impersonation, expires_at):
-        """Creates a trust."""
-        roles = [{'name': n} for n in role_names]
-        post_body = {
-            'trustor_user_id': trustor_user_id,
-            'trustee_user_id': trustee_user_id,
-            'project_id': project_id,
-            'impersonation': impersonation,
-            'roles': roles,
-            'expires_at': expires_at
-        }
-        post_body = json.dumps({'trust': post_body})
+    def create_trust(self, **kwargs):
+        """Creates a trust.
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-identity-v3-ext.html#createTrust
+        """
+        post_body = json.dumps({'trust': kwargs})
         resp, body = self.post('OS-TRUST/trusts', post_body)
         self.expected_success(201, resp.status)
         body = json.loads(body)

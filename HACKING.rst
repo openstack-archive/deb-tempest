@@ -17,6 +17,7 @@ Tempest Specific Commandments
 - [T108] Check no hyphen at the end of rand_name() argument
 - [T109] Cannot use testtools.skip decorator; instead use
          decorators.skip_because from tempest-lib
+- [T110] Check that service client names of GET should be consistent
 - [N322] Method's default argument shouldn't be mutable
 
 Test Data/Configuration
@@ -136,7 +137,7 @@ by test classes. Set-up stages are:
 Tear-down is also split in a series of steps (teardown stages), which are
 stacked for execution only if the corresponding setup stage had been
 reached during the setup phase. Tear-down stages are:
-- `clear_isolated_creds` (defined in the base test class)
+- `clear_credentials` (defined in the base test class)
 - `resource_cleanup`
 
 Skipping Tests
@@ -206,9 +207,10 @@ Parallel Test Execution
 -----------------------
 Tempest by default runs its tests in parallel this creates the possibility for
 interesting interactions between tests which can cause unexpected failures.
-Tenant isolation provides protection from most of the potential race conditions
-between tests outside the same class. But there are still a few of things to
-watch out for to try to avoid issues when running your tests in parallel.
+Dynamic credentials provides protection from most of the potential race
+conditions between tests outside the same class. But there are still a few of
+things to watch out for to try to avoid issues when running your tests in
+parallel.
 
 - Resources outside of a tenant scope still have the potential to conflict. This
   is a larger concern for the admin tests since most resources and actions that
@@ -328,24 +330,25 @@ format of the metadata looks like::
         # The created server should be in the detailed list of all servers
         ...
 
-Tempest includes a ``check_uuid.py`` tool that will test for the existence
-and uniqueness of idempotent_id metadata for every test. By default the
-tool runs against the Tempest package by calling::
+Tempest-lib includes a ``check-uuid`` tool that will test for the existence
+and uniqueness of idempotent_id metadata for every test. If you have
+tempest-lib installed you run the tool against Tempest by calling from the
+tempest repo::
 
-    python check_uuid.py
+    check-uuid
 
 It can be invoked against any test suite by passing a package name::
 
-    python check_uuid.py --package <package_name>
+    check-uuid --package <package_name>
 
 Tests without an ``idempotent_id`` can be automatically fixed by running
 the command with the ``--fix`` flag, which will modify the source package
 by inserting randomly generated uuids for every test that does not have
 one::
 
-    python check_uuid.py --fix
+    check-uuid --fix
 
-The ``check_uuid.py`` tool is used as part of the tempest gate job
+The ``check-uuid`` tool is used as part of the tempest gate job
 to ensure that all tests have an ``idempotent_id`` decorator.
 
 Branchless Tempest Considerations

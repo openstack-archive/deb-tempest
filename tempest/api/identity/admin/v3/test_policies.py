@@ -31,8 +31,8 @@ class PoliciesTestJSON(base.BaseIdentityV3AdminTest):
         for _ in range(3):
             blob = data_utils.rand_name('BlobName')
             policy_type = data_utils.rand_name('PolicyType')
-            policy = self.policy_client.create_policy(blob,
-                                                      policy_type)['policy']
+            policy = self.policy_client.create_policy(
+                blob=blob, type=policy_type)['policy']
             # Delete the Policy at the end of this method
             self.addCleanup(self._delete_policy, policy['id'])
             policy_ids.append(policy['id'])
@@ -49,7 +49,8 @@ class PoliciesTestJSON(base.BaseIdentityV3AdminTest):
         # Test to update policy
         blob = data_utils.rand_name('BlobName')
         policy_type = data_utils.rand_name('PolicyType')
-        policy = self.policy_client.create_policy(blob, policy_type)['policy']
+        policy = self.policy_client.create_policy(blob=blob,
+                                                  type=policy_type)['policy']
         self.addCleanup(self._delete_policy, policy['id'])
         self.assertIn('id', policy)
         self.assertIn('type', policy)
@@ -63,7 +64,7 @@ class PoliciesTestJSON(base.BaseIdentityV3AdminTest):
             policy['id'], type=update_type)['policy']
         self.assertIn('type', data)
         # Assertion for updated value with fetched value
-        fetched_policy = self.policy_client.get_policy(policy['id'])['policy']
+        fetched_policy = self.policy_client.show_policy(policy['id'])['policy']
         self.assertIn('id', fetched_policy)
         self.assertIn('blob', fetched_policy)
         self.assertIn('type', fetched_policy)

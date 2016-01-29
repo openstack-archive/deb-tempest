@@ -13,6 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import time
+
 from tempest.api.identity import base
 from tempest.common.utils import data_utils
 from tempest import test
@@ -27,7 +29,7 @@ class UsersV3TestJSON(base.BaseIdentityV3AdminTest):
         u_name = data_utils.rand_name('user')
         u_desc = u_name + 'description'
         u_email = u_name + '@testmail.tm'
-        u_password = data_utils.rand_name('pass')
+        u_password = data_utils.rand_password()
         user = self.client.create_user(
             u_name, description=u_desc, password=u_password,
             email=u_email, enabled=False)['user']
@@ -54,7 +56,7 @@ class UsersV3TestJSON(base.BaseIdentityV3AdminTest):
         self.assertEqual(u_email2, update_user['email'])
         self.assertEqual(False, update_user['enabled'])
         # GET by id after updation
-        new_user_get = self.client.get_user(user['id'])['user']
+        new_user_get = self.client.show_user(user['id'])['user']
         # Assert response body of GET after updation
         self.assertEqual(u_name2, new_user_get['name'])
         self.assertEqual(u_description2, new_user_get['description'])
@@ -67,20 +69,28 @@ class UsersV3TestJSON(base.BaseIdentityV3AdminTest):
     def test_update_user_password(self):
         # Creating User to check password updation
         u_name = data_utils.rand_name('user')
-        original_password = data_utils.rand_name('pass')
+        original_password = data_utils.rand_password()
         user = self.client.create_user(
             u_name, password=original_password)['user']
         # Delete the User at the end all test methods
         self.addCleanup(self.client.delete_user, user['id'])
         # Update user with new password
-        new_password = data_utils.rand_name('pass1')
-        self.client.update_user_password(user['id'], new_password,
-                                         original_password)
+        new_password = data_utils.rand_password()
+        self.client.update_user_password(user['id'], password=new_password,
+                                         original_password=original_password)
+        # TODO(lbragstad): Sleeping after the response status has been checked
+        # and the body loaded as JSON allows requests to fail-fast. The sleep
+        # is necessary because keystone will err on the side of security and
+        # invalidate tokens within a small margin of error (within the same
+        # wall clock second) after a revocation event is issued (such as a
+        # password change). Remove this once keystone and Fernet support
+        # sub-second precision, see bug 1517697 for more details.
+        time.sleep(1)
         resp = self.token.auth(user_id=user['id'],
                                password=new_password).response
         subject_token = resp['x-subject-token']
         # Perform GET Token to verify and confirm password is updated
-        token_details = self.client.get_token(subject_token)['token']
+        token_details = self.client.show_token(subject_token)['token']
         self.assertEqual(resp['x-subject-token'], subject_token)
         self.assertEqual(token_details['user']['id'], user['id'])
         self.assertEqual(token_details['user']['name'], u_name)
@@ -99,7 +109,7 @@ class UsersV3TestJSON(base.BaseIdentityV3AdminTest):
         u_name = data_utils.rand_name('user')
         u_desc = u_name + 'description'
         u_email = u_name + '@testmail.tm'
-        u_password = data_utils.rand_name('pass')
+        u_password = data_utils.rand_password()
         user_body = self.client.create_user(
             u_name, description=u_desc, password=u_password,
             email=u_email, enabled=False, project_id=u_project['id'])['user']
@@ -111,8 +121,8 @@ class UsersV3TestJSON(base.BaseIdentityV3AdminTest):
         # Delete the Role at the end of this method
         self.addCleanup(self.client.delete_role, role_body['id'])
 
-        user = self.client.get_user(user_body['id'])['user']
-        role = self.client.get_role(role_body['id'])['role']
+        user = self.client.show_user(user_body['id'])['user']
+        role = self.client.show_role(role_body['id'])['role']
         for i in range(2):
             # Creating project so as to assign role
             project_body = self.client.create_project(
@@ -142,5 +152,5 @@ class UsersV3TestJSON(base.BaseIdentityV3AdminTest):
     def test_get_user(self):
         # Get a user detail
         self.data.setup_test_v3_user()
-        user = self.client.get_user(self.data.v3_user['id'])['user']
+        user = self.client.show_user(self.data.v3_user['id'])['user']
         self.assertEqual(self.data.v3_user['id'], user['id'])

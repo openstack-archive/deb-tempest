@@ -26,9 +26,9 @@ LOG = logging.getLogger(__name__)
 
 
 class BaremetalBasicOps(manager.BaremetalScenarioTest):
-    """
-    This smoke test tests the pxe_ssh Ironic driver.  It follows this basic
-    set of operations:
+    """This smoke test tests the pxe_ssh Ironic driver.
+
+    It follows this basic set of operations:
         * Creates a keypair
         * Boots an instance using the keypair
         * Monitors the associated Ironic node for power and
@@ -62,15 +62,6 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
             self.servers_client,
             server_id=self.instance['id'],
             status='ACTIVE')
-
-    def create_remote_file(self, client, filename):
-        """Create a file on the remote client connection.
-
-        After creating the file, force a filesystem sync. Otherwise,
-        if we issue a rebuild too quickly, the file may not exist.
-        """
-        client.exec_command('sudo touch ' + filename)
-        client.exec_command('sync')
 
     def verify_partition(self, client, label, mount, gib_size):
         """Verify a labeled partition's mount point and size."""
@@ -107,17 +98,10 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
             return None
         return int(ephemeral)
 
-    def add_floating_ip(self):
-        floating_ip = (self.floating_ips_client.create_floating_ip()
-                       ['floating_ip'])
-        self.floating_ips_client.associate_floating_ip_to_server(
-            floating_ip['ip'], self.instance['id'])
-        return floating_ip['ip']
-
     def validate_ports(self):
         for port in self.get_ports(self.node['uuid']):
             n_port_id = port['extra']['vif_port_id']
-            body = self.network_client.show_port(n_port_id)
+            body = self.ports_client.show_port(n_port_id)
             n_port = body['port']
             self.assertEqual(n_port['device_id'], self.instance['id'])
             self.assertEqual(n_port['mac_address'], port['address'])
@@ -125,13 +109,12 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
     @test.idempotent_id('549173a5-38ec-42bb-b0e2-c8b9f4a08943')
     @test.services('baremetal', 'compute', 'image', 'network')
     def test_baremetal_server_ops(self):
-        test_filename = '/mnt/rebuild_test.txt'
         self.add_keypair()
         self.boot_instance()
         self.validate_ports()
         self.verify_connectivity()
-        if CONF.compute.ssh_connect_method == 'floating':
-            floating_ip = self.add_floating_ip()
+        if CONF.validation.connect_method == 'floating':
+            floating_ip = self.create_floating_ip(self.instance)['ip']
             self.verify_connectivity(ip=floating_ip)
 
         vm_client = self.get_remote_client(self.instance)
@@ -139,12 +122,13 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
         # We expect the ephemeral partition to be mounted on /mnt and to have
         # the same size as our flavor definition.
         eph_size = self.get_flavor_ephemeral_size()
-        if eph_size > 0:
+        if eph_size:
             preserve_ephemeral = True
 
             self.verify_partition(vm_client, 'ephemeral0', '/mnt', eph_size)
             # Create the test file
-            self.create_remote_file(vm_client, test_filename)
+            timestamp = self.create_timestamp(
+                floating_ip, private_key=self.keypair['private_key'])
         else:
             preserve_ephemeral = False
 
@@ -153,9 +137,9 @@ class BaremetalBasicOps(manager.BaremetalScenarioTest):
         self.verify_connectivity()
 
         # Check that we maintained our data
-        if eph_size > 0:
-            vm_client = self.get_remote_client(self.instance)
+        if eph_size:
             self.verify_partition(vm_client, 'ephemeral0', '/mnt', eph_size)
-            vm_client.exec_command('ls ' + test_filename)
-
+            timestamp2 = self.get_timestamp(
+                floating_ip, private_key=self.keypair['private_key'])
+            self.assertEqual(timestamp, timestamp2)
         self.terminate_instance()

@@ -19,13 +19,13 @@ import unicodedata
 
 from oslo_serialization import jsonutils as json
 from tempest_lib.common.utils import misc
+from tempest_lib import exceptions as exc_lib
 import testscenarios
 import testtools
 
 from tempest import clients
-from tempest.common import credentials
+from tempest.common import credentials_factory as credentials
 from tempest import config
-from tempest import exceptions
 
 CONF = config.CONF
 
@@ -72,8 +72,7 @@ class ImageUtils(object):
 @misc.singleton
 class InputScenarioUtils(object):
 
-    """
-    Example usage:
+    """Example usage:
 
     import testscenarios
     (...)
@@ -91,8 +90,8 @@ class InputScenarioUtils(object):
         def test_create_server_metadata(self):
             name = rand_name('instance')
             self.servers_client.create_server(name=name,
-                                              flavor_ref=self.flavor_ref,
-                                              image_ref=self.image_ref)
+                                              flavorRef=self.flavor_ref,
+                                              imageRef=self.image_ref)
     """
     validchars = "-_.{ascii}{digit}".format(ascii=string.ascii_letters,
                                             digit=string.digits)
@@ -104,11 +103,11 @@ class InputScenarioUtils(object):
             'subnet': False,
             'dhcp': False,
         }
-        self.isolated_creds = credentials.get_isolated_credentials(
+        self.cred_provider = credentials.get_credentials_provider(
             name='InputScenarioUtils',
             identity_version=CONF.identity.auth_version,
             network_resources=network_resources)
-        os = clients.Manager(self.isolated_creds.get_primary_creds())
+        os = clients.Manager(self.cred_provider.get_primary_creds())
         self.images_client = os.images_client
         self.flavors_client = os.flavors_client
         self.image_pattern = CONF.input_scenario.image_regex
@@ -120,13 +119,11 @@ class InputScenarioUtils(object):
         return nname
 
     def clear_creds(self):
-        self.isolated_creds.clear_isolated_creds()
+        self.cred_provider.clear_creds()
 
     @property
     def scenario_images(self):
-        """
-        :return: a scenario with name and uuid of images
-        """
+        """:return: a scenario with name and uuid of images"""
         if not CONF.service_available.glance:
             return []
         if not hasattr(self, '_scenario_images'):
@@ -143,9 +140,7 @@ class InputScenarioUtils(object):
 
     @property
     def scenario_flavors(self):
-        """
-        :return: a scenario with name and uuid of flavors
-        """
+        """:return: a scenario with name and uuid of flavors"""
         if not hasattr(self, '_scenario_flavors'):
             try:
                 flavors = self.flavors_client.list_flavors()['flavors']
@@ -160,10 +155,11 @@ class InputScenarioUtils(object):
 
 
 def load_tests_input_scenario_utils(*args):
+    """Wrapper for testscenarios to set the scenarios
+
+    The purpose is to avoid running a getattr on the CONF object at import.
     """
-    Wrapper for testscenarios to set the scenarios to avoid running a getattr
-    on the CONF object at import.
-    """
+
     if getattr(args[0], 'suiteClass', None) is not None:
         loader, standard_tests, pattern = args
     else:
@@ -174,7 +170,7 @@ def load_tests_input_scenario_utils(*args):
         scenario_utils = InputScenarioUtils()
         scenario_flavor = scenario_utils.scenario_flavors
         scenario_image = scenario_utils.scenario_images
-    except (exceptions.InvalidConfiguration, TypeError):
+    except (exc_lib.InvalidCredentials, TypeError):
         output = standard_tests
     finally:
         if scenario_utils:

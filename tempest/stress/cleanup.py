@@ -16,14 +16,14 @@
 
 from oslo_log import log as logging
 
-from tempest import clients
+from tempest.common import credentials_factory as credentials
 from tempest.common import waiters
 
 LOG = logging.getLogger(__name__)
 
 
 def cleanup():
-    admin_manager = clients.AdminManager()
+    admin_manager = credentials.AdminManager()
 
     body = admin_manager.servers_client.list_servers(all_tenants=True)
     LOG.info("Cleanup::remove %s servers" % len(body['servers']))
@@ -48,7 +48,7 @@ def cleanup():
         except Exception:
             pass
 
-    secgrp_client = admin_manager.security_groups_client
+    secgrp_client = admin_manager.compute_security_groups_client
     secgrp = (secgrp_client.list_security_groups(all_tenants=True)
               ['security_groups'])
     secgrp_del = [grp for grp in secgrp if grp['name'] != 'default']
@@ -59,26 +59,26 @@ def cleanup():
         except Exception:
             pass
 
-    floating_ips = (admin_manager.floating_ips_client.list_floating_ips()
+    admin_floating_ips_client = admin_manager.compute_floating_ips_client
+    floating_ips = (admin_floating_ips_client.list_floating_ips()
                     ['floating_ips'])
     LOG.info("Cleanup::remove %s floating ips" % len(floating_ips))
     for f in floating_ips:
         try:
-            admin_manager.floating_ips_client.delete_floating_ip(f['id'])
+            admin_floating_ips_client.delete_floating_ip(f['id'])
         except Exception:
             pass
 
-    users = admin_manager.identity_client.get_users()
+    users = admin_manager.identity_client.list_users()['users']
     LOG.info("Cleanup::remove %s users" % len(users))
     for user in users:
         if user['name'].startswith("stress_user"):
             admin_manager.identity_client.delete_user(user['id'])
-
-    tenants = admin_manager.identity_client.list_tenants()['tenants']
+    tenants = admin_manager.tenants_client.list_tenants()['tenants']
     LOG.info("Cleanup::remove %s tenants" % len(tenants))
     for tenant in tenants:
         if tenant['name'].startswith("stress_tenant"):
-            admin_manager.identity_client.delete_tenant(tenant['id'])
+            admin_manager.tenants_client.delete_tenant(tenant['id'])
 
     # We have to delete snapshots first or
     # volume deletion may block

@@ -63,7 +63,7 @@ class AgentManagementTestJSON(base.BaseAdminNetworkTest):
         # one to avoid the negative effect.
         agent_status = {'admin_state_up': origin_status}
         body = self.admin_client.update_agent(agent_id=self.agent['id'],
-                                              agent_info=agent_status)
+                                              agent=agent_status)
         updated_status = body['agent']['admin_state_up']
         self.assertEqual(origin_status, updated_status)
 
@@ -73,16 +73,15 @@ class AgentManagementTestJSON(base.BaseAdminNetworkTest):
         description = 'description for update agent.'
         agent_description = {'description': description}
         body = self.admin_client.update_agent(agent_id=self.agent['id'],
-                                              agent_info=agent_description)
+                                              agent=agent_description)
         self.addCleanup(self._restore_agent)
         updated_description = body['agent']['description']
         self.assertEqual(updated_description, description)
 
     def _restore_agent(self):
-        """
-        Restore the agent description after update test.
-        """
+        """Restore the agent description after update test"""
+
         description = self.agent['description'] or ''
         origin_agent = {'description': description}
         self.admin_client.update_agent(agent_id=self.agent['id'],
-                                       agent_info=origin_agent)
+                                       agent=origin_agent)

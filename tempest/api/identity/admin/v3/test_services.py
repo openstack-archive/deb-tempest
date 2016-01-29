@@ -26,7 +26,7 @@ class ServicesTestJSON(base.BaseIdentityV3AdminTest):
         # Used for deleting the services created in this class
         self.service_client.delete_service(service_id)
         # Checking whether service is deleted successfully
-        self.assertRaises(lib_exc.NotFound, self.service_client.get_service,
+        self.assertRaises(lib_exc.NotFound, self.service_client.show_service,
                           service_id)
 
     @test.attr(type='smoke')
@@ -37,7 +37,7 @@ class ServicesTestJSON(base.BaseIdentityV3AdminTest):
         serv_type = data_utils.rand_name('type')
         desc = data_utils.rand_name('description')
         create_service = self.service_client.create_service(
-            serv_type, name=name, description=desc)['service']
+            type=serv_type, name=name, description=desc)['service']
         self.addCleanup(self._del_service, create_service['id'])
         self.assertIsNotNone(create_service['id'])
 
@@ -56,7 +56,7 @@ class ServicesTestJSON(base.BaseIdentityV3AdminTest):
         self.assertNotEqual(resp1_desc, resp2_desc)
 
         # Get service
-        fetched_service = self.service_client.get_service(s_id)['service']
+        fetched_service = self.service_client.show_service(s_id)['service']
         resp3_desc = fetched_service['description']
 
         self.assertEqual(resp2_desc, resp3_desc)
@@ -68,7 +68,7 @@ class ServicesTestJSON(base.BaseIdentityV3AdminTest):
         name = data_utils.rand_name('service')
         serv_type = data_utils.rand_name('type')
         service = self.service_client.create_service(
-            serv_type, name=name)['service']
+            type=serv_type, name=name)['service']
         self.addCleanup(self.service_client.delete_service, service['id'])
         self.assertIn('id', service)
         expected_data = {'name': name, 'type': serv_type}
@@ -82,7 +82,7 @@ class ServicesTestJSON(base.BaseIdentityV3AdminTest):
             name = data_utils.rand_name('service')
             serv_type = data_utils.rand_name('type')
             create_service = self.service_client.create_service(
-                serv_type, name=name)['service']
+                type=serv_type, name=name)['service']
             self.addCleanup(self.service_client.delete_service,
                             create_service['id'])
             service_ids.append(create_service['id'])

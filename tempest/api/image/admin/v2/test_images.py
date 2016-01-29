@@ -26,10 +26,8 @@ CONF = config.CONF
 
 
 class BasicAdminOperationsImagesTest(base.BaseV2ImageAdminTest):
+    """Here we test admin operations of images"""
 
-    """
-    Here we test admin operations of images
-    """
     @testtools.skipUnless(CONF.image_feature_enabled.deactivate_image,
                           'deactivate-image is not available.')
     @test.idempotent_id('951ebe01-969f-4ea9-9898-8a3f1f442ab0')
@@ -51,12 +49,12 @@ class BasicAdminOperationsImagesTest(base.BaseV2ImageAdminTest):
         body = self.client.show_image(image_id)
         self.assertEqual("deactivated", body['status'])
         # non-admin user unable to download deactivated image
-        self.assertRaises(lib_exc.Forbidden, self.client.load_image_file,
+        self.assertRaises(lib_exc.Forbidden, self.client.show_image_file,
                           image_id)
         # reactivate image
         self.admin_client.reactivate_image(image_id)
         body = self.client.show_image(image_id)
         self.assertEqual("active", body['status'])
         # non-admin user able to download image after reactivation by admin
-        body = self.client.load_image_file(image_id)
+        body = self.client.show_image_file(image_id)
         self.assertEqual(content, body.data)

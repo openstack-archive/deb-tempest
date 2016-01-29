@@ -18,7 +18,7 @@ from tempest_lib import exceptions as lib_exc
 
 from tempest.api.identity import base
 from tempest import clients
-from tempest.common import cred_provider
+from tempest.common import credentials_factory as common_creds
 from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
@@ -55,7 +55,7 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
         self.trustor_username = data_utils.rand_name('user')
         u_desc = self.trustor_username + 'description'
         u_email = self.trustor_username + '@testmail.xx'
-        self.trustor_password = data_utils.rand_name('pass')
+        self.trustor_password = data_utils.rand_password()
         user = self.client.create_user(
             self.trustor_username,
             description=u_desc,
@@ -89,7 +89,7 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
         self.assertIsNotNone(self.trustee_user_id)
 
         # Initialize a new client with the trustor credentials
-        creds = cred_provider.get_credentials(
+        creds = common_creds.get_credentials(
             identity_version='v3',
             username=self.trustor_username,
             password=self.trustor_password,
@@ -115,7 +115,7 @@ class BaseTrustsV3Test(base.BaseIdentityV3AdminTest):
             trustor_user_id=self.trustor_user_id,
             trustee_user_id=self.trustee_user_id,
             project_id=self.trustor_project_id,
-            role_names=[self.delegated_role],
+            roles=[{'name': self.delegated_role}],
             impersonation=impersonate,
             expires_at=expires)['trust']
         self.trust_id = trust_create['id']

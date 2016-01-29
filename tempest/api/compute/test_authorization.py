@@ -51,20 +51,21 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
         cls.images_client = cls.os.images_client
         cls.glance_client = cls.os.image_client
         cls.keypairs_client = cls.os.keypairs_client
-        cls.security_client = cls.os.security_groups_client
+        cls.security_client = cls.os.compute_security_groups_client
         cls.rule_client = cls.os.security_group_rules_client
 
         cls.alt_client = cls.alt_manager.servers_client
         cls.alt_images_client = cls.alt_manager.images_client
         cls.alt_keypairs_client = cls.alt_manager.keypairs_client
-        cls.alt_security_client = cls.alt_manager.security_groups_client
+        cls.alt_security_client = (
+            cls.alt_manager.compute_security_groups_client)
         cls.alt_rule_client = cls.alt_manager.security_group_rules_client
 
     @classmethod
     def resource_setup(cls):
         super(AuthorizationTestJSON, cls).resource_setup()
         server = cls.create_test_server(wait_until='ACTIVE')
-        cls.server = cls.client.show_server(server['id'])
+        cls.server = cls.client.show_server(server['id'])['server']
 
         name = data_utils.rand_name('image')
         body = cls.glance_client.create_image(name=name,
@@ -150,13 +151,13 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
     def test_change_password_for_alt_account_fails(self):
         # A change password request for another user's server should fail
         self.assertRaises(lib_exc.NotFound, self.alt_client.change_password,
-                          self.server['id'], 'newpass')
+                          self.server['id'], adminPass='newpass')
 
     @test.idempotent_id('14cb5ff5-f646-45ca-8f51-09081d6c0c24')
     def test_reboot_server_for_alt_account_fails(self):
         # A reboot request for another user's server should fail
         self.assertRaises(lib_exc.NotFound, self.alt_client.reboot_server,
-                          self.server['id'], 'HARD')
+                          self.server['id'], type='HARD')
 
     @test.idempotent_id('8a0bce51-cd00-480b-88ba-dbc7d8408a37')
     def test_rebuild_server_for_alt_account_fails(self):
@@ -181,10 +182,19 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
     def test_create_server_with_unauthorized_image(self):
         # Server creation with another user's image should fail
         self.assertRaises(lib_exc.BadRequest, self.alt_client.create_server,
-                          'test', self.image['id'], self.flavor_ref)
+                          name='test', imageRef=self.image['id'],
+                          flavorRef=self.flavor_ref)
 
     @test.idempotent_id('acf8724b-142b-4044-82c3-78d31a533f24')
     def test_create_server_fails_when_tenant_incorrect(self):
+        # BUG(sdague): this test should fail because of bad auth url,
+        # which means that when we run with a service catalog without
+        # project_id in the urls, it should fail to fail, and thus
+        # fail the test. It does not.
+        #
+        # The 400 BadRequest is clearly ambiguous, and something else
+        # is wrong about this request. This should be fixed.
+        #
         # A create server request should fail if the tenant id does not match
         # the current user
         # Change the base URL to impersonate another user
@@ -193,14 +203,27 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
             auth_data=self.client.auth_provider.auth_data
         )
         self.assertRaises(lib_exc.BadRequest,
-                          self.alt_client.create_server, 'test',
-                          self.image['id'], self.flavor_ref)
+                          self.alt_client.create_server, name='test',
+                          imageRef=self.image['id'], flavorRef=self.flavor_ref)
 
     @test.idempotent_id('f03d1ded-7fd4-4d29-bc13-e2391f29c625')
     def test_create_keypair_in_analt_user_tenant(self):
-        # A create keypair request should fail if the tenant id does not match
-        # the current user
-        # POST keypair with other user tenant
+        """create keypair should not function for alternate tenant
+
+        POST {alt_service_url}/os-keypairs
+
+        Attempt to create a keypair against an alternate tenant by
+        changing using a different tenant's service url. This should
+        return a BadRequest. This tests basic tenant isolation protections.
+
+        NOTE(sdague): if the environment does not use project_id in
+        the service urls, this test is not valid. Skip under these
+        conditions.
+
+        """
+        if self.alt_keypairs_client.base_url == self.keypairs_client.base_url:
+            raise self.skipException("Service urls don't include project_id")
+
         k_name = data_utils.rand_name('keypair')
         try:
             # Change the base URL to impersonate another user
@@ -249,9 +272,23 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
 
     @test.idempotent_id('752c917e-83be-499d-a422-3559127f7d3c')
     def test_create_security_group_in_analt_user_tenant(self):
-        # A create security group request should fail if the tenant id does not
-        # match the current user
-        # POST security group with other user tenant
+        """create security group should not function for alternate tenant
+
+        POST {alt_service_url}/os-security-groups
+
+        Attempt to create a security group against an alternate tenant
+        by changing using a different tenant's service url. This
+        should return a BadRequest. This tests basic tenant isolation
+        protections.
+
+        NOTE(sdague): if the environment does not use project_id in
+        the service urls, this test is not valid. Skip under these
+        conditions.
+
+        """
+        if self.alt_security_client.base_url == self.security_client.base_url:
+            raise self.skipException("Service urls don't include project_id")
+
         s_name = data_utils.rand_name('security')
         s_description = data_utils.rand_name('security')
         try:
@@ -288,9 +325,23 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
 
     @test.idempotent_id('b2b76de0-210a-4089-b921-591c9ec552f6')
     def test_create_security_group_rule_in_analt_user_tenant(self):
-        # A create security group rule request should fail if the tenant id
-        # does not match the current user
-        # POST security group rule with other user tenant
+        """create security group rule should not function for alternate tenant
+
+        POST {alt_service_url}/os-security-group-rules
+
+        Attempt to create a security group rule against an alternate
+        tenant by changing using a different tenant's service
+        url. This should return a BadRequest. This tests basic tenant
+        isolation protections.
+
+        NOTE(sdague): if the environment does not use project_id in
+        the service urls, this test is not valid. Skip under these
+        conditions.
+
+        """
+        if self.alt_security_client.base_url == self.security_client.base_url:
+            raise self.skipException("Service urls don't include project_id")
+
         parent_group_id = self.security_group['id']
         ip_protocol = 'icmp'
         from_port = -1
@@ -350,7 +401,7 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
         self.addCleanup(self.client.delete_server_metadata_item,
                         self.server['id'], 'meta1')
         self.assertRaises(lib_exc.NotFound,
-                          self.alt_client.get_server_metadata_item,
+                          self.alt_client.show_server_metadata_item,
                           self.server['id'], 'meta1')
 
     @test.idempotent_id('16b2d724-0d3b-4216-a9fa-97bd4d9cf670')
@@ -393,4 +444,4 @@ class AuthorizationTestJSON(base.BaseV2ComputeTest):
         # A Get Console Output for another user's server should fail
         self.assertRaises(lib_exc.NotFound,
                           self.alt_client.get_console_output,
-                          self.server['id'], 10)
+                          self.server['id'], length=10)

@@ -19,10 +19,7 @@ import six
 
 
 class AttributeDict(dict):
-
-    """
-    Provide attribute access (dict.key) to dictionary values.
-    """
+    """Provide attribute access (dict.key) to dictionary values."""
 
     def __getattr__(self, name):
         """Allow attribute access for all keys in the dict."""
@@ -33,14 +30,17 @@ class AttributeDict(dict):
 
 @six.add_metaclass(abc.ABCMeta)
 class DeletableResource(AttributeDict):
+    """Support deletion of neutron resources (networks, subnets)
 
-    """
-    Support deletion of neutron resources (networks, subnets) via a
-    delete() method, as is supported by keystone and nova resources.
+    via a delete() method, as is supported by keystone and nova resources.
     """
 
     def __init__(self, *args, **kwargs):
         self.client = kwargs.pop('client', None)
+        self.network_client = kwargs.pop('network_client', None)
+        self.networks_client = kwargs.pop('networks_client', None)
+        self.subnets_client = kwargs.pop('subnets_client', None)
+        self.ports_client = kwargs.pop('ports_client', None)
         super(DeletableResource, self).__init__(*args, **kwargs)
 
     def __str__(self):
@@ -72,7 +72,7 @@ class DeletableResource(AttributeDict):
 class DeletableNetwork(DeletableResource):
 
     def delete(self):
-        self.client.delete_network(self.id)
+        self.networks_client.delete_network(self.id)
 
 
 class DeletableSubnet(DeletableResource):
@@ -82,23 +82,23 @@ class DeletableSubnet(DeletableResource):
         self._router_ids = set()
 
     def update(self, *args, **kwargs):
-        result = self.client.update_subnet(self.id,
-                                           *args,
-                                           **kwargs)
+        result = self.subnets_client.update_subnet(self.id,
+                                                   *args,
+                                                   **kwargs)
         return super(DeletableSubnet, self).update(**result['subnet'])
 
     def add_to_router(self, router_id):
         self._router_ids.add(router_id)
-        self.client.add_router_interface_with_subnet_id(router_id,
-                                                        subnet_id=self.id)
+        self.network_client.add_router_interface_with_subnet_id(
+            router_id, subnet_id=self.id)
 
     def delete(self):
         for router_id in self._router_ids.copy():
-            self.client.remove_router_interface_with_subnet_id(
+            self.network_client.remove_router_interface_with_subnet_id(
                 router_id,
                 subnet_id=self.id)
             self._router_ids.remove(router_id)
-        self.client.delete_subnet(self.id)
+        self.subnets_client.delete_subnet(self.id)
 
 
 class DeletableRouter(DeletableResource):
@@ -149,7 +149,7 @@ class DeletableFloatingIp(DeletableResource):
 class DeletablePort(DeletableResource):
 
     def delete(self):
-        self.client.delete_port(self.id)
+        self.ports_client.delete_port(self.id)
 
 
 class DeletableSecurityGroup(DeletableResource):

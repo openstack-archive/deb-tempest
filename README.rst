@@ -22,8 +22,8 @@ Tempest Design Principles that we strive to live by.
 - Tempest should not touch private or implementation specific
   interfaces. This means not directly going to the database, not
   directly hitting the hypervisors, not testing extensions not
-  included in the OpenStack base. If there is some feature of
-  OpenStack that is not verifiable through standard interfaces, this
+  included in the OpenStack base. If there are some features of
+  OpenStack that are not verifiable through standard interfaces, this
   should be considered a possible enhancement.
 - Tempest strives for complete coverage of the OpenStack API and
   common scenarios that demonstrate a working cloud.
@@ -47,10 +47,11 @@ working dir is the actually Tempest source repo, and there are a number of
 assumptions related to that. For this section we'll only cover the newer method
 as it is simpler, and quicker to work with.
 
-#. You first need to install Tempest this is done with pip, after you check out
-   the Tempest repo you simply run something like::
+#. You first need to install Tempest. This is done with pip after you check out
+   the Tempest repo::
 
-    $ pip install tempest
+    $ git clone https://github.com/openstack/tempest/
+    $ pip install tempest/
 
    This can be done within a venv, but the assumption for this guide is that
    the Tempest cli entry point will be in your shell's PATH.
@@ -86,7 +87,7 @@ as it is simpler, and quicker to work with.
    be done with testr directly or any `testr`_ based test runner, like
    `ostestr`_. For example, from the working dir running::
 
-     $ ostestr --regex '(?!.*\[.*\bslow\b.*\])(^tempest\.(api|scenario|thirdparty))'
+     $ ostestr --regex '(?!.*\[.*\bslow\b.*\])(^tempest\.(api|scenario))'
 
    will run the same set of tests as the default gate jobs.
 
@@ -168,7 +169,7 @@ configuration file is to generate a sample in the ``etc/`` directory ::
 
     $> cd $TEMPEST_ROOT_DIR
     $> oslo-config-generator --config-file \
-        tools/config/config-generator.tempest.conf \
+        etc/config-generator.tempest.conf \
         --output-file etc/tempest.conf
 
 After that, open up the ``etc/tempest.conf`` file and edit the

@@ -31,7 +31,7 @@ class RemoteClient(object):
     # NOTE(afazekas): It should always get an address instead of server
     def __init__(self, server, username, password=None, pkey=None):
         ssh_timeout = CONF.validation.ssh_timeout
-        network = CONF.compute.network_for_ssh
+        network = CONF.validation.network_for_ssh
         ip_version = CONF.validation.ip_version_for_ssh
         connect_timeout = CONF.validation.connect_timeout
         if isinstance(server, six.string_types):
@@ -51,12 +51,13 @@ class RemoteClient(object):
     def exec_command(self, cmd):
         # Shell options below add more clearness on failures,
         # path is extended for some non-cirros guest oses (centos7)
-        cmd = CONF.compute.ssh_shell_prologue + " " + cmd
+        cmd = CONF.validation.ssh_shell_prologue + " " + cmd
         LOG.debug("Remote command: %s" % cmd)
         return self.ssh_client.exec_command(cmd)
 
     def validate_authentication(self):
         """Validate ssh connection and authentication
+
            This method raises an Exception when the validation fails.
         """
         self.ssh_client.test_connection_auth()
@@ -72,7 +73,7 @@ class RemoteClient(object):
             return output.split()[1]
 
     def get_number_of_vcpus(self):
-        output = self.exec_command('grep -c processor /proc/cpuinfo')
+        output = self.exec_command('grep -c ^processor /proc/cpuinfo')
         return int(output)
 
     def get_partitions(self):
@@ -93,16 +94,25 @@ class RemoteClient(object):
         cmd = 'sudo sh -c "echo \\"%s\\" >/dev/console"' % message
         return self.exec_command(cmd)
 
-    def ping_host(self, host, count=CONF.compute.ping_count,
-                  size=CONF.compute.ping_size):
+    def ping_host(self, host, count=CONF.validation.ping_count,
+                  size=CONF.validation.ping_size, nic=None):
         addr = netaddr.IPAddress(host)
         cmd = 'ping6' if addr.version == 6 else 'ping'
+        if nic:
+            cmd = 'sudo {cmd} -I {nic}'.format(cmd=cmd, nic=nic)
         cmd += ' -c{0} -w{0} -s{1} {2}'.format(count, size, host)
         return self.exec_command(cmd)
 
-    def get_mac_address(self):
-        cmd = "ip addr | awk '/ether/ {print $2}'"
-        return self.exec_command(cmd)
+    def set_mac_address(self, nic, address):
+        self.set_nic_state(nic=nic, state="down")
+        cmd = "sudo ip link set dev {0} address {1}".format(nic, address)
+        self.exec_command(cmd)
+        self.set_nic_state(nic=nic, state="up")
+
+    def get_mac_address(self, nic=""):
+        show_nic = "show {nic} ".format(nic=nic) if nic else ""
+        cmd = "ip addr %s| awk '/ether/ {print $2}'" % show_nic
+        return self.exec_command(cmd).strip().lower()
 
     def get_nic_name(self, address):
         cmd = "ip -o addr | awk '/%s/ {print $2}'" % address
@@ -120,8 +130,8 @@ class RemoteClient(object):
         )
         return self.exec_command(cmd)
 
-    def turn_nic_on(self, nic):
-        cmd = "sudo ip link set {nic} up".format(nic=nic)
+    def set_nic_state(self, nic, state="up"):
+        cmd = "sudo ip link set {nic} {state}".format(nic=nic, state=state)
         return self.exec_command(cmd)
 
     def get_pids(self, pr_name):
@@ -163,11 +173,22 @@ class RemoteClient(object):
         * dhclient
         """
         # TODO(yfried): add support for dhcpcd
-        suported_clients = ['udhcpc', 'dhclient']
+        supported_clients = ['udhcpc', 'dhclient']
         dhcp_client = CONF.scenario.dhcp_client
-        if dhcp_client not in suported_clients:
+        if dhcp_client not in supported_clients:
             raise exceptions.InvalidConfiguration('%s DHCP client unsupported'
                                                   % dhcp_client)
         if dhcp_client == 'udhcpc' and not fixed_ip:
             raise ValueError("need to set 'fixed_ip' for udhcpc client")
         return getattr(self, '_renew_lease_' + dhcp_client)(fixed_ip=fixed_ip)
+
+    def mount(self, dev_name, mount_path='/mnt'):
+        cmd_mount = 'sudo mount /dev/%s %s' % (dev_name, mount_path)
+        self.exec_command(cmd_mount)
+
+    def umount(self, mount_path='/mnt'):
+        self.exec_command('sudo umount %s' % mount_path)
+
+    def make_fs(self, dev_name, fs='ext4'):
+        cmd_mkfs = 'sudo /usr/sbin/mke2fs -t %s /dev/%s' % (fs, dev_name)
+        self.exec_command(cmd_mkfs)

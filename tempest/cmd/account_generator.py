@@ -89,10 +89,15 @@ import os
 from oslo_log import log as logging
 import yaml
 
+from tempest.common import identity
 from tempest import config
-from tempest import exceptions
+from tempest import exceptions as exc
 from tempest.services.identity.v2.json import identity_client
+from tempest.services.identity.v2.json import roles_client
+from tempest.services.identity.v2.json import tenants_client
 from tempest.services.network.json import network_client
+from tempest.services.network.json import networks_client
+from tempest.services.network.json import subnets_client
 import tempest_lib.auth
 from tempest_lib.common.utils import data_utils
 import tempest_lib.exceptions
@@ -135,47 +140,79 @@ def get_admin_clients(opts):
         endpoint_type='adminURL',
         **params
     )
+    tenants_admin = tenants_client.TenantsClient(
+        _auth,
+        CONF.identity.catalog_type,
+        CONF.identity.region,
+        endpoint_type='adminURL',
+        **params
+    )
+    roles_admin = roles_client.RolesClient(
+        _auth,
+        CONF.identity.catalog_type,
+        CONF.identity.region,
+        endpoint_type='adminURL',
+        **params
+    )
     network_admin = None
+    networks_admin = None
+    subnets_admin = None
+    neutron_iso_networks = False
     if (CONF.service_available.neutron and
         CONF.auth.create_isolated_networks):
+        neutron_iso_networks = True
         network_admin = network_client.NetworkClient(
             _auth,
             CONF.network.catalog_type,
             CONF.network.region or CONF.identity.region,
             endpoint_type='adminURL',
             **params)
-    return identity_admin, network_admin
+        networks_admin = networks_client.NetworksClient(
+            _auth,
+            CONF.network.catalog_type,
+            CONF.network.region or CONF.identity.region,
+            endpoint_type='adminURL',
+            **params)
+        subnets_admin = subnets_client.SubnetsClient(
+            _auth,
+            CONF.network.catalog_type,
+            CONF.network.region or CONF.identity.region,
+            endpoint_type='adminURL',
+            **params)
+    return (identity_admin, tenants_admin, roles_admin, neutron_iso_networks,
+            network_admin, networks_admin, subnets_admin)
 
 
 def create_resources(opts, resources):
-    identity_admin, network_admin = get_admin_clients(opts)
-    roles = identity_admin.list_roles()
+    (identity_admin, tenants_admin, roles_admin, neutron_iso_networks,
+     network_admin, networks_admin, subnets_admin) = get_admin_clients(opts)
+    roles = roles_admin.list_roles()['roles']
     for u in resources['users']:
         u['role_ids'] = []
         for r in u.get('roles', ()):
             try:
                 role = filter(lambda r_: r_['name'] == r, roles)[0]
-                u['role_ids'] += [role['id']]
             except IndexError:
-                raise exceptions.TempestException(
-                    "Role: %s - doesn't exist" % r
-                )
-    existing = [x['name'] for x in identity_admin.list_tenants()['tenants']]
+                msg = "Role: %s doesn't exist" % r
+                raise exc.InvalidConfiguration(msg)
+            u['role_ids'] += [role['id']]
+    existing = [x['name'] for x in tenants_admin.list_tenants()['tenants']]
     for tenant in resources['tenants']:
         if tenant not in existing:
-            identity_admin.create_tenant(tenant)
+            tenants_admin.create_tenant(tenant)
         else:
             LOG.warn("Tenant '%s' already exists in this environment" % tenant)
     LOG.info('Tenants created')
     for u in resources['users']:
         try:
-            tenant = identity_admin.get_tenant_by_name(u['tenant'])
+            tenant = identity.get_tenant_by_name(tenants_admin, u['tenant'])
         except tempest_lib.exceptions.NotFound:
             LOG.error("Tenant: %s - not found" % u['tenant'])
             continue
         while True:
             try:
-                identity_admin.get_user_by_username(tenant['id'], u['name'])
+                identity.get_user_by_username(tenants_admin,
+                                              tenant['id'], u['name'])
             except tempest_lib.exceptions.NotFound:
                 identity_admin.create_user(
                     u['name'], u['pass'], tenant['id'],
@@ -188,30 +225,30 @@ def create_resources(opts, resources):
                 u['name'] = random_user_name(opts.tag, u['prefix'])
 
     LOG.info('Users created')
-    if network_admin:
+    if neutron_iso_networks:
         for u in resources['users']:
-            tenant = identity_admin.get_tenant_by_name(u['tenant'])
-            network_name, router_name = create_network_resources(network_admin,
-                                                                 tenant['id'],
-                                                                 u['name'])
+            tenant = identity.get_tenant_by_name(tenants_admin, u['tenant'])
+            network_name, router_name = create_network_resources(
+                network_admin, networks_admin, subnets_admin, tenant['id'],
+                u['name'])
             u['network'] = network_name
             u['router'] = router_name
         LOG.info('Networks created')
     for u in resources['users']:
         try:
-            tenant = identity_admin.get_tenant_by_name(u['tenant'])
+            tenant = identity.get_tenant_by_name(tenants_admin, u['tenant'])
         except tempest_lib.exceptions.NotFound:
             LOG.error("Tenant: %s - not found" % u['tenant'])
             continue
         try:
-            user = identity_admin.get_user_by_username(tenant['id'],
-                                                       u['name'])
+            user = identity.get_user_by_username(tenants_admin,
+                                                 tenant['id'], u['name'])
         except tempest_lib.exceptions.NotFound:
             LOG.error("User: %s - not found" % u['user'])
             continue
         for r in u['role_ids']:
             try:
-                identity_admin.assign_user_role(tenant['id'], user['id'], r)
+                roles_admin.assign_user_role(tenant['id'], user['id'], r)
             except tempest_lib.exceptions.Conflict:
                 # don't care if it's already assigned
                 pass
@@ -219,10 +256,11 @@ def create_resources(opts, resources):
     LOG.info('Resources deployed successfully!')
 
 
-def create_network_resources(network_admin_client, tenant_id, name):
+def create_network_resources(network_admin_client, networks_admin_client,
+                             subnets_admin_client, tenant_id, name):
 
     def _create_network(name):
-        resp_body = network_admin_client.create_network(
+        resp_body = networks_admin_client.create_network(
             name=name, tenant_id=tenant_id)
         return resp_body['network']
 
@@ -231,7 +269,7 @@ def create_network_resources(network_admin_client, tenant_id, name):
         mask_bits = CONF.network.tenant_network_mask_bits
         for subnet_cidr in base_cidr.subnet(mask_bits):
             try:
-                resp_body = network_admin_client.\
+                resp_body = subnets_admin_client.\
                     create_subnet(
                         network_id=network_id, cidr=str(subnet_cidr),
                         name=subnet_name,
@@ -285,17 +323,21 @@ def generate_resources(opts):
             {'number': 1,
              'prefix': 'alt',
              'roles': (CONF.auth.tempest_roles +
-                       [CONF.object_storage.operator_role])},
-            {'number': 1,
-             'prefix': 'swift_admin',
-             'roles': (CONF.auth.tempest_roles +
-                       [CONF.object_storage.operator_role,
-                        CONF.object_storage.reseller_admin_role])},
-            {'number': 1,
-             'prefix': 'stack_owner',
-             'roles': (CONF.auth.tempest_roles +
-                       [CONF.orchestration.stack_owner_role])},
-            ]
+                       [CONF.object_storage.operator_role])}]
+    if CONF.service_available.swift:
+        spec.append({'number': 1,
+                     'prefix': 'swift_operator',
+                     'roles': (CONF.auth.tempest_roles +
+                               [CONF.object_storage.operator_role])})
+        spec.append({'number': 1,
+                     'prefix': 'swift_reseller_admin',
+                     'roles': (CONF.auth.tempest_roles +
+                               [CONF.object_storage.reseller_admin_role])})
+    if CONF.service_available.heat:
+        spec.append({'number': 1,
+                     'prefix': 'stack_owner',
+                     'roles': (CONF.auth.tempest_roles +
+                               [CONF.orchestration.stack_owner_role])})
     if opts.admin:
         spec.append({
             'number': 1,
@@ -315,7 +357,7 @@ def generate_resources(opts):
                 resources['users'].append({
                     'tenant': tenant,
                     'name': user,
-                    'pass': data_utils.rand_name(),
+                    'pass': data_utils.rand_password(),
                     'prefix': user_group['prefix'],
                     'roles': user_group['roles']
                 })

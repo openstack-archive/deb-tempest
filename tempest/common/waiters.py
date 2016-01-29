@@ -34,7 +34,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
 
     # NOTE(afazekas): UNKNOWN status possible on ERROR
     # or in a very early stage.
-    body = client.show_server(server_id)
+    body = client.show_server(server_id)['server']
     old_status = server_status = body['status']
     old_task_state = task_state = _get_task_state(body)
     start_time = int(time.time())
@@ -61,7 +61,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
                 return
 
         time.sleep(client.build_interval)
-        body = client.show_server(server_id)
+        body = client.show_server(server_id)['server']
         server_status = body['status']
         task_state = _get_task_state(body)
         if (server_status != old_status) or (task_state != old_task_state):
@@ -102,7 +102,7 @@ def wait_for_server_termination(client, server_id, ignore_error=False):
     start_time = int(time.time())
     while True:
         try:
-            body = client.show_server(server_id)
+            body = client.show_server(server_id)['server']
         except lib_exc.NotFound:
             return
 
@@ -162,20 +162,13 @@ def wait_for_image_status(client, image_id, status):
 
 def wait_for_volume_status(client, volume_id, status):
     """Waits for a Volume to reach a given status."""
-    body = client.show_volume(volume_id)
-    if 'volume' in body:
-        body = body['volume']
+    body = client.show_volume(volume_id)['volume']
     volume_status = body['status']
     start = int(time.time())
 
     while volume_status != status:
         time.sleep(client.build_interval)
-        body = client.show_volume(volume_id)
-        # TODO(jswarren) always extract 'volume' value
-        # once the compute clients also return the full
-        # response.
-        if 'volume' in body:
-            body = body['volume']
+        body = client.show_volume(volume_id)['volume']
         volume_status = body['status']
         if volume_status == 'error':
             raise exceptions.VolumeBuildErrorException(volume_id=volume_id)
@@ -186,6 +179,27 @@ def wait_for_volume_status(client, volume_id, status):
             message = ('Volume %s failed to reach %s status (current %s) '
                        'within the required time (%s s).' %
                        (volume_id, status, volume_status,
+                        client.build_timeout))
+            raise exceptions.TimeoutException(message)
+
+
+def wait_for_snapshot_status(client, snapshot_id, status):
+    """Waits for a Snapshot to reach a given status."""
+    body = client.show_snapshot(snapshot_id)['snapshot']
+    snapshot_status = body['status']
+    start = int(time.time())
+
+    while snapshot_status != status:
+        time.sleep(client.build_interval)
+        body = client.show_snapshot(snapshot_id)['snapshot']
+        snapshot_status = body['status']
+        if snapshot_status == 'error':
+            raise exceptions.SnapshotBuildErrorException(
+                snapshot_id=snapshot_id)
+        if int(time.time()) - start >= client.build_timeout:
+            message = ('Snapshot %s failed to reach %s status (current %s) '
+                       'within the required time (%s s).' %
+                       (snapshot_id, status, snapshot_status,
                         client.build_timeout))
             raise exceptions.TimeoutException(message)
 
