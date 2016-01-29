@@ -33,7 +33,7 @@ override_dh_auto_install:
 	install -D -m 0664 etc/javelin-resources.yaml.sample $(CURDIR)/debian/tempest/etc/tempest/javelin-resources.yaml
 
 	#cp -rfv etc/schemas $(CURDIR)/debian/tempest/etc/tempest
-	cp tools/colorizer.py $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest
+#	cp tools/colorizer.py $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest
 	# Fix-up some preferences
 
 	sed -i 's/^[ \t#]*lock_path[ \t]*=.*/lock_path=\/var\/lock/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
