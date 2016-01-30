@@ -18,7 +18,7 @@ override_dh_auto_clean:
 override_dh_auto_install:
 	dh_auto_install -O--buildsystem=python_distutils
 	mkdir -p $(CURDIR)/debian/tempest/etc/tempest
-	PYTHONPATH=. oslo-config-generator --output-file $(CURDIR)/debian/tempest/etc/tempest/tempest.conf \
+	PYTHONPATH=$(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages oslo-config-generator --output-file $(CURDIR)/debian/tempest/etc/tempest/tempest.conf \
 		--wrap-width 140 \
 		--namespace tempest.config \
 		--namespace oslo.concurrency \
@@ -37,15 +37,8 @@ override_dh_auto_install:
 	# Fix-up some preferences
 
 	sed -i 's/^[ \t#]*lock_path[ \t]*=.*/lock_path=\/var\/lock/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^[ \t#]*username[ \t]*=.*/username=admin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^[ \t#]*tenant_name[ \t]*=,*/tenant_name=admin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^[ \t#]*cli_dir[ \t]*=.*/cli_dir=\/usr\/bin/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^[ \t#]*allow_tenant_isolation[ \t]*=.*/allow_tenant_isolation=true/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 	sed -i 's/^[ \t#]*image_ssh_user=.*/image_ssh_user=debian/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-
-	# Do not use verbose by default: it is a way too verbose and not
-	# really helpful, as failed tests will anyway dump the trace.
-	sed -i 's/^[ \t#]*verbose[ \t]*=.*/verbose = false/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
 
 	# Package stuff in /var/lib/tempest, since we need read/write access
 	# to run the testr stuff
