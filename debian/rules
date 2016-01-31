@@ -37,13 +37,45 @@ override_dh_auto_install:
 	# Fix-up some preferences
 
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf DEFAULT verbose false
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf log_file tempest.log
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf log_dir /var/log
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf oslo_concurrency lock_path /var/lock
 
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf auth admin_tenant_name admin
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf auth admin_username admin
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf auth admin_domain_name default
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf compute fixed_network_name demo-net
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf compute region regionOne
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf compute-feature-enabled allow_duplicate_networks true
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf compute-feature-enabled spice_console true
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf dashboard dashboard_url http://127.0.0.1
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity uri http://127.0.0.1:35357/v2.0
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity v2_public_endpoint_type adminURL
-	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity disable_ssl_certificate_validation ture
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity uri_v3 http://127.0.0.1:35357/v3
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity disable_ssl_certificate_validation true
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity domain_name default
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity auth_version v3
-	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity v2_public_endpoint_type adminURL
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity default_domain_id default
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity region regionOne
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity v2_admin_endpoint_type adminURL
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity-feature-enabled api_v3 true
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity-feature-enabled api_v2 false
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf image region regionOne
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf network region regionOne
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf network build_interval 3
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf orchestration instance_type m1.small
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf orchestration region regionOne
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf orchestration region regionOne
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf volume region regionOne
 
 	# Package stuff in /var/lib/tempest, since we need read/write access
 	# to run the testr stuff
