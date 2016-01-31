@@ -36,9 +36,14 @@ override_dh_auto_install:
 #	cp tools/colorizer.py $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest
 	# Fix-up some preferences
 
-	sed -i 's/^[ \t#]*lock_path[ \t]*=.*/lock_path=\/var\/lock/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^[ \t#]*allow_tenant_isolation[ \t]*=.*/allow_tenant_isolation=true/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
-	sed -i 's/^[ \t#]*image_ssh_user=.*/image_ssh_user=debian/' $(CURDIR)/debian/tempest/etc/tempest/tempest.conf
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf DEFAULT verbose false
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf oslo_concurrency lock_path /var/lock
+
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity v2_public_endpoint_type adminURL
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity disable_ssl_certificate_validation ture
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity auth_version v3
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity v2_public_endpoint_type adminURL
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf identity default_domain_id default
 
 	# Package stuff in /var/lib/tempest, since we need read/write access
 	# to run the testr stuff
