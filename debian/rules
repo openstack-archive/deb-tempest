@@ -37,8 +37,10 @@ override_dh_auto_install:
 	# Fix-up some preferences
 
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf DEFAULT verbose false
-	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf log_file tempest.log
-	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf log_dir /var/log
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf DEFAULT log_file tempest.log
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf DEFAULT log_dir /var/log
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf DEFAULT log_file tempest.log
+
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf oslo_concurrency lock_path /var/lock
 
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf auth admin_tenant_name admin
