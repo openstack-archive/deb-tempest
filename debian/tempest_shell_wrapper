@@ -21,9 +21,9 @@ if [ ! -d .testrepository ] ; then
 fi
 
 if [ -z "${1}" ] && [ -n ${A} ] ; then
-	testr run --parallel --subunit '^(?!('"${A}"'))' $@ | subunit-trace
+	testr run --parallel --concurrency=2 --subunit '^(?!('"${A}"'))' $@ | subunit-trace
 else
-	testr run --parallel --subunit $@ | subunit-trace
+	testr run --parallel --concurrency=2 --subunit $@ | subunit-trace
 fi
 
-testr run --parallel --subunit $@ | subunit-trace
+#testr run --parallel --subunit $@ | subunit-trace
