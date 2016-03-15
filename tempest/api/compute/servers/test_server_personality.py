@@ -14,12 +14,13 @@
 #    under the License.
 
 import base64
-from tempest_lib import exceptions as lib_exc
 
 from tempest.api.compute import base
 from tempest.common.utils.linux import remote_client
 from tempest.common import waiters
 from tempest import config
+from tempest.lib.common.utils import data_utils
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 CONF = config.CONF
@@ -55,13 +56,16 @@ class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
         file_path = '/test.txt'
         personality = [{'path': file_path,
                         'contents': base64.b64encode(file_contents)}]
-        server = self.create_test_server(personality=personality,
-                                         wait_until='ACTIVE',
-                                         validatable=True)
+        password = data_utils.rand_password()
+        created_server = self.create_test_server(personality=personality,
+                                                 adminPass=password,
+                                                 wait_until='ACTIVE',
+                                                 validatable=True)
+        server = self.client.show_server(created_server['id'])['server']
         if CONF.validation.run_validation:
             linux_client = remote_client.RemoteClient(
                 self.get_server_ip(server),
-                self.ssh_user, server['adminPass'],
+                self.ssh_user, password,
                 self.validation_resources['keypair']['private_key'])
             self.assertEqual(file_contents,
                              linux_client.exec_command(
@@ -116,13 +120,16 @@ class ServerPersonalityTestJSON(base.BaseV2ComputeTest):
                 'path': path,
                 'contents': base64.b64encode(file_contents),
             })
-        server = self.create_test_server(personality=person,
-                                         wait_until='ACTIVE',
-                                         validatable=True)
+        password = data_utils.rand_password()
+        created_server = self.create_test_server(personality=person,
+                                                 adminPass=password,
+                                                 wait_until='ACTIVE',
+                                                 validatable=True)
+        server = self.client.show_server(created_server['id'])['server']
         if CONF.validation.run_validation:
             linux_client = remote_client.RemoteClient(
                 self.get_server_ip(server),
-                self.ssh_user, server['adminPass'],
+                self.ssh_user, password,
                 self.validation_resources['keypair']['private_key'])
             for i in person:
                 self.assertEqual(base64.b64decode(i['contents']),

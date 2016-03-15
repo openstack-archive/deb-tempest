@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_log import log
 import testtools
 
 from tempest import config
@@ -21,8 +20,6 @@ from tempest.scenario import manager
 from tempest import test
 
 CONF = config.CONF
-
-LOG = log.getLogger(__name__)
 
 
 class TestSnapshotPattern(manager.ScenarioTest):
@@ -52,7 +49,7 @@ class TestSnapshotPattern(manager.ScenarioTest):
             security_groups=[{'name': security_group['name']}],
             wait_until='ACTIVE')
 
-        instance_ip = self.get_server_or_ip(server)
+        instance_ip = self.get_server_ip(server)
         timestamp = self.create_timestamp(instance_ip,
                                           private_key=keypair['private_key'])
 
@@ -67,7 +64,7 @@ class TestSnapshotPattern(manager.ScenarioTest):
             wait_until='ACTIVE')
 
         # check the existence of the timestamp file in the second instance
-        server_from_snapshot_ip = self.get_server_or_ip(server_from_snapshot)
+        server_from_snapshot_ip = self.get_server_ip(server_from_snapshot)
         timestamp2 = self.get_timestamp(server_from_snapshot_ip,
                                         private_key=keypair['private_key'])
         self.assertEqual(timestamp, timestamp2)

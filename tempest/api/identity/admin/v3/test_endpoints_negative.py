@@ -14,10 +14,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib import exceptions as lib_exc
-
 from tempest.api.identity import base
 from tempest.common.utils import data_utils
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 
@@ -37,8 +36,8 @@ class EndpointsNegativeTestJSON(base.BaseIdentityV3AdminTest):
         s_type = data_utils.rand_name('type')
         s_description = data_utils.rand_name('description')
         cls.service_data = (
-            cls.service_client.create_service(name=s_name, type=s_type,
-                                              description=s_description)
+            cls.services_client.create_service(name=s_name, type=s_type,
+                                               description=s_description)
             ['service'])
         cls.service_id = cls.service_data['id']
         cls.service_ids.append(cls.service_id)
@@ -46,7 +45,7 @@ class EndpointsNegativeTestJSON(base.BaseIdentityV3AdminTest):
     @classmethod
     def resource_cleanup(cls):
         for s in cls.service_ids:
-            cls.service_client.delete_service(s)
+            cls.services_client.delete_service(s)
         super(EndpointsNegativeTestJSON, cls).resource_cleanup()
 
     @test.attr(type=['negative'])

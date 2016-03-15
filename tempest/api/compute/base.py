@@ -16,13 +16,15 @@
 import time
 
 from oslo_log import log as logging
-from tempest_lib import exceptions as lib_exc
 
+from tempest.api.compute import api_microversion_fixture
 from tempest.common import api_version_utils
 from tempest.common import compute
 from tempest.common.utils import data_utils
 from tempest.common import waiters
 from tempest import config
+from tempest import exceptions
+from tempest.lib import exceptions as lib_exc
 import tempest.test
 
 CONF = config.CONF
@@ -63,12 +65,13 @@ class BaseV2ComputeTest(api_version_utils.BaseMicroversionTest,
         cls.servers_client = cls.os.servers_client
         cls.server_groups_client = cls.os.server_groups_client
         cls.flavors_client = cls.os.flavors_client
-        cls.images_client = cls.os.images_client
+        cls.compute_images_client = cls.os.compute_images_client
         cls.extensions_client = cls.os.extensions_client
         cls.floating_ip_pools_client = cls.os.floating_ip_pools_client
         cls.floating_ips_client = cls.os.compute_floating_ips_client
         cls.keypairs_client = cls.os.keypairs_client
-        cls.security_group_rules_client = cls.os.security_group_rules_client
+        cls.security_group_rules_client = (
+            cls.os.compute_security_group_rules_client)
         cls.security_groups_client = cls.os.compute_security_groups_client
         cls.quotas_client = cls.os.quotas_client
         cls.quota_classes_client = cls.os.quota_classes_client
@@ -99,6 +102,10 @@ class BaseV2ComputeTest(api_version_utils.BaseMicroversionTest,
     @classmethod
     def resource_setup(cls):
         super(BaseV2ComputeTest, cls).resource_setup()
+        cls.request_microversion = (
+            api_version_utils.select_request_microversion(
+                cls.min_microversion,
+                CONF.compute_feature_enabled.min_microversion))
         cls.build_interval = CONF.compute.build_interval
         cls.build_timeout = CONF.compute.build_timeout
         cls.image_ref = CONF.compute.image_ref
@@ -170,7 +177,7 @@ class BaseV2ComputeTest(api_version_utils.BaseMicroversionTest,
         LOG.debug('Clearing images: %s', ','.join(cls.images))
         for image_id in cls.images:
             try:
-                cls.images_client.delete_image(image_id)
+                cls.compute_images_client.delete_image(image_id)
             except lib_exc.NotFound:
                 # The image may have already been deleted which is OK.
                 pass
@@ -278,8 +285,8 @@ class BaseV2ComputeTest(api_version_utils.BaseMicroversionTest,
             # into the delete_volume method as a convenience to the caller.
             volumes_client.wait_for_resource_deletion(volume_id)
         except lib_exc.NotFound:
-            LOG.warn("Unable to delete volume '%s' since it was not found. "
-                     "Maybe it was already deleted?" % volume_id)
+            LOG.warning("Unable to delete volume '%s' since it was not found. "
+                        "Maybe it was already deleted?" % volume_id)
 
     @classmethod
     def prepare_instance_network(cls):
@@ -295,14 +302,14 @@ class BaseV2ComputeTest(api_version_utils.BaseMicroversionTest,
         if 'name' in kwargs:
             name = kwargs.pop('name')
 
-        image = cls.images_client.create_image(server_id, name=name)
+        image = cls.compute_images_client.create_image(server_id, name=name)
         image_id = data_utils.parse_image_id(image.response['location'])
         cls.images.append(image_id)
 
         if 'wait_until' in kwargs:
-            waiters.wait_for_image_status(cls.images_client,
+            waiters.wait_for_image_status(cls.compute_images_client,
                                           image_id, kwargs['wait_until'])
-            image = cls.images_client.show_image(image_id)['image']
+            image = cls.compute_images_client.show_image(image_id)['image']
 
             if kwargs['wait_until'] == 'ACTIVE':
                 if kwargs.get('wait_for_server', True):
@@ -321,11 +328,12 @@ class BaseV2ComputeTest(api_version_utils.BaseMicroversionTest,
             except Exception:
                 LOG.exception('Failed to delete server %s' % server_id)
 
+        cls.password = data_utils.rand_password()
         server = cls.create_test_server(
             validatable,
             wait_until='ACTIVE',
+            adminPass=cls.password,
             **kwargs)
-        cls.password = server['adminPass']
         return server['id']
 
     @classmethod
@@ -347,16 +355,24 @@ class BaseV2ComputeTest(api_version_utils.BaseMicroversionTest,
     def get_server_ip(cls, server):
         """Get the server fixed or floating IP.
 
-        For the floating IP, the address created by the validation resources
-        is returned.
-        For the fixed IP, the server is returned and the current mechanism of
-        address extraction in the remote_client is followed.
+        Based on the configuration we're in, return a correct ip
+        address for validating that a guest is up.
         """
         if CONF.validation.connect_method == 'floating':
-            ip_or_server = cls.validation_resources['floating_ip']['ip']
+            return cls.validation_resources['floating_ip']['ip']
         elif CONF.validation.connect_method == 'fixed':
-            ip_or_server = server
-        return ip_or_server
+            addresses = server['addresses'][CONF.validation.network_for_ssh]
+            for address in addresses:
+                if address['version'] == CONF.validation.ip_version_for_ssh:
+                    return address['addr']
+            raise exceptions.ServerUnreachable()
+        else:
+            raise exceptions.InvalidConfiguration()
+
+    def setUp(self):
+        super(BaseV2ComputeTest, self).setUp()
+        self.useFixture(api_microversion_fixture.APIMicroversionFixture(
+            self.request_microversion))
 
 
 class BaseV2ComputeAdminTest(BaseV2ComputeTest):

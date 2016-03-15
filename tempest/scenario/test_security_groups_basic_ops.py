@@ -13,8 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_log import log as logging
-
 from tempest import clients
 from tempest.common.utils import data_utils
 from tempest import config
@@ -22,8 +20,6 @@ from tempest.scenario import manager
 from tempest import test
 
 CONF = config.CONF
-
-LOG = logging.getLogger(__name__)
 
 
 class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
@@ -137,6 +133,9 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
             msg = ('Either tenant_networks_reachable must be "true", or '
                    'public_network_id must be defined.')
             raise cls.skipException(msg)
+        if not test.is_extension_enabled('security-group', 'network'):
+            msg = "security-group extension not enabled."
+            raise cls.skipException(msg)
 
     @classmethod
     def setup_credentials(cls):
@@ -176,14 +175,14 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         access_sg = self._create_empty_security_group(
             namestart='secgroup_access-',
             tenant_id=tenant.creds.tenant_id,
-            client=tenant.manager.network_client
+            client=tenant.manager.security_groups_client
         )
 
         # don't use default secgroup since it allows in-tenant traffic
         def_sg = self._create_empty_security_group(
             namestart='secgroup_general-',
             tenant_id=tenant.creds.tenant_id,
-            client=tenant.manager.network_client
+            client=tenant.manager.security_groups_client
         )
         tenant.security_groups.update(access=access_sg, default=def_sg)
         ssh_rule = dict(
@@ -192,9 +191,11 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
             port_range_max=22,
             direction='ingress',
         )
-        self._create_security_group_rule(secgroup=access_sg,
-                                         client=tenant.manager.network_client,
-                                         **ssh_rule)
+        sec_group_rules_client = tenant.manager.security_group_rules_client
+        self._create_security_group_rule(
+            secgroup=access_sg,
+            sec_group_rules_client=sec_group_rules_client,
+            **ssh_rule)
 
     def _verify_network_details(self, tenant):
         # Checks that we see the newly created network/subnet/router via
@@ -320,8 +321,8 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         access_point_ssh = \
             self.floating_ips[tenant.access_point['id']].floating_ip_address
         private_key = tenant.keypair['private_key']
-        access_point_ssh = self._ssh_to_server(access_point_ssh,
-                                               private_key=private_key)
+        access_point_ssh = self.get_remote_client(
+            access_point_ssh, private_key=private_key)
         return access_point_ssh
 
     def _check_connectivity(self, access_point, ip, should_succeed=True):
@@ -372,9 +373,11 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
             protocol='icmp',
             direction='ingress'
         )
+        sec_group_rules_client = (
+            dest_tenant.manager.security_group_rules_client)
         self._create_security_group_rule(
             secgroup=dest_tenant.security_groups['default'],
-            client=dest_tenant.manager.network_client,
+            sec_group_rules_client=sec_group_rules_client,
             **ruleset
         )
         access_point_ssh = self._connect_to_access_point(source_tenant)
@@ -386,9 +389,11 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         self._test_cross_tenant_block(dest_tenant, source_tenant)
 
         # allow reverse traffic and check
+        sec_group_rules_client = (
+            source_tenant.manager.security_group_rules_client)
         self._create_security_group_rule(
             secgroup=source_tenant.security_groups['default'],
-            client=source_tenant.manager.network_client,
+            sec_group_rules_client=sec_group_rules_client,
             **ruleset
         )
 
@@ -464,14 +469,15 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         new_sg = self._create_empty_security_group(
             namestart='secgroup_new-',
             tenant_id=new_tenant.creds.tenant_id,
-            client=new_tenant.manager.network_client)
+            client=new_tenant.manager.security_groups_client)
         icmp_rule = dict(
             protocol='icmp',
             direction='ingress',
         )
+        sec_group_rules_client = new_tenant.manager.security_group_rules_client
         self._create_security_group_rule(
             secgroup=new_sg,
-            client=new_tenant.manager.network_client,
+            sec_group_rules_client=sec_group_rules_client,
             **icmp_rule)
         new_tenant.security_groups.update(new_sg=new_sg)
 

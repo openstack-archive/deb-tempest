@@ -15,8 +15,8 @@
 from tempest.api.network import base
 from tempest.common.utils import data_utils
 from tempest import config
+from tempest.lib import exceptions as lib_exc
 from tempest import test
-from tempest_lib import exceptions as lib_exc
 
 CONF = config.CONF
 
@@ -50,27 +50,28 @@ class SubnetPoolsTestJSON(base.BaseNetworkTest):
         subnetpool_name = data_utils.rand_name('subnetpools')
         # create subnet pool
         prefix = CONF.network.default_network
-        body = self.client.create_subnetpools(name=subnetpool_name,
-                                              prefixes=prefix)
+        body = self.subnetpools_client.create_subnetpool(name=subnetpool_name,
+                                                         prefixes=prefix)
         subnetpool_id = body["subnetpool"]["id"]
         self.addCleanup(self._cleanup_subnetpools, subnetpool_id)
         self.assertEqual(subnetpool_name, body["subnetpool"]["name"])
         # get detail about subnet pool
-        body = self.client.show_subnetpools(subnetpool_id)
+        body = self.subnetpools_client.show_subnetpool(subnetpool_id)
         self.assertEqual(subnetpool_name, body["subnetpool"]["name"])
         # update the subnet pool
         subnetpool_name = data_utils.rand_name('subnetpools_update')
-        body = self.client.update_subnetpools(subnetpool_id,
-                                              name=subnetpool_name)
+        body = self.subnetpools_client.update_subnetpool(subnetpool_id,
+                                                         name=subnetpool_name)
         self.assertEqual(subnetpool_name, body["subnetpool"]["name"])
         # delete subnet pool
-        body = self.client.delete_subnetpools(subnetpool_id)
-        self.assertRaises(lib_exc.NotFound, self.client.show_subnetpools,
+        body = self.subnetpools_client.delete_subnetpool(subnetpool_id)
+        self.assertRaises(lib_exc.NotFound,
+                          self.subnetpools_client.show_subnetpool,
                           subnetpool_id)
 
     def _cleanup_subnetpools(self, subnetpool_id):
         # this is used to cleanup the resources
         try:
-            self.client.delete_subnetpools(subnetpool_id)
+            self.subnetpools_client.delete_subnetpool(subnetpool_id)
         except lib_exc.NotFound:
             pass

@@ -352,13 +352,6 @@ ComputeFeaturesGroup = [
                 help="Does the test environment block migration support "
                 "cinder iSCSI volumes. Note, libvirt doesn't support this, "
                 "see https://bugs.launchpad.net/nova/+bug/1398999"),
-    # TODO(gilliard): Remove live_migrate_paused_instances at juno-eol.
-    cfg.BoolOpt('live_migrate_paused_instances',
-                default=False,
-                help="Does the test system allow live-migration of paused "
-                "instances? Note, this is more than just the ANDing of "
-                "paused and live_migrate, but all 3 should be set to True "
-                "to run those tests"),
     cfg.BoolOpt('vnc_console',
                 default=False,
                 help='Enable VNC console. This configuration value should '
@@ -394,12 +387,6 @@ ComputeFeaturesGroup = [
     cfg.BoolOpt('personality',
                 default=True,
                 help='Does the test environment support server personality'),
-    # TODO(mriedem): Remove preserve_ports once juno-eol happens.
-    cfg.BoolOpt('preserve_ports',
-                default=False,
-                help='Does Nova preserve preexisting ports from Neutron '
-                     'when deleting an instance? This should be set to True '
-                     'if testing Kilo+ Nova.'),
     cfg.BoolOpt('attach_encrypted_volume',
                 default=True,
                 help='Does the test environment support attaching an '
@@ -574,41 +561,6 @@ NetworkFeaturesGroup = [
                      " port admin state"),
 ]
 
-messaging_group = cfg.OptGroup(name='messaging',
-                               title='Messaging Service')
-
-MessagingGroup = [
-    cfg.StrOpt('catalog_type',
-               default='messaging',
-               help='Catalog type of the Messaging service.'),
-    cfg.IntOpt('max_queues_per_page',
-               default=20,
-               help='The maximum number of queue records per page when '
-                    'listing queues'),
-    cfg.IntOpt('max_queue_metadata',
-               default=65536,
-               help='The maximum metadata size for a queue'),
-    cfg.IntOpt('max_messages_per_page',
-               default=20,
-               help='The maximum number of queue message per page when '
-                    'listing (or) posting messages'),
-    cfg.IntOpt('max_message_size',
-               default=262144,
-               help='The maximum size of a message body'),
-    cfg.IntOpt('max_messages_per_claim',
-               default=20,
-               help='The maximum number of messages per claim'),
-    cfg.IntOpt('max_message_ttl',
-               default=1209600,
-               help='The maximum ttl for a message'),
-    cfg.IntOpt('max_claim_ttl',
-               default=43200,
-               help='The maximum ttl for a claim'),
-    cfg.IntOpt('max_claim_grace',
-               default=43200,
-               help='The maximum grace period for a claim'),
-]
-
 validation_group = cfg.OptGroup(name='validation',
                                 title='SSH Validation options')
 
@@ -737,7 +689,7 @@ VolumeGroup = [
                deprecated_for_removal=True),
     cfg.ListOpt('backend_names',
                 default=['BACKEND_1', 'BACKEND_2'],
-                help='A list of backend names seperated by comma .'
+                help='A list of backend names separated by comma. '
                      'The backend name must be declared in cinder.conf',
                 deprecated_opts=[cfg.DeprecatedOpt('BACKEND_1',
                                                    group='volume'),
@@ -785,9 +737,14 @@ VolumeFeaturesGroup = [
                 default=True,
                 help="Is the v2 volume API enabled"),
     cfg.BoolOpt('bootable',
-                default=False,
+                default=True,
                 help='Update bootable status of a volume '
-                     'Not implemented on icehouse ')
+                     'Not implemented on icehouse ',
+                deprecated_for_removal=True),
+    # TODO(ynesenenko): Remove volume_services once liberty-eol happens.
+    cfg.BoolOpt('volume_services',
+                default=False,
+                help='Extract correct host info from host@backend')
 ]
 
 
@@ -1045,7 +1002,8 @@ ScenarioGroup = [
     cfg.StrOpt('img_dir',
                default='/opt/stack/new/devstack/files/images/'
                'cirros-0.3.1-x86_64-uec',
-               help='Directory containing image files'),
+               help='Directory containing image files',
+               deprecated_for_removal=True),
     cfg.StrOpt('img_file', deprecated_name='qcow2_img_file',
                default='cirros-0.3.1-x86_64-disk.img',
                help='Image file name'),
@@ -1059,18 +1017,16 @@ ScenarioGroup = [
                 'Use for custom images which require them'),
     cfg.StrOpt('ami_img_file',
                default='cirros-0.3.1-x86_64-blank.img',
-               help='AMI image file name'),
+               help='AMI image file name',
+               deprecated_for_removal=True),
     cfg.StrOpt('ari_img_file',
                default='cirros-0.3.1-x86_64-initrd',
-               help='ARI image file name'),
+               help='ARI image file name',
+               deprecated_for_removal=True),
     cfg.StrOpt('aki_img_file',
                default='cirros-0.3.1-x86_64-vmlinuz',
-               help='AKI image file name'),
-    cfg.IntOpt(
-        'large_ops_number',
-        default=0,
-        help="specifies how many resources to request at once. Used "
-        "for large operations testing."),
+               help='AKI image file name',
+               deprecated_for_removal=True),
     # TODO(yfried): add support for dhcpcd
     cfg.StrOpt('dhcp_client',
                default='udhcpc',
@@ -1121,9 +1077,6 @@ ServiceAvailableGroup = [
     cfg.BoolOpt('trove',
                 default=False,
                 help="Whether or not Trove is expected to be available"),
-    cfg.BoolOpt('zaqar',
-                default=False,
-                help="Whether or not Zaqar is expected to be available"),
 ]
 
 debug_group = cfg.OptGroup(name="debug",
@@ -1184,6 +1137,11 @@ baremetal_group = cfg.OptGroup(name='baremetal',
                                     'live_migration, pause, rescue, resize '
                                     'shelve, snapshot, and suspend')
 
+
+# NOTE(deva): Ironic tests have been ported to tempest-lib. New config options
+#             should be added to ironic/ironic_tempest_plugin/config.py.
+#             However, these options need to remain here for testing stable
+#             branches until Liberty release reaches EOL.
 BaremetalGroup = [
     cfg.StrOpt('catalog_type',
                default='baremetal',
@@ -1245,7 +1203,6 @@ _opts = [
     (image_feature_group, ImageFeaturesGroup),
     (network_group, NetworkGroup),
     (network_feature_group, NetworkFeaturesGroup),
-    (messaging_group, MessagingGroup),
     (validation_group, ValidationGroup),
     (volume_group, VolumeGroup),
     (volume_feature_group, VolumeFeaturesGroup),
@@ -1286,7 +1243,10 @@ def list_opts():
     generator to discover the options exposed to users.
     """
     ext_plugins = plugins.TempestTestPluginManager()
-    opt_list = [(getattr(g, 'name', None), o) for g, o in _opts]
+    # Make a shallow copy of the options list that can be
+    # extended by plugins. Send back the group object
+    # to allow group help text to be generated.
+    opt_list = [(g, o) for g, o in _opts]
     opt_list.extend(ext_plugins.get_plugin_options_list())
     return opt_list
 
@@ -1321,7 +1281,6 @@ class TempestConfigPrivate(object):
             'object-storage-feature-enabled']
         self.database = _CONF.database
         self.orchestration = _CONF.orchestration
-        self.messaging = _CONF.messaging
         self.telemetry = _CONF.telemetry
         self.telemetry_feature_enabled = _CONF['telemetry-feature-enabled']
         self.dashboard = _CONF.dashboard
@@ -1372,6 +1331,14 @@ class TempestConfigPrivate(object):
             _CONF([], project='tempest', default_config_files=config_files)
         else:
             _CONF([], project='tempest')
+
+        logging_cfg_path = "%s/logging.conf" % os.path.dirname(path)
+        if ((not hasattr(_CONF, 'log_config_append') or
+            _CONF.log_config_append is None) and
+            os.path.isfile(logging_cfg_path)):
+            # if logging conf is in place we need to set log_config_append
+            _CONF.log_config_append = logging_cfg_path
+
         logging.setup(_CONF, 'tempest')
         LOG = logging.getLogger('tempest')
         LOG.info("Using tempest config file %s" % path)

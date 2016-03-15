@@ -15,12 +15,12 @@
 
 from oslo_log import log as logging
 from oslo_utils import excutils
-from tempest_lib.common.utils import data_utils
 
 from tempest.common import fixed_network
 from tempest.common import service_client
 from tempest.common import waiters
 from tempest import config
+from tempest.lib.common.utils import data_utils
 
 CONF = config.CONF
 
@@ -29,7 +29,8 @@ LOG = logging.getLogger(__name__)
 
 def create_test_server(clients, validatable=False, validation_resources=None,
                        tenant_network=None, wait_until=None,
-                       volume_backed=False, **kwargs):
+                       volume_backed=False, name=None, flavor=None,
+                       image_id=None, **kwargs):
     """Common wrapper utility returning a test server.
 
     This method is a common wrapper returning a test server that can be
@@ -48,21 +49,27 @@ def create_test_server(clients, validatable=False, validation_resources=None,
 
     # TODO(jlanoux) add support of wait_until PINGABLE/SSHABLE
 
-    if 'name' in kwargs:
-        name = kwargs.pop('name')
-    else:
-        name = data_utils.rand_name(__name__ + "-instance")
+    name = name
+    flavor = flavor
+    image_id = image_id
 
-    flavor = kwargs.pop('flavor', CONF.compute.flavor_ref)
-    image_id = kwargs.pop('image_id', CONF.compute.image_ref)
+    if name is None:
+        name = data_utils.rand_name(__name__ + "-instance")
+    if flavor is None:
+        flavor = CONF.compute.flavor_ref
+    if image_id is None:
+        image_id = CONF.compute.image_ref
 
     kwargs = fixed_network.set_networks_kwarg(
         tenant_network, kwargs) or {}
 
+    multiple_create_request = (max(kwargs.get('min_count', 0),
+                                   kwargs.get('max_count', 0)) > 1)
+
     if CONF.validation.run_validation and validatable:
         # As a first implementation, multiple pingable or sshable servers will
         # not be supported
-        if 'min_count' in kwargs or 'max_count' in kwargs:
+        if multiple_create_request:
             msg = ("Multiple pingable or sshable servers not supported at "
                    "this stage.")
             raise ValueError(msg)
@@ -116,7 +123,7 @@ def create_test_server(clients, validatable=False, validation_resources=None,
 
     # handle the case of multiple servers
     servers = []
-    if 'min_count' in kwargs or 'max_count' in kwargs:
+    if multiple_create_request:
         # Get servers created which name match with name param.
         body_servers = clients.servers_client.list_servers()
         servers = \

@@ -13,11 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib import auth
-
 from tempest.common import cred_provider
 from tempest import config
 from tempest import exceptions
+from tempest.lib import auth
 
 CONF = config.CONF
 
@@ -50,8 +49,6 @@ class Manager(object):
             creds = self.credentials
         # Creates an auth provider for the credentials
         self.auth_provider = get_auth_provider(creds, pre_auth=True)
-        # FIXME(andreaf) unused
-        self.client_attr_names = []
 
 
 def get_auth_provider_class(credentials):

@@ -22,6 +22,7 @@ from tempest.api.network import base_security_groups as sec_base
 from tempest.common import custom_matchers
 from tempest.common.utils import data_utils
 from tempest import config
+from tempest import exceptions
 from tempest import test
 
 CONF = config.CONF
@@ -74,7 +75,7 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
         network2 = self.create_network(network_name=name)
         network_list = [network1['id'], network2['id']]
         port_list = [{'network_id': net_id} for net_id in network_list]
-        body = self.client.create_bulk_port(port_list)
+        body = self.client.create_bulk_port(ports=port_list)
         created_ports = body['ports']
         port1 = created_ports[0]
         port2 = created_ports[1]
@@ -87,14 +88,16 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
 
     @classmethod
     def _get_ipaddress_from_tempest_conf(cls):
-        """Return first subnet gateway for configured CIDR """
+        """Return subnet with mask bits for configured CIDR """
         if cls._ip_version == 4:
             cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
+            cidr.prefixlen = CONF.network.tenant_network_mask_bits
 
         elif cls._ip_version == 6:
             cidr = netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr)
+            cidr.prefixlen = CONF.network.tenant_network_v6_mask_bits
 
-        return netaddr.IPAddress(cidr)
+        return cidr
 
     @test.attr(type='smoke')
     @test.idempotent_id('0435f278-40ae-48cb-a404-b8a087bc09b1')
@@ -102,9 +105,15 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
         network = self.create_network()
         net_id = network['id']
         address = self._get_ipaddress_from_tempest_conf()
-        allocation_pools = {'allocation_pools': [{'start': str(address + 4),
-                                                  'end': str(address + 6)}]}
-        subnet = self.create_subnet(network, **allocation_pools)
+        if ((address.version == 4 and address.prefixlen >= 30) or
+           (address.version == 6 and address.prefixlen >= 126)):
+            msg = ("Subnet %s isn't large enough for the test" % address.cidr)
+            raise exceptions.InvalidConfiguration(message=msg)
+        allocation_pools = {'allocation_pools': [{'start': str(address[2]),
+                                                  'end': str(address[-2])}]}
+        subnet = self.create_subnet(network, cidr=address,
+                                    mask_bits=address.prefixlen,
+                                    **allocation_pools)
         self.addCleanup(self.subnets_client.delete_subnet, subnet['id'])
         body = self.ports_client.create_port(network_id=net_id)
         self.addCleanup(self.ports_client.delete_port, body['port']['id'])
@@ -191,10 +200,10 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
         self.addCleanup(self.client.delete_router, router['id'])
         port = self.ports_client.create_port(network_id=network['id'])
         # Add router interface to port created above
-        self.client.add_router_interface_with_port_id(
-            router['id'], port['port']['id'])
-        self.addCleanup(self.client.remove_router_interface_with_port_id,
-                        router['id'], port['port']['id'])
+        self.client.add_router_interface(router['id'],
+                                         port_id=port['port']['id'])
+        self.addCleanup(self.client.remove_router_interface, router['id'],
+                        port_id=port['port']['id'])
         # List ports filtered by router_id
         port_list = self.ports_client.list_ports(device_id=router['id'])
         ports = port_list['ports']
@@ -250,17 +259,19 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
         fixed_ip_1 = [{'subnet_id': subnet_1['id']}]
 
         security_groups_list = list()
+        sec_grps_client = self.security_groups_client
         for name in security_groups_names:
-            group_create_body = self.client.create_security_group(
+            group_create_body = sec_grps_client.create_security_group(
                 name=name)
-            self.addCleanup(self.client.delete_security_group,
+            self.addCleanup(self.security_groups_client.delete_security_group,
                             group_create_body['security_group']['id'])
             security_groups_list.append(group_create_body['security_group']
                                         ['id'])
         # Create a port
         sec_grp_name = data_utils.rand_name('secgroup')
-        security_group = self.client.create_security_group(name=sec_grp_name)
-        self.addCleanup(self.client.delete_security_group,
+        security_group = sec_grps_client.create_security_group(
+            name=sec_grp_name)
+        self.addCleanup(self.security_groups_client.delete_security_group,
                         security_group['security_group']['id'])
         post_body = {
             "name": data_utils.rand_name('port-'),

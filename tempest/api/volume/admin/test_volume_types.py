@@ -32,7 +32,7 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
 
     @test.idempotent_id('9d9b28e3-1b2e-4483-a2cc-24aa0ea1de54')
     def test_volume_type_list(self):
-        # List Volume types.
+        # List volume types.
         body = self.volume_types_client.list_volume_types()['volume_types']
         self.assertIsInstance(body, list)
 
@@ -50,7 +50,7 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
         for i in range(2):
             vol_type_name = data_utils.rand_name("volume-type")
             vol_type = self.volume_types_client.create_volume_type(
-                vol_type_name,
+                name=vol_type_name,
                 extra_specs=extra_specs)['volume_type']
             volume_types.append(vol_type)
             self.addCleanup(self._delete_volume_type, vol_type['id'])
@@ -70,7 +70,7 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
 
         # Update volume with new volume_type
         self.volumes_client.retype_volume(volume['id'],
-                                          volume_type=volume_types[1]['id'])
+                                          new_type=volume_types[1]['id'])
         self.volumes_client.wait_for_volume_status(volume['id'], 'available')
 
         # Get volume details and Verify
@@ -97,7 +97,7 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
         extra_specs = {"storage_protocol": proto,
                        "vendor_name": vendor}
         body = self.volume_types_client.create_volume_type(
-            name,
+            name=name,
             extra_specs=extra_specs)['volume_type']
         self.assertIn('id', body)
         self.addCleanup(self._delete_volume_type, body['id'])
@@ -125,7 +125,8 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
         provider = "LuksEncryptor"
         control_location = "front-end"
         name = data_utils.rand_name("volume-type")
-        body = self.volume_types_client.create_volume_type(name)['volume_type']
+        body = self.volume_types_client.create_volume_type(
+            name=name)['volume_type']
         self.addCleanup(self._delete_volume_type, body['id'])
 
         # Create encryption type

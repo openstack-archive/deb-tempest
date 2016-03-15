@@ -15,10 +15,13 @@
 #    under the License.
 
 import argparse
+import httplib2
 import os
 import sys
+import traceback
 
-import httplib2
+from cliff import command
+from oslo_log import log as logging
 from oslo_serialization import jsonutils as json
 from six import moves
 from six.moves.urllib import parse as urlparse
@@ -30,6 +33,8 @@ from tempest import config
 
 CONF = config.CONF
 CONF_PARSER = None
+
+LOG = logging.getLogger(__name__)
 
 
 def _get_config_file():
@@ -141,7 +146,7 @@ def get_extension_client(os, service):
     extensions_client = {
         'nova': os.extensions_client,
         'cinder': os.volumes_extension_client,
-        'neutron': os.network_client,
+        'neutron': os.network_extensions_client,
         'swift': os.account_client,
     }
     # NOTE (e0ne): Use Cinder API v2 by default because v1 is deprecated
@@ -152,7 +157,7 @@ def get_extension_client(os, service):
 
     if service not in extensions_client:
         print('No tempest extensions client for %s' % service)
-        exit(1)
+        sys.exit(1)
     return extensions_client[service]
 
 
@@ -165,7 +170,7 @@ def get_enabled_extensions(service):
     }
     if service not in extensions_options:
         print('No supported extensions list option for %s' % service)
-        exit(1)
+        sys.exit(1)
     return extensions_options[service]
 
 
@@ -264,7 +269,6 @@ def check_service_availability(os, update):
         'data_processing': 'sahara',
         'baremetal': 'ironic',
         'identity': 'keystone',
-        'messaging': 'zaqar',
         'database': 'trove'
     }
     # Get catalog list for endpoints to use for validation
@@ -310,8 +314,7 @@ def check_service_availability(os, update):
     return avail_services
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
+def _parser_add_args(parser):
     parser.add_argument('-u', '--update', action='store_true',
                         help='Update the config file with results from api '
                              'queries. This assumes whatever is set in the '
@@ -329,13 +332,21 @@ def parse_args():
     parser.add_argument('-r', '--replace-ext', action='store_true',
                         help="If specified the all option will be replaced "
                              "with a full list of extensions")
-    args = parser.parse_args()
-    return args
 
 
-def main():
+def parse_args():
+    parser = argparse.ArgumentParser()
+    _parser_add_args(parser)
+    opts = parser.parse_args()
+    return opts
+
+
+def main(opts=None):
     print('Running config verification...')
-    opts = parse_args()
+    if opts is None:
+        print("Use of: 'verify-tempest-config' is deprecated, "
+              "please use: 'tempest verify-config'")
+        opts = parse_args()
     update = opts.update
     replace = opts.replace_ext
     global CONF_PARSER
@@ -372,6 +383,23 @@ def main():
     finally:
         icreds.clear_creds()
 
+
+class TempestVerifyConfig(command.Command):
+    """Verify your current tempest configuration"""
+
+    def get_parser(self, prog_name):
+        parser = super(TempestVerifyConfig, self).get_parser(prog_name)
+        _parser_add_args(parser)
+        return parser
+
+    def take_action(self, parsed_args):
+        try:
+            return main(parsed_args)
+        except Exception:
+            LOG.exception("Failure verifying configuration.")
+            traceback.print_exc()
+            raise
+        return 0
 
 if __name__ == "__main__":
     main()

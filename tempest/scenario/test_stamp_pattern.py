@@ -16,19 +16,17 @@
 import time
 
 from oslo_log import log as logging
-from tempest_lib import decorators
-from tempest_lib import exceptions as lib_exc
 import testtools
 
 from tempest.common.utils import data_utils
 from tempest import config
 from tempest import exceptions
+from tempest.lib import decorators
+from tempest.lib import exceptions as lib_exc
 from tempest.scenario import manager
 from tempest import test
-import tempest.test
 
 CONF = config.CONF
-
 LOG = logging.getLogger(__name__)
 
 
@@ -60,14 +58,10 @@ class TestStampPattern(manager.ScenarioTest):
         if not CONF.volume_feature_enabled.snapshot:
             raise cls.skipException("Cinder volume snapshots are disabled")
 
-    def _wait_for_volume_snapshot_status(self, volume_snapshot, status):
-        self.snapshots_client.wait_for_snapshot_status(volume_snapshot['id'],
-                                                       status)
-
     def _create_volume_snapshot(self, volume):
         snapshot_name = data_utils.rand_name('scenario-snapshot')
         snapshot = self.snapshots_client.create_snapshot(
-            volume['id'], display_name=snapshot_name)['snapshot']
+            volume_id=volume['id'], display_name=snapshot_name)['snapshot']
 
         def cleaner():
             self.snapshots_client.delete_snapshot(snapshot['id'])
@@ -78,55 +72,38 @@ class TestStampPattern(manager.ScenarioTest):
             except lib_exc.NotFound:
                 pass
         self.addCleanup(cleaner)
-        self._wait_for_volume_status(volume, 'available')
+        self.volumes_client.wait_for_volume_status(volume['id'], 'available')
         self.snapshots_client.wait_for_snapshot_status(snapshot['id'],
                                                        'available')
         self.assertEqual(snapshot_name, snapshot['display_name'])
         return snapshot
 
-    def _wait_for_volume_status(self, volume, status):
-        self.volumes_client.wait_for_volume_status(volume['id'], status)
-
-    def _create_volume(self, snapshot_id=None):
-        return self.create_volume(snapshot_id=snapshot_id)
-
-    def _attach_volume(self, server, volume):
-        attached_volume = self.servers_client.attach_volume(
-            server['id'], volumeId=volume['id'], device='/dev/%s'
-            % CONF.compute.volume_device_name)['volumeAttachment']
-        self.assertEqual(volume['id'], attached_volume['id'])
-        self._wait_for_volume_status(attached_volume, 'in-use')
-
-    def _detach_volume(self, server, volume):
-        self.servers_client.detach_volume(server['id'], volume['id'])
-        self._wait_for_volume_status(volume, 'available')
-
-    def _wait_for_volume_available_on_the_system(self, server_or_ip,
+    def _wait_for_volume_available_on_the_system(self, ip_address,
                                                  private_key):
-        ssh = self.get_remote_client(server_or_ip, private_key=private_key)
+        ssh = self.get_remote_client(ip_address, private_key=private_key)
 
         def _func():
             part = ssh.get_partitions()
             LOG.debug("Partitions:%s" % part)
             return CONF.compute.volume_device_name in part
 
-        if not tempest.test.call_until_true(_func,
-                                            CONF.compute.build_timeout,
-                                            CONF.compute.build_interval):
+        if not test.call_until_true(_func,
+                                    CONF.compute.build_timeout,
+                                    CONF.compute.build_interval):
             raise exceptions.TimeoutException
 
     @decorators.skip_because(bug="1205344")
     @test.idempotent_id('10fd234a-515c-41e5-b092-8323060598c5')
     @testtools.skipUnless(CONF.compute_feature_enabled.snapshot,
                           'Snapshotting is not available.')
-    @tempest.test.services('compute', 'network', 'volume', 'image')
+    @test.services('compute', 'network', 'volume', 'image')
     def test_stamp_pattern(self):
         # prepare for booting an instance
         keypair = self.create_keypair()
         security_group = self._create_security_group()
 
         # boot an instance and create a timestamp file in it
-        volume = self._create_volume()
+        volume = self.create_volume()
         server = self.create_server(
             image_id=CONF.compute.image_ref,
             key_name=keypair['name'],
@@ -134,15 +111,15 @@ class TestStampPattern(manager.ScenarioTest):
             wait_until='ACTIVE')
 
         # create and add floating IP to server1
-        ip_for_server = self.get_server_or_ip(server)
+        ip_for_server = self.get_server_ip(server)
 
-        self._attach_volume(server, volume)
+        self.nova_volume_attach(server, volume)
         self._wait_for_volume_available_on_the_system(ip_for_server,
                                                       keypair['private_key'])
         timestamp = self.create_timestamp(ip_for_server,
                                           CONF.compute.volume_device_name,
                                           private_key=keypair['private_key'])
-        self._detach_volume(server, volume)
+        self.nova_volume_detach(server, volume)
 
         # snapshot the volume
         volume_snapshot = self._create_volume_snapshot(volume)
@@ -151,7 +128,7 @@ class TestStampPattern(manager.ScenarioTest):
         snapshot_image = self.create_server_snapshot(server=server)
 
         # create second volume from the snapshot(volume2)
-        volume_from_snapshot = self._create_volume(
+        volume_from_snapshot = self.create_volume(
             snapshot_id=volume_snapshot['id'])
 
         # boot second instance from the snapshot(instance2)
@@ -161,10 +138,10 @@ class TestStampPattern(manager.ScenarioTest):
             security_groups=security_group)
 
         # create and add floating IP to server_from_snapshot
-        ip_for_snapshot = self.get_server_or_ip(server_from_snapshot)
+        ip_for_snapshot = self.get_server_ip(server_from_snapshot)
 
         # attach volume2 to instance2
-        self._attach_volume(server_from_snapshot, volume_from_snapshot)
+        self.nova_volume_attach(server_from_snapshot, volume_from_snapshot)
         self._wait_for_volume_available_on_the_system(ip_for_snapshot,
                                                       keypair['private_key'])
 

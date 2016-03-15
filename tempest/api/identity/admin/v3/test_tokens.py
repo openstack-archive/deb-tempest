@@ -13,10 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib import exceptions as lib_exc
-
 from tempest.api.identity import base
 from tempest.common.utils import data_utils
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 
@@ -30,10 +29,10 @@ class TokensV3TestJSON(base.BaseIdentityV3AdminTest):
         u_desc = '%s-description' % u_name
         u_email = '%s@testmail.tm' % u_name
         u_password = data_utils.rand_password()
-        user = self.client.create_user(
+        user = self.users_client.create_user(
             u_name, description=u_desc, password=u_password,
             email=u_email)['user']
-        self.addCleanup(self.client.delete_user, user['id'])
+        self.addCleanup(self.users_client.delete_user, user['id'])
         # Perform Authentication
         resp = self.token.auth(user_id=user['id'],
                                password=u_password).response
@@ -61,30 +60,34 @@ class TokensV3TestJSON(base.BaseIdentityV3AdminTest):
         # Create a user.
         user_name = data_utils.rand_name(name='user')
         user_password = data_utils.rand_password()
-        user = self.client.create_user(user_name,
-                                       password=user_password)['user']
-        self.addCleanup(self.client.delete_user, user['id'])
+        user = self.users_client.create_user(user_name,
+                                             password=user_password)['user']
+        self.addCleanup(self.users_client.delete_user, user['id'])
 
         # Create a couple projects
         project1_name = data_utils.rand_name(name='project')
-        project1 = self.client.create_project(project1_name)['project']
-        self.addCleanup(self.client.delete_project, project1['id'])
+        project1 = self.projects_client.create_project(
+            project1_name)['project']
+        self.addCleanup(self.projects_client.delete_project, project1['id'])
 
         project2_name = data_utils.rand_name(name='project')
-        project2 = self.client.create_project(project2_name)['project']
-        self.addCleanup(self.client.delete_project, project2['id'])
+        project2 = self.projects_client.create_project(
+            project2_name)['project']
+        self.addCleanup(self.projects_client.delete_project, project2['id'])
 
         # Create a role
         role_name = data_utils.rand_name(name='role')
-        role = self.client.create_role(role_name)['role']
-        self.addCleanup(self.client.delete_role, role['id'])
+        role = self.roles_client.create_role(name=role_name)['role']
+        self.addCleanup(self.roles_client.delete_role, role['id'])
 
         # Grant the user the role on both projects.
-        self.client.assign_user_role(project1['id'], user['id'],
-                                     role['id'])
+        self.roles_client.assign_user_role_on_project(project1['id'],
+                                                      user['id'],
+                                                      role['id'])
 
-        self.client.assign_user_role(project2['id'], user['id'],
-                                     role['id'])
+        self.roles_client.assign_user_role_on_project(project2['id'],
+                                                      user['id'],
+                                                      role['id'])
 
         # Get an unscoped token.
         token_auth = self.token.auth(user_id=user['id'],

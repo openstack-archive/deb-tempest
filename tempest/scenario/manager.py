@@ -20,8 +20,6 @@ import netaddr
 from oslo_log import log
 from oslo_serialization import jsonutils as json
 import six
-from tempest_lib.common.utils import misc as misc_utils
-from tempest_lib import exceptions as lib_exc
 
 from tempest.common import compute
 from tempest.common.utils import data_utils
@@ -29,6 +27,8 @@ from tempest.common.utils.linux import remote_client
 from tempest.common import waiters
 from tempest import config
 from tempest import exceptions
+from tempest.lib.common.utils import misc as misc_utils
+from tempest.lib import exceptions as lib_exc
 from tempest.services.network import resources as net_resources
 import tempest.test
 
@@ -49,16 +49,17 @@ class ScenarioTest(tempest.test.BaseTestCase):
         cls.flavors_client = cls.manager.flavors_client
         cls.compute_floating_ips_client = (
             cls.manager.compute_floating_ips_client)
-        # Glance image client v1
-        cls.image_client = cls.manager.image_client
+        if CONF.service_available.glance:
+            # Glance image client v1
+            cls.image_client = cls.manager.image_client
         # Compute image client
-        cls.images_client = cls.manager.images_client
+        cls.compute_images_client = cls.manager.compute_images_client
         cls.keypairs_client = cls.manager.keypairs_client
         # Nova security groups client
         cls.compute_security_groups_client = (
             cls.manager.compute_security_groups_client)
-        cls.security_group_rules_client = (
-            cls.manager.security_group_rules_client)
+        cls.compute_security_group_rules_client = (
+            cls.manager.compute_security_group_rules_client)
         cls.servers_client = cls.manager.servers_client
         cls.interface_client = cls.manager.interfaces_client
         # Neutron network client
@@ -67,6 +68,9 @@ class ScenarioTest(tempest.test.BaseTestCase):
         cls.ports_client = cls.manager.ports_client
         cls.subnets_client = cls.manager.subnets_client
         cls.floating_ips_client = cls.manager.floating_ips_client
+        cls.security_groups_client = cls.manager.security_groups_client
+        cls.security_group_rules_client = (
+            cls.manager.security_group_rules_client)
         # Heat client
         cls.orchestration_client = cls.manager.orchestration_client
 
@@ -158,7 +162,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
         self.addCleanup(client.delete_keypair, name)
         return body['keypair']
 
-    def create_server(self, name=None, image=None, flavor=None,
+    def create_server(self, name=None, image_id=None, flavor=None,
                       validatable=False, wait_until=None,
                       wait_on_delete=True, clients=None, **kwargs):
         """Wrapper utility that returns a test server.
@@ -196,7 +200,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
                 # to pass to create_port
                 if 'security_groups' in kwargs:
                     security_groups =\
-                        clients.network_client.list_security_groups(
+                        clients.security_groups_client.list_security_groups(
                         ).get('security_groups')
                     sec_dict = dict([(s['name'], s['id'])
                                     for s in security_groups])
@@ -238,7 +242,8 @@ class ScenarioTest(tempest.test.BaseTestCase):
             clients,
             tenant_network=tenant_network,
             wait_until=wait_until,
-            **kwargs)
+            name=name, flavor=flavor,
+            image_id=image_id, **kwargs)
 
         # TODO(jlanoux) Move wait_on_delete in compute.py
         if wait_on_delete:
@@ -259,9 +264,13 @@ class ScenarioTest(tempest.test.BaseTestCase):
                       imageRef=None, volume_type=None, wait_on_delete=True):
         if name is None:
             name = data_utils.rand_name(self.__class__.__name__)
-        volume = self.volumes_client.create_volume(
-            size=size, display_name=name, snapshot_id=snapshot_id,
-            imageRef=imageRef, volume_type=volume_type)['volume']
+        kwargs = {'display_name': name,
+                  'snapshot_id': snapshot_id,
+                  'imageRef': imageRef,
+                  'volume_type': volume_type}
+        if size is not None:
+            kwargs.update({'size': size})
+        volume = self.volumes_client.create_volume(**kwargs)['volume']
 
         if wait_on_delete:
             self.addCleanup(self.volumes_client.wait_for_resource_deletion,
@@ -288,7 +297,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
     def _create_loginable_secgroup_rule(self, secgroup_id=None):
         _client = self.compute_security_groups_client
-        _client_rules = self.security_group_rules_client
+        _client_rules = self.compute_security_group_rules_client
         if secgroup_id is None:
             sgs = _client.list_security_groups()['security_groups']
             for sg in sgs:
@@ -319,9 +328,6 @@ class ScenarioTest(tempest.test.BaseTestCase):
         for ruleset in rulesets:
             sg_rule = _client_rules.create_security_group_rule(
                 parent_group_id=secgroup_id, **ruleset)['security_group_rule']
-            self.addCleanup(self.delete_wrapper,
-                            _client_rules.delete_security_group_rule,
-                            sg_rule['id'])
             rules.append(sg_rule)
         return rules
 
@@ -343,29 +349,15 @@ class ScenarioTest(tempest.test.BaseTestCase):
 
         return secgroup
 
-    def get_remote_client(self, server_or_ip, username=None, private_key=None,
-                          log_console_of_servers=None):
+    def get_remote_client(self, ip_address, username=None, private_key=None):
         """Get a SSH client to a remote server
 
-        @param server_or_ip a server object as returned by Tempest compute
-            client or an IP address to connect to
+        @param ip_address the server floating or fixed IP address to use
+                          for ssh validation
         @param username name of the Linux account on the remote server
         @param private_key the SSH private key to use
-        @param log_console_of_servers a list of server objects. Each server
-            in the list will have its console printed in the logs in case the
-            SSH connection failed to be established
         @return a RemoteClient object
         """
-        if isinstance(server_or_ip, six.string_types):
-            ip = server_or_ip
-        else:
-            addrs = server_or_ip['addresses'][CONF.validation.network_for_ssh]
-            try:
-                ip = (addr['addr'] for addr in addrs if
-                      netaddr.valid_ipv4(addr['addr'])).next()
-            except StopIteration:
-                raise lib_exc.NotFound("No IPv4 addresses to use for SSH to "
-                                       "remote server.")
 
         if username is None:
             username = CONF.validation.image_ssh_user
@@ -378,22 +370,20 @@ class ScenarioTest(tempest.test.BaseTestCase):
         else:
             password = CONF.validation.image_ssh_password
             private_key = None
-        linux_client = remote_client.RemoteClient(ip, username,
+        linux_client = remote_client.RemoteClient(ip_address, username,
                                                   pkey=private_key,
                                                   password=password)
         try:
             linux_client.validate_authentication()
         except Exception as e:
             message = ('Initializing SSH connection to %(ip)s failed. '
-                       'Error: %(error)s' % {'ip': ip, 'error': e})
+                       'Error: %(error)s' % {'ip': ip_address,
+                                             'error': e})
             caller = misc_utils.find_test_caller()
             if caller:
                 message = '(%s) %s' % (caller, message)
             LOG.exception(message)
-            # If we don't explicitly set for which servers we want to
-            # log the console output then all the servers will be logged.
-            # See the definition of _log_console_output()
-            self._log_console_output(log_console_of_servers)
+            self._log_console_output()
             raise
 
         return linux_client
@@ -470,7 +460,7 @@ class ScenarioTest(tempest.test.BaseTestCase):
         # Glance client
         _image_client = self.image_client
         # Compute client
-        _images_client = self.images_client
+        _images_client = self.compute_images_client
         if name is None:
             name = data_utils.rand_name('scenario-snapshot')
         LOG.debug("Creating a snapshot image for server: %s", server['name'])
@@ -626,9 +616,9 @@ class ScenarioTest(tempest.test.BaseTestCase):
             floating_ip['ip'], thing['id'])
         return floating_ip
 
-    def create_timestamp(self, server_or_ip, dev_name=None, mount_path='/mnt',
+    def create_timestamp(self, ip_address, dev_name=None, mount_path='/mnt',
                          private_key=None):
-        ssh_client = self.get_remote_client(server_or_ip,
+        ssh_client = self.get_remote_client(ip_address,
                                             private_key=private_key)
         if dev_name is not None:
             ssh_client.make_fs(dev_name)
@@ -641,9 +631,9 @@ class ScenarioTest(tempest.test.BaseTestCase):
             ssh_client.umount(mount_path)
         return timestamp
 
-    def get_timestamp(self, server_or_ip, dev_name=None, mount_path='/mnt',
+    def get_timestamp(self, ip_address, dev_name=None, mount_path='/mnt',
                       private_key=None):
-        ssh_client = self.get_remote_client(server_or_ip,
+        ssh_client = self.get_remote_client(ip_address,
                                             private_key=private_key)
         if dev_name is not None:
             ssh_client.mount(dev_name, mount_path)
@@ -653,12 +643,25 @@ class ScenarioTest(tempest.test.BaseTestCase):
             ssh_client.umount(mount_path)
         return timestamp
 
-    def get_server_or_ip(self, server):
+    def get_server_ip(self, server):
+        """Get the server fixed or floating IP.
+
+        Based on the configuration we're in, return a correct ip
+        address for validating that a guest is up.
+        """
         if CONF.validation.connect_method == 'floating':
-            ip = self.create_floating_ip(server)['ip']
+            # The tests calling this method don't have a floating IP
+            # and can't make use of the validattion resources. So the
+            # method is creating the floating IP there.
+            return self.create_floating_ip(server)['ip']
+        elif CONF.validation.connect_method == 'fixed':
+            addresses = server['addresses'][CONF.validation.network_for_ssh]
+            for address in addresses:
+                if address['version'] == CONF.validation.ip_version_for_ssh:
+                    return address['addr']
+            raise exceptions.ServerUnreachable()
         else:
-            ip = server
-        return ip
+            raise exceptions.InvalidConfiguration()
 
 
 class NetworkScenarioTest(ScenarioTest):
@@ -728,7 +731,7 @@ class NetworkScenarioTest(ScenarioTest):
 
     def _list_agents(self, *args, **kwargs):
         """List agents using admin creds """
-        agents_list = self.admin_manager.network_client.list_agents(
+        agents_list = self.admin_manager.network_agents_client.list_agents(
             *args, **kwargs)
         return agents_list['agents']
 
@@ -810,15 +813,18 @@ class NetworkScenarioTest(ScenarioTest):
         return port
 
     def _get_server_port_id_and_ip4(self, server, ip_addr=None):
-        ports = self._list_ports(device_id=server['id'], status='ACTIVE',
-                                 fixed_ip=ip_addr)
+        ports = self._list_ports(device_id=server['id'], fixed_ip=ip_addr)
         # A port can have more then one IP address in some cases.
         # If the network is dual-stack (IPv4 + IPv6), this port is associated
         # with 2 subnets
         port_map = [(p["id"], fxip["ip_address"])
                     for p in ports
                     for fxip in p["fixed_ips"]
-                    if netaddr.valid_ipv4(fxip["ip_address"])]
+                    if netaddr.valid_ipv4(fxip["ip_address"])
+                    and p['status'] == 'ACTIVE']
+        inactive = [p for p in ports if p['status'] != 'ACTIVE']
+        if inactive:
+            LOG.warning("Instance has ports that are not ACTIVE: %s", inactive)
 
         self.assertNotEqual(0, len(port_map),
                             "No IPv4 addresses found in: %s" % ports)
@@ -931,8 +937,8 @@ class NetworkScenarioTest(ScenarioTest):
             try:
                 source.ping_host(dest, nic=nic)
             except lib_exc.SSHExecCommandFailed:
-                LOG.warn('Failed to ping IP: %s via a ssh connection from: %s.'
-                         % (dest, source.ssh_client.host))
+                LOG.warning('Failed to ping IP: %s via a ssh connection '
+                            'from: %s.' % (dest, source.ssh_client.host))
                 return not should_succeed
             return should_succeed
 
@@ -940,19 +946,25 @@ class NetworkScenarioTest(ScenarioTest):
                                             CONF.validation.ping_timeout,
                                             1)
 
-    def _create_security_group(self, client=None, tenant_id=None,
-                               namestart='secgroup-smoke'):
-        if client is None:
-            client = self.network_client
+    def _create_security_group(self, security_group_rules_client=None,
+                               tenant_id=None,
+                               namestart='secgroup-smoke',
+                               security_groups_client=None):
+        if security_group_rules_client is None:
+            security_group_rules_client = self.security_group_rules_client
+        if security_groups_client is None:
+            security_groups_client = self.security_groups_client
         if tenant_id is None:
-            tenant_id = client.tenant_id
-        secgroup = self._create_empty_security_group(namestart=namestart,
-                                                     client=client,
-                                                     tenant_id=tenant_id)
+            tenant_id = security_groups_client.tenant_id
+        secgroup = self._create_empty_security_group(
+            namestart=namestart, client=security_groups_client,
+            tenant_id=tenant_id)
 
         # Add rules to the security group
-        rules = self._create_loginable_secgroup_rule(client=client,
-                                                     secgroup=secgroup)
+        rules = self._create_loginable_secgroup_rule(
+            security_group_rules_client=security_group_rules_client,
+            secgroup=secgroup,
+            security_groups_client=security_groups_client)
         for rule in rules:
             self.assertEqual(tenant_id, rule.tenant_id)
             self.assertEqual(secgroup.id, rule.security_group_id)
@@ -970,7 +982,7 @@ class NetworkScenarioTest(ScenarioTest):
         :returns: DeletableSecurityGroup -- containing the secgroup created
         """
         if client is None:
-            client = self.network_client
+            client = self.security_groups_client
         if not tenant_id:
             tenant_id = client.tenant_id
         sg_name = data_utils.rand_name(namestart)
@@ -995,7 +1007,7 @@ class NetworkScenarioTest(ScenarioTest):
         :returns: DeletableSecurityGroup -- default secgroup for given tenant
         """
         if client is None:
-            client = self.network_client
+            client = self.security_groups_client
         if not tenant_id:
             tenant_id = client.tenant_id
         sgs = [
@@ -1007,8 +1019,10 @@ class NetworkScenarioTest(ScenarioTest):
         return net_resources.DeletableSecurityGroup(client=client,
                                                     **sgs[0])
 
-    def _create_security_group_rule(self, secgroup=None, client=None,
-                                    tenant_id=None, **kwargs):
+    def _create_security_group_rule(self, secgroup=None,
+                                    sec_group_rules_client=None,
+                                    tenant_id=None,
+                                    security_groups_client=None, **kwargs):
         """Create a rule from a dictionary of rule parameters.
 
         Create a rule in a secgroup. if secgroup not defined will search for
@@ -1026,30 +1040,33 @@ class NetworkScenarioTest(ScenarioTest):
                     port_range_max: 22
                     }
         """
-        if client is None:
-            client = self.network_client
+        if sec_group_rules_client is None:
+            sec_group_rules_client = self.security_group_rules_client
+        if security_groups_client is None:
+            security_groups_client = self.security_groups_client
         if not tenant_id:
-            tenant_id = client.tenant_id
+            tenant_id = security_groups_client.tenant_id
         if secgroup is None:
-            secgroup = self._default_security_group(client=client,
-                                                    tenant_id=tenant_id)
+            secgroup = self._default_security_group(
+                client=security_groups_client, tenant_id=tenant_id)
 
         ruleset = dict(security_group_id=secgroup.id,
                        tenant_id=secgroup.tenant_id)
         ruleset.update(kwargs)
 
-        sg_rule = client.create_security_group_rule(**ruleset)
+        sg_rule = sec_group_rules_client.create_security_group_rule(**ruleset)
         sg_rule = net_resources.DeletableSecurityGroupRule(
-            client=client,
+            client=sec_group_rules_client,
             **sg_rule['security_group_rule']
         )
-        self.addCleanup(self.delete_wrapper, sg_rule.delete)
         self.assertEqual(secgroup.tenant_id, sg_rule.tenant_id)
         self.assertEqual(secgroup.id, sg_rule.security_group_id)
 
         return sg_rule
 
-    def _create_loginable_secgroup_rule(self, client=None, secgroup=None):
+    def _create_loginable_secgroup_rule(self, security_group_rules_client=None,
+                                        secgroup=None,
+                                        security_groups_client=None):
         """Create loginable security group rule
 
         These rules are intended to permit inbound ssh and icmp
@@ -1058,8 +1075,10 @@ class NetworkScenarioTest(ScenarioTest):
         belonging to the same security group.
         """
 
-        if client is None:
-            client = self.network_client
+        if security_group_rules_client is None:
+            security_group_rules_client = self.security_group_rules_client
+        if security_groups_client is None:
+            security_groups_client = self.security_groups_client
         rules = []
         rulesets = [
             dict(
@@ -1078,12 +1097,16 @@ class NetworkScenarioTest(ScenarioTest):
                 ethertype='IPv6',
             )
         ]
+        sec_group_rules_client = security_group_rules_client
         for ruleset in rulesets:
             for r_direction in ['ingress', 'egress']:
                 ruleset['direction'] = r_direction
                 try:
                     sg_rule = self._create_security_group_rule(
-                        client=client, secgroup=secgroup, **ruleset)
+                        sec_group_rules_client=sec_group_rules_client,
+                        secgroup=secgroup,
+                        security_groups_client=security_groups_client,
+                        **ruleset)
                 except lib_exc.Conflict as ex:
                     # if rule already exist - skip rule and continue
                     msg = 'Security group rule already exists'
@@ -1094,12 +1117,6 @@ class NetworkScenarioTest(ScenarioTest):
                     rules.append(sg_rule)
 
         return rules
-
-    def _ssh_to_server(self, server, private_key):
-        ssh_login = CONF.validation.image_ssh_user
-        return self.get_remote_client(server,
-                                      username=ssh_login,
-                                      private_key=private_key)
 
     def _get_router(self, client=None, tenant_id=None):
         """Retrieve a router for the given tenant id.
@@ -1302,13 +1319,6 @@ class BaremetalScenarioTest(ScenarioTest):
     def add_keypair(self):
         self.keypair = self.create_keypair()
 
-    def verify_connectivity(self, ip=None):
-        if ip:
-            dest = self.get_remote_client(ip)
-        else:
-            dest = self.get_remote_client(self.instance)
-        dest.validate_authentication()
-
     def boot_instance(self):
         self.instance = self.create_server(
             key_name=self.keypair['name'])
@@ -1365,7 +1375,7 @@ class EncryptionScenarioTest(ScenarioTest):
         randomized_name = data_utils.rand_name('scenario-type-' + name)
         LOG.debug("Creating a volume type: %s", randomized_name)
         body = client.create_volume_type(
-            randomized_name)['volume_type']
+            name=randomized_name)['volume_type']
         self.assertIn('id', body)
         self.addCleanup(client.delete_volume_type, body['id'])
         return body

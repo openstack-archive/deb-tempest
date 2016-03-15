@@ -15,11 +15,11 @@ import re
 import time
 
 from oslo_log import log as logging
-import six
-from tempest_lib.common import ssh
 
 from tempest import config
 from tempest import exceptions
+from tempest.lib.common import ssh
+import tempest.lib.exceptions
 
 CONF = config.CONF
 
@@ -28,22 +28,10 @@ LOG = logging.getLogger(__name__)
 
 class RemoteClient(object):
 
-    # NOTE(afazekas): It should always get an address instead of server
-    def __init__(self, server, username, password=None, pkey=None):
+    def __init__(self, ip_address, username, password=None, pkey=None):
         ssh_timeout = CONF.validation.ssh_timeout
-        network = CONF.validation.network_for_ssh
-        ip_version = CONF.validation.ip_version_for_ssh
         connect_timeout = CONF.validation.connect_timeout
-        if isinstance(server, six.string_types):
-            ip_address = server
-        else:
-            addresses = server['addresses'][network]
-            for address in addresses:
-                if address['version'] == ip_version:
-                    ip_address = address['addr']
-                    break
-            else:
-                raise exceptions.ServerUnreachable()
+
         self.ssh_client = ssh.Client(ip_address, username, password,
                                      ssh_timeout, pkey=pkey,
                                      channel_timeout=connect_timeout)
@@ -191,4 +179,10 @@ class RemoteClient(object):
 
     def make_fs(self, dev_name, fs='ext4'):
         cmd_mkfs = 'sudo /usr/sbin/mke2fs -t %s /dev/%s' % (fs, dev_name)
-        self.exec_command(cmd_mkfs)
+        try:
+            self.exec_command(cmd_mkfs)
+        except tempest.lib.exceptions.SSHExecCommandFailed:
+            LOG.error("Couldn't mke2fs")
+            cmd_why = 'sudo ls -lR /dev'
+            LOG.info("Contents of /dev: %s" % self.exec_command(cmd_why))
+            raise

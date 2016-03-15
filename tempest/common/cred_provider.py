@@ -14,13 +14,10 @@
 
 import abc
 
-from oslo_log import log as logging
 import six
-from tempest_lib import auth
 
 from tempest import exceptions
-
-LOG = logging.getLogger(__name__)
+from tempest.lib import auth
 
 
 @six.add_metaclass(abc.ABCMeta)

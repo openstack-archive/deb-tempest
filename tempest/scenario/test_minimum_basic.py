@@ -13,8 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_log import log as logging
-
 from tempest.common import custom_matchers
 from tempest.common import waiters
 from tempest import config
@@ -23,8 +21,6 @@ from tempest.scenario import manager
 from tempest import test
 
 CONF = config.CONF
-
-LOG = logging.getLogger(__name__)
 
 
 class TestMinimumBasicScenario(manager.ScenarioTest):
@@ -51,13 +47,6 @@ class TestMinimumBasicScenario(manager.ScenarioTest):
 
     """
 
-    def _wait_for_server_status(self, server, status):
-        server_id = server['id']
-        # Raise on error defaults to True, which is consistent with the
-        # original function from scenario tests here
-        waiters.wait_for_server_status(self.servers_client,
-                                       server_id, status)
-
     def nova_list(self):
         servers = self.servers_client.list_servers()
         # The list servers in the compute client is inconsistent...
@@ -73,19 +62,14 @@ class TestMinimumBasicScenario(manager.ScenarioTest):
             server, custom_matchers.MatchesDictExceptForKeys(
                 got_server, excluded_keys=excluded_keys))
 
-    def cinder_create(self):
-        return self.create_volume()
-
-    def cinder_list(self):
-        return self.volumes_client.list_volumes()['volumes']
-
     def cinder_show(self, volume):
         got_volume = self.volumes_client.show_volume(volume['id'])['volume']
         self.assertEqual(volume, got_volume)
 
     def nova_reboot(self, server):
         self.servers_client.reboot_server(server['id'], type='SOFT')
-        self._wait_for_server_status(server, 'ACTIVE')
+        waiters.wait_for_server_status(self.servers_client,
+                                       server['id'], 'ACTIVE')
 
     def check_partitions(self):
         # NOTE(andreaf) The device name may be different on different guest OS
@@ -125,8 +109,8 @@ class TestMinimumBasicScenario(manager.ScenarioTest):
 
         self.nova_show(server)
 
-        volume = self.cinder_create()
-        volumes = self.cinder_list()
+        volume = self.create_volume()
+        volumes = self.volumes_client.list_volumes()['volumes']
         self.assertIn(volume['id'], [x['id'] for x in volumes])
 
         self.cinder_show(volume)

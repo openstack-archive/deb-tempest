@@ -13,10 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib import exceptions as lib_exc
-
 from tempest.api.identity import base
 from tempest.common.utils import data_utils
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 
@@ -25,7 +24,7 @@ class RegionsTestJSON(base.BaseIdentityV3AdminTest):
     @classmethod
     def setup_clients(cls):
         super(RegionsTestJSON, cls).setup_clients()
-        cls.client = cls.region_client
+        cls.client = cls.regions_client
 
     @classmethod
     def resource_setup(cls):

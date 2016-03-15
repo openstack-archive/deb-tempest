@@ -22,12 +22,12 @@ from oslo_log import log as logging
 from oslo_serialization import jsonutils as json
 import six
 from six.moves.urllib import parse as urllib
-from tempest_lib.common.utils import misc as misc_utils
-from tempest_lib import exceptions as lib_exc
 
 from tempest.common import glance_http
 from tempest.common import service_client
 from tempest import exceptions
+from tempest.lib.common.utils import misc as misc_utils
+from tempest.lib import exceptions as lib_exc
 
 LOG = logging.getLogger(__name__)
 
@@ -147,50 +147,29 @@ class ImagesClient(service_client.ServiceClient):
             self._http = self._get_http()
         return self._http
 
-    def create_image(self, name, container_format, disk_format, **kwargs):
-        params = {
-            "name": name,
-            "container_format": container_format,
-            "disk_format": disk_format,
-        }
-
+    def create_image(self, **kwargs):
         headers = {}
+        data = kwargs.pop('data', None)
+        headers.update(self._image_meta_to_headers(kwargs))
 
-        for option in ['is_public', 'location', 'properties',
-                       'copy_from', 'min_ram']:
-            if option in kwargs:
-                params[option] = kwargs.get(option)
-
-        headers.update(self._image_meta_to_headers(params))
-
-        if 'data' in kwargs:
-            return self._create_with_data(headers, kwargs.get('data'))
+        if data is not None:
+            return self._create_with_data(headers, data)
 
         resp, body = self.post('v1/images', None, headers)
         self.expected_success(201, resp.status)
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
 
-    def update_image(self, image_id, name=None, container_format=None,
-                     data=None, properties=None):
-        params = {}
+    def update_image(self, image_id, **kwargs):
         headers = {}
-        if name is not None:
-            params['name'] = name
-
-        if container_format is not None:
-            params['container_format'] = container_format
-
-        if properties is not None:
-            params['properties'] = properties
-
-        headers.update(self._image_meta_to_headers(params))
+        data = kwargs.pop('data', None)
+        headers.update(self._image_meta_to_headers(kwargs))
 
         if data is not None:
             return self._update_with_data(image_id, headers, data)
 
         url = 'v1/images/%s' % image_id
-        resp, body = self.put(url, data, headers)
+        resp, body = self.put(url, None, headers)
         self.expected_success(200, resp.status)
         body = json.loads(body)
         return service_client.ResponseBody(resp, body)
@@ -201,21 +180,27 @@ class ImagesClient(service_client.ServiceClient):
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def list_images(self, detail=False, properties=dict(),
-                    changes_since=None, **kwargs):
+    def list_images(self, detail=False, **kwargs):
+        """Return a list of all images filtered by input parameters.
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-image-v1.html#listImage-v1
+
+        Most parameters except the following are passed to the API without
+        any changes.
+        :param changes_since: The name is changed to changes-since
+        """
         url = 'v1/images'
 
         if detail:
             url += '/detail'
 
-        params = {}
-        for key, value in properties.items():
-            params['property-%s' % key] = value
+        properties = kwargs.pop('properties', {})
+        for key, value in six.iteritems(properties):
+            kwargs['property-%s' % key] = value
 
-        kwargs.update(params)
-
-        if changes_since is not None:
-            kwargs['changes-since'] = changes_since
+        if kwargs.get('changes_since'):
+            kwargs['changes-since'] = kwargs.pop('changes_since')
 
         if len(kwargs) > 0:
             url += '?%s' % urllib.urlencode(kwargs)

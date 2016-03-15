@@ -17,6 +17,7 @@ import six
 
 from tempest.api.network import base
 from tempest.common.utils import data_utils
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 
@@ -59,7 +60,7 @@ class QuotasTest(base.BaseAdminNetworkTest):
         # Change quotas for tenant
         quota_set = self.admin_quotas_client.update_quotas(
             project_id, **new_quotas)['quota']
-        self.addCleanup(self.admin_quotas_client.reset_quotas, project_id)
+        self.addCleanup(self._cleanup_quotas, project_id)
         for key, value in six.iteritems(new_quotas):
             self.assertEqual(value, quota_set[key])
 
@@ -87,3 +88,12 @@ class QuotasTest(base.BaseAdminNetworkTest):
     def test_quotas(self):
         new_quotas = {'network': 0, 'security_group': 0}
         self._check_quotas(new_quotas)
+
+    def _cleanup_quotas(self, project_id):
+        # try to clean up the resources.If it fails, then
+        # assume that everything was already deleted, so
+        # it is OK to continue.
+        try:
+            self.admin_quotas_client.reset_quotas(project_id)
+        except lib_exc.NotFound:
+            pass

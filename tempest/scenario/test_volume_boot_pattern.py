@@ -10,8 +10,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_log import log
-
 from tempest.common.utils import data_utils
 from tempest.common import waiters
 from tempest import config
@@ -19,8 +17,6 @@ from tempest.scenario import manager
 from tempest import test
 
 CONF = config.CONF
-
-LOG = log.getLogger(__name__)
 
 
 class TestVolumeBootPattern(manager.ScenarioTest):
@@ -70,7 +66,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
         create_kwargs.update(self._get_bdm(
             vol_id, delete_on_termination=delete_on_termination))
         return self.create_server(
-            image='',
+            image_id='',
             wait_until='ACTIVE',
             **create_kwargs)
 
@@ -114,7 +110,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
                                                        keypair, security_group)
 
         # write content to volume on instance
-        ip_instance_1st = self.get_server_or_ip(instance_1st)
+        ip_instance_1st = self.get_server_ip(instance_1st)
         timestamp = self.create_timestamp(ip_instance_1st,
                                           private_key=keypair['private_key'])
 
@@ -126,7 +122,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
                                                        keypair, security_group)
 
         # check the content of written file
-        ip_instance_2nd = self.get_server_or_ip(instance_2nd)
+        ip_instance_2nd = self.get_server_ip(instance_2nd)
         timestamp2 = self.get_timestamp(ip_instance_2nd,
                                         private_key=keypair['private_key'])
         self.assertEqual(timestamp, timestamp2)
@@ -141,7 +137,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
                                             keypair, security_group))
 
         # check the content of written file
-        server_from_snapshot_ip = self.get_server_or_ip(server_from_snapshot)
+        server_from_snapshot_ip = self.get_server_ip(server_from_snapshot)
         timestamp3 = self.get_timestamp(server_from_snapshot_ip,
                                         private_key=keypair['private_key'])
         self.assertEqual(timestamp, timestamp3)

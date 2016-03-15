@@ -13,9 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from tempest_lib import exceptions as lib_exc
-
 from tempest.api.identity import base
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 
@@ -27,7 +26,7 @@ class IdentityV3ProjectsTest(base.BaseIdentityV3Test):
     def test_list_projects_returns_only_authorized_projects(self):
         alt_project_name =\
             self.alt_manager.credentials.credentials.project_name
-        resp = self.non_admin_client.list_user_projects(
+        resp = self.non_admin_users_client.list_user_projects(
             self.os.credentials.user_id)
 
         # check that user can see only that projects that he presents in so

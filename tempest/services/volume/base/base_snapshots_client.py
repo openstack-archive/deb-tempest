@@ -15,10 +15,10 @@ import time
 from oslo_log import log as logging
 from oslo_serialization import jsonutils as json
 from six.moves.urllib import parse as urllib
-from tempest_lib import exceptions as lib_exc
 
 from tempest.common import service_client
 from tempest import exceptions
+from tempest.lib import exceptions as lib_exc
 
 
 LOG = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class BaseSnapshotsClient(service_client.ServiceClient):
 
     create_resp = 200
 
-    def list_snapshots(self, detail=False, params=None):
+    def list_snapshots(self, detail=False, **params):
         """List all the snapshot."""
         url = 'snapshots'
         if detail:
@@ -50,17 +50,13 @@ class BaseSnapshotsClient(service_client.ServiceClient):
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def create_snapshot(self, volume_id, **kwargs):
+    def create_snapshot(self, **kwargs):
         """Creates a new snapshot.
 
-        volume_id(Required): id of the volume.
-        force: Create a snapshot even if the volume attached (Default=False)
-        display_name: Optional snapshot Name.
-        display_description: User friendly snapshot description.
+        Available params: see http://developer.openstack.org/
+                              api-ref-blockstorage-v2.html#createSnapshot
         """
-        post_body = {'volume_id': volume_id}
-        post_body.update(kwargs)
-        post_body = json.dumps({'snapshot': post_body})
+        post_body = json.dumps({'snapshot': kwargs})
         resp, body = self.post('snapshots', post_body)
         body = json.loads(body)
         self.expected_success(self.create_resp, resp.status)
@@ -136,13 +132,14 @@ class BaseSnapshotsClient(service_client.ServiceClient):
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def update_snapshot_status(self, snapshot_id, status, progress):
+    def update_snapshot_status(self, snapshot_id, **kwargs):
         """Update the specified snapshot's status."""
-        post_body = {
-            'status': status,
-            'progress': progress
-        }
-        post_body = json.dumps({'os-update_snapshot_status': post_body})
+        # TODO(gmann): api-site doesn't contain doc ref
+        # for this API. After fixing the api-site, we need to
+        # add the link here.
+        # Bug https://bugs.launchpad.net/openstack-api-site/+bug/1532645
+
+        post_body = json.dumps({'os-update_snapshot_status': kwargs})
         url = 'snapshots/%s/action' % str(snapshot_id)
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
@@ -165,18 +162,26 @@ class BaseSnapshotsClient(service_client.ServiceClient):
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def update_snapshot_metadata(self, snapshot_id, metadata):
+    def update_snapshot_metadata(self, snapshot_id, **kwargs):
         """Update metadata for the snapshot."""
-        put_body = json.dumps({'metadata': metadata})
+        # TODO(piyush): Current api-site doesn't contain this API description.
+        # After fixing the api-site, we need to fix here also for putting the
+        # link to api-site.
+        # LP: https://bugs.launchpad.net/openstack-api-site/+bug/1529063
+        put_body = json.dumps(kwargs)
         url = "snapshots/%s/metadata" % str(snapshot_id)
         resp, body = self.put(url, put_body)
         body = json.loads(body)
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def update_snapshot_metadata_item(self, snapshot_id, id, meta_item):
+    def update_snapshot_metadata_item(self, snapshot_id, id, **kwargs):
         """Update metadata item for the snapshot."""
-        put_body = json.dumps({'meta': meta_item})
+        # TODO(piyush): Current api-site doesn't contain this API description.
+        # After fixing the api-site, we need to fix here also for putting the
+        # link to api-site.
+        # LP: https://bugs.launchpad.net/openstack-api-site/+bug/1529064
+        put_body = json.dumps(kwargs)
         url = "snapshots/%s/metadata/%s" % (str(snapshot_id), str(id))
         resp, body = self.put(url, put_body)
         body = json.loads(body)

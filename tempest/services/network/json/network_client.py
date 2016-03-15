@@ -12,10 +12,9 @@
 
 import time
 
-from tempest_lib.common.utils import misc
-from tempest_lib import exceptions as lib_exc
-
 from tempest import exceptions
+from tempest.lib.common.utils import misc
+from tempest.lib import exceptions as lib_exc
 from tempest.services.network.json import base
 
 
@@ -35,68 +34,32 @@ class NetworkClient(base.BaseNetworkClient):
     quotas
     """
 
-    def create_security_group(self, **kwargs):
-        uri = '/security-groups'
-        post_data = {'security_group': kwargs}
-        return self.create_resource(uri, post_data)
+    def create_bulk_network(self, **kwargs):
+        """create bulk network
 
-    def update_security_group(self, security_group_id, **kwargs):
-        uri = '/security-groups/%s' % security_group_id
-        post_data = {'security_group': kwargs}
-        return self.update_resource(uri, post_data)
-
-    def show_security_group(self, security_group_id, **fields):
-        uri = '/security-groups/%s' % security_group_id
-        return self.show_resource(uri, **fields)
-
-    def delete_security_group(self, security_group_id):
-        uri = '/security-groups/%s' % security_group_id
-        return self.delete_resource(uri)
-
-    def list_security_groups(self, **filters):
-        uri = '/security-groups'
-        return self.list_resources(uri, **filters)
-
-    def create_security_group_rule(self, **kwargs):
-        uri = '/security-group-rules'
-        post_data = {'security_group_rule': kwargs}
-        return self.create_resource(uri, post_data)
-
-    def show_security_group_rule(self, security_group_rule_id, **fields):
-        uri = '/security-group-rules/%s' % security_group_rule_id
-        return self.show_resource(uri, **fields)
-
-    def delete_security_group_rule(self, security_group_rule_id):
-        uri = '/security-group-rules/%s' % security_group_rule_id
-        return self.delete_resource(uri)
-
-    def list_security_group_rules(self, **filters):
-        uri = '/security-group-rules'
-        return self.list_resources(uri, **filters)
-
-    def show_extension(self, ext_alias, **fields):
-        uri = '/extensions/%s' % ext_alias
-        return self.show_resource(uri, **fields)
-
-    def list_extensions(self, **filters):
-        uri = '/extensions'
-        return self.list_resources(uri, **filters)
-
-    def create_bulk_network(self, names):
-        network_list = [{'name': name} for name in names]
-        post_data = {'networks': network_list}
+        Available params: see http://developer.openstack.org/
+                              api-ref-networking-v2.html#bulkCreateNetwork
+        """
         uri = '/networks'
-        return self.create_resource(uri, post_data)
+        return self.create_resource(uri, kwargs)
 
-    def create_bulk_subnet(self, subnet_list):
-        post_data = {'subnets': subnet_list}
+    def create_bulk_subnet(self, **kwargs):
+        """create bulk subnet
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-networking-v2.html#bulkCreateSubnet
+        """
         uri = '/subnets'
-        return self.create_resource(uri, post_data)
+        return self.create_resource(uri, kwargs)
 
-    def create_bulk_port(self, port_list):
-        post_data = {'ports': port_list}
+    def create_bulk_port(self, **kwargs):
+        """create bulk port
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-networking-v2.html#bulkCreatePorts
+        """
         uri = '/ports'
-        return self.create_resource(uri, post_data)
+        return self.create_resource(uri, kwargs)
 
     def wait_for_resource_deletion(self, resource_type, id, client=None):
         """Waits for a resource to be deleted."""
@@ -216,83 +179,35 @@ class NetworkClient(base.BaseNetworkClient):
         """
         return self._update_router(router_id, set_enable_snat=True, **kwargs)
 
-    def add_router_interface_with_subnet_id(self, router_id, subnet_id):
+    def add_router_interface(self, router_id, **kwargs):
+        """Add router interface.
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-networking-v2-ext.html#addRouterInterface
+        """
         uri = '/routers/%s/add_router_interface' % router_id
-        update_body = {"subnet_id": subnet_id}
-        return self.update_resource(uri, update_body)
+        return self.update_resource(uri, kwargs)
 
-    def add_router_interface_with_port_id(self, router_id, port_id):
-        uri = '/routers/%s/add_router_interface' % router_id
-        update_body = {"port_id": port_id}
-        return self.update_resource(uri, update_body)
+    def remove_router_interface(self, router_id, **kwargs):
+        """Remove router interface.
 
-    def remove_router_interface_with_subnet_id(self, router_id, subnet_id):
+        Available params: see http://developer.openstack.org/
+                              api-ref-networking-v2-ext.html#removeRouterInterface
+        """
         uri = '/routers/%s/remove_router_interface' % router_id
-        update_body = {"subnet_id": subnet_id}
-        return self.update_resource(uri, update_body)
-
-    def remove_router_interface_with_port_id(self, router_id, port_id):
-        uri = '/routers/%s/remove_router_interface' % router_id
-        update_body = {"port_id": port_id}
-        return self.update_resource(uri, update_body)
+        return self.update_resource(uri, kwargs)
 
     def list_router_interfaces(self, uuid):
         uri = '/ports?device_id=%s' % uuid
-        return self.list_resources(uri)
-
-    def update_agent(self, agent_id, **kwargs):
-        """Update agent
-
-        :param agent_info: Agent update information.
-        E.g {"admin_state_up": True}
-        """
-        # TODO(piyush): Current api-site doesn't contain this API description.
-        # After fixing the api-site, we need to fix here also for putting the
-        # link to api-site.
-        # LP: https://bugs.launchpad.net/openstack-api-site/+bug/1526673
-        uri = '/agents/%s' % agent_id
-        return self.update_resource(uri, kwargs)
-
-    def show_agent(self, agent_id, **fields):
-        uri = '/agents/%s' % agent_id
-        return self.show_resource(uri, **fields)
-
-    def list_agents(self, **filters):
-        uri = '/agents'
-        return self.list_resources(uri, **filters)
-
-    def list_routers_on_l3_agent(self, agent_id):
-        uri = '/agents/%s/l3-routers' % agent_id
         return self.list_resources(uri)
 
     def list_l3_agents_hosting_router(self, router_id):
         uri = '/routers/%s/l3-agents' % router_id
         return self.list_resources(uri)
 
-    def add_router_to_l3_agent(self, agent_id, **kwargs):
-        # TODO(piyush): Current api-site doesn't contain this API description.
-        # After fixing the api-site, we need to fix here also for putting the
-        # link to api-site.
-        # LP: https://bugs.launchpad.net/openstack-api-site/+bug/1526670
-        uri = '/agents/%s/l3-routers' % agent_id
-        return self.create_resource(uri, kwargs)
-
-    def remove_router_from_l3_agent(self, agent_id, router_id):
-        uri = '/agents/%s/l3-routers/%s' % (agent_id, router_id)
-        return self.delete_resource(uri)
-
     def list_dhcp_agent_hosting_network(self, network_id):
         uri = '/networks/%s/dhcp-agents' % network_id
         return self.list_resources(uri)
-
-    def list_networks_hosted_by_one_dhcp_agent(self, agent_id):
-        uri = '/agents/%s/dhcp-networks' % agent_id
-        return self.list_resources(uri)
-
-    def remove_network_from_dhcp_agent(self, agent_id, network_id):
-        uri = '/agents/%s/dhcp-networks/%s' % (agent_id,
-                                               network_id)
-        return self.delete_resource(uri)
 
     def update_extra_routes(self, router_id, **kwargs):
         """Update Extra routes.
@@ -312,30 +227,3 @@ class NetworkClient(base.BaseNetworkClient):
             }
         }
         return self.update_resource(uri, put_body)
-
-    def add_dhcp_agent_to_network(self, agent_id, network_id):
-        post_body = {'network_id': network_id}
-        uri = '/agents/%s/dhcp-networks' % agent_id
-        return self.create_resource(uri, post_body)
-
-    def list_subnetpools(self, **filters):
-        uri = '/subnetpools'
-        return self.list_resources(uri, **filters)
-
-    def create_subnetpools(self, **kwargs):
-        uri = '/subnetpools'
-        post_data = {'subnetpool': kwargs}
-        return self.create_resource(uri, post_data)
-
-    def show_subnetpools(self, subnetpool_id, **fields):
-        uri = '/subnetpools/%s' % subnetpool_id
-        return self.show_resource(uri, **fields)
-
-    def update_subnetpools(self, subnetpool_id, **kwargs):
-        uri = '/subnetpools/%s' % subnetpool_id
-        post_data = {'subnetpool': kwargs}
-        return self.update_resource(uri, post_data)
-
-    def delete_subnetpools(self, subnetpool_id):
-        uri = '/subnetpools/%s' % subnetpool_id
-        return self.delete_resource(uri)

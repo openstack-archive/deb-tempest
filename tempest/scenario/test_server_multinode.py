@@ -14,8 +14,6 @@
 #    under the License.
 
 
-from oslo_log import log as logging
-
 from tempest import config
 from tempest import exceptions
 from tempest.scenario import manager
@@ -23,12 +21,18 @@ from tempest import test
 
 CONF = config.CONF
 
-LOG = logging.getLogger(__name__)
-
 
 class TestServerMultinode(manager.ScenarioTest):
     """This is a set of tests specific to multinode testing."""
     credentials = ['primary', 'admin']
+
+    @classmethod
+    def skip_checks(cls):
+        super(TestServerMultinode, cls).skip_checks()
+
+        if CONF.compute.min_compute_nodes < 2:
+            raise cls.skipException(
+                "Less than 2 compute nodes, skipping multinode tests.")
 
     @classmethod
     def setup_clients(cls):

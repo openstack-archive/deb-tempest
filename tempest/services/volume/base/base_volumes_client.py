@@ -16,10 +16,10 @@
 from oslo_serialization import jsonutils as json
 import six
 from six.moves.urllib import parse as urllib
-from tempest_lib import exceptions as lib_exc
 
 from tempest.common import service_client
 from tempest.common import waiters
+from tempest.lib import exceptions as lib_exc
 
 
 class BaseVolumesClient(service_client.ServiceClient):
@@ -71,23 +71,15 @@ class BaseVolumesClient(service_client.ServiceClient):
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def create_volume(self, size=None, **kwargs):
+    def create_volume(self, **kwargs):
         """Creates a new Volume.
 
-        size: Size of volume in GB.
-        Following optional keyword arguments are accepted:
-        display_name: Optional Volume Name(only for V1).
-        name: Optional Volume Name(only for V2).
-        metadata: A dictionary of values to be used as metadata.
-        volume_type: Optional Name of volume_type for the volume
-        snapshot_id: When specified the volume is created from this snapshot
-        imageRef: When specified the volume is created from this image
+        Available params: see http://developer.openstack.org/
+                              api-ref-blockstorage-v2.html#createVolume
         """
-        if size is None:
-            size = self.default_volume_size
-        post_body = {'size': size}
-        post_body.update(kwargs)
-        post_body = json.dumps({'volume': post_body})
+        if 'size' not in kwargs:
+            kwargs['size'] = self.default_volume_size
+        post_body = json.dumps({'volume': kwargs})
         resp, body = self.post('volumes', post_body)
         body = json.loads(body)
         self.expected_success(self.create_resp, resp.status)
@@ -107,35 +99,26 @@ class BaseVolumesClient(service_client.ServiceClient):
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def upload_volume(self, volume_id, image_name, disk_format):
+    def upload_volume(self, volume_id, **kwargs):
         """Uploads a volume in Glance."""
-        post_body = {
-            'image_name': image_name,
-            'disk_format': disk_format
-        }
-        post_body = json.dumps({'os-volume_upload_image': post_body})
+        post_body = json.dumps({'os-volume_upload_image': kwargs})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         body = json.loads(body)
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def attach_volume(self, volume_id, instance_uuid, mountpoint):
+    def attach_volume(self, volume_id, **kwargs):
         """Attaches a volume to a given instance on a given mountpoint."""
-        post_body = {
-            'instance_uuid': instance_uuid,
-            'mountpoint': mountpoint,
-        }
-        post_body = json.dumps({'os-attach': post_body})
+        post_body = json.dumps({'os-attach': kwargs})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def set_bootable_volume(self, volume_id, bootable):
+    def set_bootable_volume(self, volume_id, **kwargs):
         """set a bootable flag for a volume - true or false."""
-        post_body = {"bootable": bootable}
-        post_body = json.dumps({'os-set_bootable': post_body})
+        post_body = json.dumps({'os-set_bootable': kwargs})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         self.expected_success(200, resp.status)
@@ -143,8 +126,7 @@ class BaseVolumesClient(service_client.ServiceClient):
 
     def detach_volume(self, volume_id):
         """Detaches a volume from an instance."""
-        post_body = {}
-        post_body = json.dumps({'os-detach': post_body})
+        post_body = json.dumps({'os-detach': {}})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
@@ -152,8 +134,7 @@ class BaseVolumesClient(service_client.ServiceClient):
 
     def reserve_volume(self, volume_id):
         """Reserves a volume."""
-        post_body = {}
-        post_body = json.dumps({'os-reserve': post_body})
+        post_body = json.dumps({'os-reserve': {}})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
@@ -161,8 +142,7 @@ class BaseVolumesClient(service_client.ServiceClient):
 
     def unreserve_volume(self, volume_id):
         """Restore a reserved volume ."""
-        post_body = {}
-        post_body = json.dumps({'os-unreserve': post_body})
+        post_body = json.dumps({'os-unreserve': {}})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
@@ -184,20 +164,17 @@ class BaseVolumesClient(service_client.ServiceClient):
         """Returns the primary type of resource this client works with."""
         return 'volume'
 
-    def extend_volume(self, volume_id, extend_size):
+    def extend_volume(self, volume_id, **kwargs):
         """Extend a volume."""
-        post_body = {
-            'new_size': extend_size
-        }
-        post_body = json.dumps({'os-extend': post_body})
+        post_body = json.dumps({'os-extend': kwargs})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def reset_volume_status(self, volume_id, status):
+    def reset_volume_status(self, volume_id, **kwargs):
         """Reset the Specified Volume's Status."""
-        post_body = json.dumps({'os-reset_status': {"status": status}})
+        post_body = json.dumps({'os-reset_status': kwargs})
         resp, body = self.post('volumes/%s/action' % volume_id, post_body)
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
@@ -218,14 +195,9 @@ class BaseVolumesClient(service_client.ServiceClient):
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def create_volume_transfer(self, vol_id, display_name=None):
+    def create_volume_transfer(self, **kwargs):
         """Create a volume transfer."""
-        post_body = {
-            'volume_id': vol_id
-        }
-        if display_name:
-            post_body['name'] = display_name
-        post_body = json.dumps({'transfer': post_body})
+        post_body = json.dumps({'transfer': kwargs})
         resp, body = self.post('os-volume-transfer', post_body)
         body = json.loads(body)
         self.expected_success(202, resp.status)
@@ -239,7 +211,7 @@ class BaseVolumesClient(service_client.ServiceClient):
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def list_volume_transfers(self, params=None):
+    def list_volume_transfers(self, **params):
         """List all the volume transfers created."""
         url = 'os-volume-transfer'
         if params:
@@ -255,24 +227,18 @@ class BaseVolumesClient(service_client.ServiceClient):
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def accept_volume_transfer(self, transfer_id, transfer_auth_key):
+    def accept_volume_transfer(self, transfer_id, **kwargs):
         """Accept a volume transfer."""
-        post_body = {
-            'auth_key': transfer_auth_key,
-        }
         url = 'os-volume-transfer/%s/accept' % transfer_id
-        post_body = json.dumps({'accept': post_body})
+        post_body = json.dumps({'accept': kwargs})
         resp, body = self.post(url, post_body)
         body = json.loads(body)
         self.expected_success(202, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def update_volume_readonly(self, volume_id, readonly):
+    def update_volume_readonly(self, volume_id, **kwargs):
         """Update the Specified Volume readonly."""
-        post_body = {
-            'readonly': readonly
-        }
-        post_body = json.dumps({'os-update_readonly_flag': post_body})
+        post_body = json.dumps({'os-update_readonly_flag': kwargs})
         url = 'volumes/%s/action' % (volume_id)
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
@@ -327,10 +293,8 @@ class BaseVolumesClient(service_client.ServiceClient):
         self.expected_success(200, resp.status)
         return service_client.ResponseBody(resp, body)
 
-    def retype_volume(self, volume_id, volume_type, **kwargs):
+    def retype_volume(self, volume_id, **kwargs):
         """Updates volume with new volume type."""
-        post_body = {'new_type': volume_type}
-        post_body.update(kwargs)
-        post_body = json.dumps({'os-retype': post_body})
+        post_body = json.dumps({'os-retype': kwargs})
         resp, body = self.post('volumes/%s/action' % volume_id, post_body)
         self.expected_success(202, resp.status)

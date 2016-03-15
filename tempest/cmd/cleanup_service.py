@@ -78,7 +78,7 @@ def init_conf():
 
     if IS_NEUTRON:
         CONF_PRIV_NETWORK = _get_network_id(CONF.compute.fixed_network_name,
-                                            CONF.identity.tenant_name)
+                                            CONF.auth.admin_tenant_name)
         CONF_NETWORKS = [CONF_PUB_NETWORK, CONF_PRIV_NETWORK]
 
 
@@ -389,6 +389,7 @@ class NetworkService(BaseService):
         self.floating_ips_client = manager.floating_ips_client
         self.metering_labels_client = manager.metering_labels_client
         self.metering_label_rules_client = manager.metering_label_rules_client
+        self.security_groups_client = manager.security_groups_client
 
     def _filter_by_conf_networks(self, item_list):
         if not item_list or not all(('network_id' in i for i in item_list)):
@@ -468,8 +469,7 @@ class NetworkRouterService(NetworkService):
                          in client.list_router_interfaces(rid)['ports']
                          if port["device_owner"] == "network:router_interface"]
                 for port in ports:
-                    client.remove_router_interface_with_port_id(rid,
-                                                                port['id'])
+                    client.remove_router_interface(rid, port_id=port['id'])
                 client.delete_router(rid)
             except Exception:
                 LOG.exception("Delete Router exception.")
@@ -654,7 +654,7 @@ class NetworkPortService(NetworkService):
 
 class NetworkSecGroupService(NetworkService):
     def list(self):
-        client = self.client
+        client = self.security_groups_client
         filter = self.tenant_filter
         # cannot delete default sec group so never show it.
         secgroups = [secgroup for secgroup in
@@ -774,7 +774,7 @@ class FlavorService(BaseService):
 class ImageService(BaseService):
     def __init__(self, manager, **kwargs):
         super(ImageService, self).__init__(kwargs)
-        self.client = manager.images_client
+        self.client = manager.compute_images_client
 
     def list(self):
         client = self.client
@@ -814,11 +814,14 @@ class IdentityService(BaseService):
         self.client = manager.identity_client
 
 
-class UserService(IdentityService):
+class UserService(BaseService):
+
+    def __init__(self, manager, **kwargs):
+        super(UserService, self).__init__(kwargs)
+        self.client = manager.users_client
 
     def list(self):
-        client = self.client
-        users = client.list_users()['users']
+        users = self.client.list_users()['users']
 
         if not self.is_save_state:
             users = [user for user in users if user['id']
@@ -836,11 +839,10 @@ class UserService(IdentityService):
         return users
 
     def delete(self):
-        client = self.client
         users = self.list()
         for user in users:
             try:
-                client.delete_user(user['id'])
+                self.client.delete_user(user['id'])
             except Exception:
                 LOG.exception("Delete User exception.")
 
@@ -855,7 +857,7 @@ class UserService(IdentityService):
             self.data['users'][user['id']] = user['name']
 
 
-class RoleService(IdentityService):
+class RoleService(BaseService):
 
     def __init__(self, manager, **kwargs):
         super(RoleService, self).__init__(kwargs)
@@ -895,7 +897,7 @@ class RoleService(IdentityService):
             self.data['roles'][role['id']] = role['name']
 
 
-class TenantService(IdentityService):
+class TenantService(BaseService):
 
     def __init__(self, manager, **kwargs):
         super(TenantService, self).__init__(kwargs)
@@ -938,7 +940,7 @@ class DomainService(BaseService):
 
     def __init__(self, manager, **kwargs):
         super(DomainService, self).__init__(kwargs)
-        self.client = manager.identity_v3_client
+        self.client = manager.domains_client
 
     def list(self):
         client = self.client

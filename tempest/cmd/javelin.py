@@ -115,24 +115,25 @@ import netaddr
 from oslo_log import log as logging
 from oslo_utils import timeutils
 import six
-from tempest_lib import auth
-from tempest_lib import exceptions as lib_exc
-from tempest_lib.services.compute import flavors_client
-from tempest_lib.services.compute import security_groups_client
 import yaml
 
 from tempest.common import identity
 from tempest.common import waiters
 from tempest import config
-from tempest.services.compute.json import floating_ips_client
-from tempest.services.compute.json import security_group_rules_client
-from tempest.services.compute.json import servers_client
+from tempest.lib import auth
+from tempest.lib import exceptions as lib_exc
+from tempest.lib.services.compute import flavors_client
+from tempest.lib.services.compute import floating_ips_client
+from tempest.lib.services.compute import security_group_rules_client
+from tempest.lib.services.compute import security_groups_client
+from tempest.lib.services.compute import servers_client
+from tempest.lib.services.network import subnets_client
 from tempest.services.identity.v2.json import identity_client
 from tempest.services.identity.v2.json import roles_client
 from tempest.services.identity.v2.json import tenants_client
+from tempest.services.identity.v2.json import users_client
 from tempest.services.image.v2.json import images_client
 from tempest.services.network.json import network_client
-from tempest.services.network.json import subnets_client
 from tempest.services.object_storage import container_client
 from tempest.services.object_storage import object_client
 from tempest.services.telemetry.json import alarming_client
@@ -208,6 +209,12 @@ class OSClient(object):
             endpoint_type='adminURL',
             **default_params_with_timeout_values)
         self.roles = roles_client.RolesClient(
+            _auth,
+            CONF.identity.catalog_type,
+            CONF.identity.region,
+            endpoint_type='adminURL',
+            **default_params_with_timeout_values)
+        self.users = users_client.UsersClient(
             _auth,
             CONF.identity.catalog_type,
             CONF.identity.region,
@@ -311,7 +318,8 @@ def create_tenants(tenants):
         if tenant not in existing:
             admin.tenants.create_tenant(tenant)['tenant']
         else:
-            LOG.warn("Tenant '%s' already exists in this environment" % tenant)
+            LOG.warning("Tenant '%s' already exists in this environment"
+                        % tenant)
 
 
 def destroy_tenants(tenants):
@@ -374,12 +382,12 @@ def create_users(users):
             LOG.error("Tenant: %s - not found" % u['tenant'])
             continue
         try:
-            identity.get_user_by_username(admin.identity,
+            identity.get_user_by_username(admin.tenants,
                                           tenant['id'], u['name'])
-            LOG.warn("User '%s' already exists in this environment"
-                     % u['name'])
+            LOG.warning("User '%s' already exists in this environment"
+                        % u['name'])
         except lib_exc.NotFound:
-            admin.identity.create_user(
+            admin.users.create_user(
                 u['name'], u['pass'], tenant['id'],
                 "%s@%s" % (u['name'], tenant['id']),
                 enabled=True)
@@ -390,9 +398,9 @@ def destroy_users(users):
     for user in users:
         tenant_id = identity.get_tenant_by_name(admin.tenants,
                                                 user['tenant'])['id']
-        user_id = identity.get_user_by_username(admin.identity,
+        user_id = identity.get_user_by_username(admin.tenants,
                                                 tenant_id, user['name'])['id']
-        admin.identity.delete_user(user_id)
+        admin.users.delete_user(user_id)
 
 
 def collect_users(users):
@@ -403,7 +411,7 @@ def collect_users(users):
         tenant = identity.get_tenant_by_name(admin.tenants, u['tenant'])
         u['tenant_id'] = tenant['id']
         USERS[u['name']] = u
-        body = identity.get_user_by_username(admin.identity,
+        body = identity.get_user_by_username(admin.tenants,
                                              tenant['id'], u['name'])
         USERS[u['name']]['id'] = body['id']
 
@@ -457,7 +465,7 @@ class JavelinCheck(unittest.TestCase):
         LOG.info("checking users")
         for name, user in six.iteritems(self.users):
             client = keystone_admin()
-            found = client.identity.show_user(user['id'])['user']
+            found = client.users.show_user(user['id'])['user']
             self.assertEqual(found['name'], user['name'])
             self.assertEqual(found['tenantId'], user['tenant_id'])
 
@@ -833,8 +841,8 @@ def destroy_routers(routers):
         for subnet in router['subnet']:
             subnet_id = _get_resource_by_name(client.networks,
                                               'subnets', subnet)['id']
-            client.networks.remove_router_interface_with_subnet_id(router_id,
-                                                                   subnet_id)
+            client.networks.remove_router_interface(router_id,
+                                                    subnet_id=subnet_id)
         client.networks.delete_router(router_id)
 
 
@@ -848,8 +856,8 @@ def add_router_interface(routers):
             subnet_id = _get_resource_by_name(client.networks,
                                               'subnets', subnet)['id']
             # connect routers to their subnets
-            client.networks.add_router_interface_with_subnet_id(router_id,
-                                                                subnet_id)
+            client.networks.add_router_interface(router_id,
+                                                 subnet_id=subnet_id)
         # connect routers to external network if set to "gateway"
         if router['gateway']:
             if CONF.network.public_network_id:
@@ -1022,7 +1030,9 @@ def attach_volumes(volumes):
         server_id = _get_server_by_name(client, volume['server'])['id']
         volume_id = _get_volume_by_name(client, volume['name'])['id']
         device = volume['device']
-        client.volumes.attach_volume(volume_id, server_id, device)
+        client.volumes.attach_volume(volume_id,
+                                     instance_uuid=server_id,
+                                     mountpoint=device)
 
 
 #######################
@@ -1074,7 +1084,7 @@ def destroy_resources():
     destroy_secgroups(RES['secgroups'])
     destroy_users(RES['users'])
     destroy_tenants(RES['tenants'])
-    LOG.warn("Destroy mode incomplete")
+    LOG.warning("Destroy mode incomplete")
 
 
 def get_options():
@@ -1130,6 +1140,8 @@ def setup_logging():
 
 
 def main():
+    print("Javelin is deprecated and will be removed from Tempest in the "
+          "future.")
     global RES
     get_options()
     setup_logging()

@@ -16,12 +16,6 @@ import mock
 import random
 import six
 
-from tempest.services.baremetal.v1.json import baremetal_client
-from tempest.services.compute.json import floating_ips_client
-from tempest.services.compute.json import security_group_rules_client
-from tempest.services.compute.json import server_groups_client
-from tempest.services.compute.json import servers_client
-from tempest.services.data_processing.v1_1 import data_processing_client
 from tempest.services.database.json import flavors_client as db_flavor_client
 from tempest.services.database.json import versions_client as db_version_client
 from tempest.services.identity.v2.json import identity_client as \
@@ -30,12 +24,11 @@ from tempest.services.identity.v3.json import credentials_client
 from tempest.services.identity.v3.json import endpoints_client
 from tempest.services.identity.v3.json import identity_client as \
     identity_v3_identity_client
-from tempest.services.identity.v3.json import policy_client
-from tempest.services.identity.v3.json import region_client
-from tempest.services.identity.v3.json import service_client
+from tempest.services.identity.v3.json import policies_client
+from tempest.services.identity.v3.json import regions_client
+from tempest.services.identity.v3.json import services_client
 from tempest.services.image.v1.json import images_client
 from tempest.services.image.v2.json import images_client as images_v2_client
-from tempest.services.messaging.json import messaging_client
 from tempest.services.network.json import network_client
 from tempest.services.object_storage import account_client
 from tempest.services.object_storage import container_client
@@ -83,18 +76,11 @@ from tempest.tests import base
 
 class TestServiceClient(base.TestCase):
 
-    @mock.patch('tempest_lib.common.rest_client.RestClient.__init__')
+    @mock.patch('tempest.lib.common.rest_client.RestClient.__init__')
     def test_service_client_creations_with_specified_args(self, mock_init):
         test_clients = [
-            baremetal_client.BaremetalClient,
-            floating_ips_client.FloatingIPsClient,
-            security_group_rules_client.SecurityGroupRulesClient,
-            server_groups_client.ServerGroupsClient,
-            servers_client.ServersClient,
-            data_processing_client.DataProcessingClient,
             db_flavor_client.DatabaseFlavorsClient,
             db_version_client.DatabaseVersionsClient,
-            messaging_client.MessagingClient,
             network_client.NetworkClient,
             account_client.AccountClient,
             container_client.ContainerClient,
@@ -126,9 +112,9 @@ class TestServiceClient(base.TestCase):
             credentials_client.CredentialsClient,
             endpoints_client.EndPointClient,
             identity_v3_identity_client.IdentityV3Client,
-            policy_client.PolicyClient,
-            region_client.RegionClient,
-            service_client.ServiceClient,
+            policies_client.PoliciesClient,
+            regions_client.RegionsClient,
+            services_client.ServicesClient,
             images_client.ImagesClient,
             images_v2_client.ImagesClientV2
         ]

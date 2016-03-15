@@ -181,6 +181,15 @@ class InvalidAPIVersionString(TempestException):
                "be of format MajorNum.MinorNum or string 'latest'.")
 
 
+class JSONSchemaNotFound(TempestException):
+    message = ("JSON Schema for %(version)s is not found in \n"
+               " %(schema_versions_info)s")
+
+
+class InvalidAPIVersionRange(TempestException):
+    message = ("API Min Version is greater than Max version")
+
+
 class CommandFailed(Exception):
     def __init__(self, returncode, cmd, output, stderr):
         super(CommandFailed, self).__init__()

@@ -14,7 +14,6 @@
 
 import uuid
 
-from tempest_lib import exceptions as lib_exc
 import testtools
 
 from tempest.api.compute import base
@@ -22,6 +21,7 @@ from tempest.common import tempest_fixtures as fixtures
 from tempest.common.utils import data_utils
 from tempest.common import waiters
 from tempest import config
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 CONF = config.CONF
@@ -68,7 +68,11 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
         flavor_id = self._get_unused_flavor_id()
         quota_set = (self.quotas_client.show_default_quota_set(self.tenant_id)
                      ['quota_set'])
-        ram = int(quota_set['ram']) + 1
+        ram = int(quota_set['ram'])
+        if ram == -1:
+            raise self.skipException("default ram quota set is -1,"
+                                     " cannot test overlimit")
+        ram += 1
         vcpus = 8
         disk = 10
         flavor_ref = self.flavors_client.create_flavor(name=flavor_name,
@@ -93,7 +97,11 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
         ram = 512
         quota_set = (self.quotas_client.show_default_quota_set(self.tenant_id)
                      ['quota_set'])
-        vcpus = int(quota_set['cores']) + 1
+        vcpus = int(quota_set['cores'])
+        if vcpus == -1:
+            raise self.skipException("default cores quota set is -1,"
+                                     " cannot test overlimit")
+        vcpus += 1
         disk = 10
         flavor_ref = self.flavors_client.create_flavor(name=flavor_name,
                                                        ram=ram, vcpus=vcpus,
@@ -155,7 +163,7 @@ class ServersAdminNegativeTestJSON(base.BaseV2ComputeAdminTest):
         self.client.suspend_server(server_id)
         waiters.wait_for_server_status(self.client,
                                        server_id, 'SUSPENDED')
-        # migrate an suspended server should fail
+        # migrate a suspended server should fail
         self.assertRaises(lib_exc.Conflict,
                           self.client.migrate_server,
                           server_id)

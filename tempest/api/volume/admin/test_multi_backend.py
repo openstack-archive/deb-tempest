@@ -10,7 +10,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_log import log as logging
 import six
 from tempest.api.volume import base
 from tempest.common.utils import data_utils
@@ -18,8 +17,6 @@ from tempest import config
 from tempest import test
 
 CONF = config.CONF
-
-LOG = logging.getLogger(__name__)
 
 
 class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
@@ -71,7 +68,7 @@ class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
         else:
             extra_specs = {spec_key_without_prefix: backend_name_key}
         self.type = self.volume_types_client.create_volume_type(
-            type_name, extra_specs=extra_specs)['volume_type']
+            name=type_name, extra_specs=extra_specs)['volume_type']
         self.volume_type_id_list.append(self.type['id'])
 
         params = {self.name_field: vol_name, 'volume_type': type_name}

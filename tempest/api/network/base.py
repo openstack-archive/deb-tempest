@@ -14,17 +14,14 @@
 #    under the License.
 
 import netaddr
-from oslo_log import log as logging
-from tempest_lib import exceptions as lib_exc
 
 from tempest.common.utils import data_utils
 from tempest import config
 from tempest import exceptions
+from tempest.lib import exceptions as lib_exc
 import tempest.test
 
 CONF = config.CONF
-
-LOG = logging.getLogger(__name__)
 
 
 class BaseNetworkTest(tempest.test.BaseTestCase):
@@ -71,11 +68,17 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     def setup_clients(cls):
         super(BaseNetworkTest, cls).setup_clients()
         cls.client = cls.os.network_client
+        cls.agents_client = cls.os.network_agents_client
+        cls.network_extensions_client = cls.os.network_extensions_client
         cls.networks_client = cls.os.networks_client
+        cls.subnetpools_client = cls.os.subnetpools_client
         cls.subnets_client = cls.os.subnets_client
         cls.ports_client = cls.os.ports_client
         cls.quotas_client = cls.os.network_quotas_client
         cls.floating_ips_client = cls.os.floating_ips_client
+        cls.security_groups_client = cls.os.security_groups_client
+        cls.security_group_rules_client = (
+            cls.os.security_group_rules_client)
 
     @classmethod
     def resource_setup(cls):
@@ -247,8 +250,8 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_router_interface(cls, router_id, subnet_id):
         """Wrapper utility that returns a router interface."""
-        interface = cls.client.add_router_interface_with_subnet_id(
-            router_id, subnet_id)
+        interface = cls.client.add_router_interface(router_id,
+                                                    subnet_id=subnet_id)
         return interface
 
     @classmethod
@@ -257,8 +260,9 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
         interfaces = body['ports']
         for i in interfaces:
             try:
-                cls.client.remove_router_interface_with_subnet_id(
-                    router['id'], i['fixed_ips'][0]['subnet_id'])
+                cls.client.remove_router_interface(
+                    router['id'],
+                    subnet_id=i['fixed_ips'][0]['subnet_id'])
             except lib_exc.NotFound:
                 pass
         cls.client.delete_router(router['id'])
@@ -272,6 +276,7 @@ class BaseAdminNetworkTest(BaseNetworkTest):
     def setup_clients(cls):
         super(BaseAdminNetworkTest, cls).setup_clients()
         cls.admin_client = cls.os_adm.network_client
+        cls.admin_agents_client = cls.os_adm.network_agents_client
         cls.admin_networks_client = cls.os_adm.networks_client
         cls.admin_subnets_client = cls.os_adm.subnets_client
         cls.admin_ports_client = cls.os_adm.ports_client

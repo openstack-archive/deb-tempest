@@ -20,7 +20,7 @@ import pep8
 
 PYTHON_CLIENTS = ['cinder', 'glance', 'keystone', 'nova', 'swift', 'neutron',
                   'trove', 'ironic', 'savanna', 'heat', 'ceilometer',
-                  'zaqar', 'sahara']
+                  'sahara']
 
 PYTHON_CLIENT_RE = re.compile('import (%s)client' % '|'.join(PYTHON_CLIENTS))
 TEST_DEFINITION = re.compile(r'^\s*def test.*')
@@ -69,10 +69,12 @@ def no_setup_teardown_class_for_tests(physical_line, filename):
     if pep8.noqa(physical_line):
         return
 
-    if 'tempest/test.py' not in filename:
-        if SETUP_TEARDOWN_CLASS_DEFINITION.match(physical_line):
-            return (physical_line.find('def'),
-                    "T105: (setUp|tearDown)Class can not be used in tests")
+    if 'tempest/test.py' in filename or 'tempest/lib/' in filename:
+        return
+
+    if SETUP_TEARDOWN_CLASS_DEFINITION.match(physical_line):
+        return (physical_line.find('def'),
+                "T105: (setUp|tearDown)Class can not be used in tests")
 
 
 def no_vi_headers(physical_line, line_number, lines):
@@ -185,7 +187,8 @@ def get_resources_on_service_clients(logical_line, physical_line, filename,
             # the end of a method
             return
 
-        if 'self.get(' not in line:
+        if 'self.get(' not in line and ('self.show_resource(' not in line and
+                                        'self.list_resources(' not in line):
             continue
 
         if METHOD_GET_RESOURCE.match(logical_line):
@@ -211,7 +214,7 @@ def delete_resources_on_service_clients(logical_line, physical_line, filename,
             # the end of a method
             return
 
-        if 'self.delete(' not in line:
+        if 'self.delete(' not in line and 'self.delete_resource(' not in line:
             continue
 
         if METHOD_DELETE_RESOURCE.match(logical_line):

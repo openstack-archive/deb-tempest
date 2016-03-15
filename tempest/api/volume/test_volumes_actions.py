@@ -62,8 +62,8 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
         # Volume is attached and detached successfully from an instance
         mountpoint = '/dev/vdc'
         self.client.attach_volume(self.volume['id'],
-                                  self.server['id'],
-                                  mountpoint)
+                                  instance_uuid=self.server['id'],
+                                  mountpoint=mountpoint)
         self.client.wait_for_volume_status(self.volume['id'], 'in-use')
         self.client.detach_volume(self.volume['id'])
         self.client.wait_for_volume_status(self.volume['id'], 'available')
@@ -74,7 +74,8 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
     def test_volume_bootable(self):
         # Verify that a volume bootable flag is retrieved
         for bool_bootable in [True, False]:
-            self.client.set_bootable_volume(self.volume['id'], bool_bootable)
+            self.client.set_bootable_volume(self.volume['id'],
+                                            bootable=bool_bootable)
             fetched_volume = self.client.show_volume(
                 self.volume['id'])['volume']
             # Get Volume information
@@ -88,8 +89,8 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
         # Verify that a volume's attachment information is retrieved
         mountpoint = '/dev/vdc'
         self.client.attach_volume(self.volume['id'],
-                                  self.server['id'],
-                                  mountpoint)
+                                  instance_uuid=self.server['id'],
+                                  mountpoint=mountpoint)
         self.client.wait_for_volume_status(self.volume['id'], 'in-use')
         # NOTE(gfidente): added in reverse order because functions will be
         # called in reverse order to the order they are added (LIFO)
@@ -114,8 +115,8 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
         # using the Glance image_client and from Cinder via tearDownClass.
         image_name = data_utils.rand_name('Image')
         body = self.client.upload_volume(
-            self.volume['id'], image_name,
-            CONF.volume.disk_format)['os-volume_upload_image']
+            self.volume['id'], image_name=image_name,
+            disk_format=CONF.volume.disk_format)['os-volume_upload_image']
         image_id = body["image_id"]
         self.addCleanup(self.image_client.delete_image, image_id)
         self.image_client.wait_for_image_status(image_id, 'active')
@@ -142,7 +143,7 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
         # Update volume readonly true
         readonly = True
         self.client.update_volume_readonly(self.volume['id'],
-                                           readonly)
+                                           readonly=readonly)
         # Get Volume information
         fetched_volume = self.client.show_volume(self.volume['id'])['volume']
         bool_flag = self._is_true(fetched_volume['metadata']['readonly'])
@@ -150,7 +151,8 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
 
         # Update volume readonly false
         readonly = False
-        self.client.update_volume_readonly(self.volume['id'], readonly)
+        self.client.update_volume_readonly(self.volume['id'],
+                                           readonly=readonly)
 
         # Get Volume information
         fetched_volume = self.client.show_volume(self.volume['id'])['volume']

@@ -85,25 +85,33 @@ To see help on specific argument, please do: ``tempest-account-generator
 import argparse
 import netaddr
 import os
+import traceback
 
+from cliff import command
 from oslo_log import log as logging
 import yaml
 
 from tempest.common import identity
 from tempest import config
 from tempest import exceptions as exc
+import tempest.lib.auth
+from tempest.lib.common.utils import data_utils
+import tempest.lib.exceptions
+from tempest.lib.services.network import networks_client
+from tempest.lib.services.network import subnets_client
 from tempest.services.identity.v2.json import identity_client
 from tempest.services.identity.v2.json import roles_client
 from tempest.services.identity.v2.json import tenants_client
+from tempest.services.identity.v2.json import users_client
 from tempest.services.network.json import network_client
-from tempest.services.network.json import networks_client
-from tempest.services.network.json import subnets_client
-import tempest_lib.auth
-from tempest_lib.common.utils import data_utils
-import tempest_lib.exceptions
 
 LOG = None
 CONF = config.CONF
+DESCRIPTION = ('Create accounts.yaml file for concurrent test runs.%s'
+               'One primary user, one alt user, '
+               'one swift admin, one stack owner '
+               'and one admin (optionally) will be created '
+               'for each concurrent thread.' % os.linesep)
 
 
 def setup_logging():
@@ -113,7 +121,7 @@ def setup_logging():
 
 
 def get_admin_clients(opts):
-    _creds = tempest_lib.auth.KeystoneV2Credentials(
+    _creds = tempest.lib.auth.KeystoneV2Credentials(
         username=opts.os_username,
         password=opts.os_password,
         tenant_name=opts.os_tenant_name)
@@ -123,7 +131,7 @@ def get_admin_clients(opts):
         'ca_certs': CONF.identity.ca_certificates_file,
         'trace_requests': CONF.debug.trace_requests
     }
-    _auth = tempest_lib.auth.KeystoneV2AuthProvider(
+    _auth = tempest.lib.auth.KeystoneV2AuthProvider(
         _creds, CONF.identity.uri, **auth_params)
     params = {
         'disable_ssl_certificate_validation':
@@ -148,6 +156,13 @@ def get_admin_clients(opts):
         **params
     )
     roles_admin = roles_client.RolesClient(
+        _auth,
+        CONF.identity.catalog_type,
+        CONF.identity.region,
+        endpoint_type='adminURL',
+        **params
+    )
+    users_admin = users_client.UsersClient(
         _auth,
         CONF.identity.catalog_type,
         CONF.identity.region,
@@ -179,13 +194,14 @@ def get_admin_clients(opts):
             CONF.network.region or CONF.identity.region,
             endpoint_type='adminURL',
             **params)
-    return (identity_admin, tenants_admin, roles_admin, neutron_iso_networks,
-            network_admin, networks_admin, subnets_admin)
+    return (identity_admin, tenants_admin, roles_admin, users_admin,
+            neutron_iso_networks, network_admin, networks_admin, subnets_admin)
 
 
 def create_resources(opts, resources):
-    (identity_admin, tenants_admin, roles_admin, neutron_iso_networks,
-     network_admin, networks_admin, subnets_admin) = get_admin_clients(opts)
+    (identity_admin, tenants_admin, roles_admin, users_admin,
+     neutron_iso_networks, network_admin, networks_admin,
+     subnets_admin) = get_admin_clients(opts)
     roles = roles_admin.list_roles()['roles']
     for u in resources['users']:
         u['role_ids'] = []
@@ -201,27 +217,28 @@ def create_resources(opts, resources):
         if tenant not in existing:
             tenants_admin.create_tenant(tenant)
         else:
-            LOG.warn("Tenant '%s' already exists in this environment" % tenant)
+            LOG.warning("Tenant '%s' already exists in this environment"
+                        % tenant)
     LOG.info('Tenants created')
     for u in resources['users']:
         try:
             tenant = identity.get_tenant_by_name(tenants_admin, u['tenant'])
-        except tempest_lib.exceptions.NotFound:
+        except tempest.lib.exceptions.NotFound:
             LOG.error("Tenant: %s - not found" % u['tenant'])
             continue
         while True:
             try:
                 identity.get_user_by_username(tenants_admin,
                                               tenant['id'], u['name'])
-            except tempest_lib.exceptions.NotFound:
-                identity_admin.create_user(
+            except tempest.lib.exceptions.NotFound:
+                users_admin.create_user(
                     u['name'], u['pass'], tenant['id'],
                     "%s@%s" % (u['name'], tenant['id']),
                     enabled=True)
                 break
             else:
-                LOG.warn("User '%s' already exists in this environment. "
-                         "New name generated" % u['name'])
+                LOG.warning("User '%s' already exists in this environment. "
+                            "New name generated" % u['name'])
                 u['name'] = random_user_name(opts.tag, u['prefix'])
 
     LOG.info('Users created')
@@ -237,19 +254,19 @@ def create_resources(opts, resources):
     for u in resources['users']:
         try:
             tenant = identity.get_tenant_by_name(tenants_admin, u['tenant'])
-        except tempest_lib.exceptions.NotFound:
+        except tempest.lib.exceptions.NotFound:
             LOG.error("Tenant: %s - not found" % u['tenant'])
             continue
         try:
             user = identity.get_user_by_username(tenants_admin,
                                                  tenant['id'], u['name'])
-        except tempest_lib.exceptions.NotFound:
+        except tempest.lib.exceptions.NotFound:
             LOG.error("User: %s - not found" % u['user'])
             continue
         for r in u['role_ids']:
             try:
                 roles_admin.assign_user_role(tenant['id'], user['id'], r)
-            except tempest_lib.exceptions.Conflict:
+            except tempest.lib.exceptions.Conflict:
                 # don't care if it's already assigned
                 pass
     LOG.info('Roles assigned')
@@ -277,7 +294,7 @@ def create_network_resources(network_admin_client, networks_admin_client,
                         enable_dhcp=True,
                         ip_version=4)
                 break
-            except tempest_lib.exceptions.BadRequest as e:
+            except tempest.lib.exceptions.BadRequest as e:
                 if 'overlaps with another subnet' not in str(e):
                     raise
         else:
@@ -295,8 +312,8 @@ def create_network_resources(network_admin_client, networks_admin_client,
         return resp_body['router']
 
     def _add_router_interface(router_id, subnet_id):
-        network_admin_client.add_router_interface_with_subnet_id(
-            router_id, subnet_id)
+        network_admin_client.add_router_interface(router_id,
+                                                  subnet_id=subnet_id)
 
     network_name = name + "-network"
     network = _create_network(network_name)
@@ -373,7 +390,7 @@ def dump_accounts(opts, resources):
             'password': user['pass'],
             'roles': user['roles']
         }
-        if 'network' or 'router' in user:
+        if 'network' in user or 'router' in user:
             account['resources'] = {}
         if 'network' in user:
             account['resources']['network'] = user['network']
@@ -387,20 +404,7 @@ def dump_accounts(opts, resources):
     LOG.info('%s generated successfully!' % opts.accounts)
 
 
-def get_options():
-    usage_string = ('tempest-account-generator [-h] <ARG> ...\n\n'
-                    'To see help on specific argument, do:\n'
-                    'tempest-account-generator <ARG> -h')
-    parser = argparse.ArgumentParser(
-        description='Create accounts.yaml file for concurrent test runs. '
-                    'One primary user, one alt user, '
-                    'one swift admin, one stack owner '
-                    'and one admin (optionally) will be created '
-                    'for each concurrent thread.',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        usage=usage_string
-    )
-
+def _parser_add_args(parser):
     parser.add_argument('-c', '--config-file',
                         metavar='/etc/tempest.conf',
                         help='path to tempest config file')
@@ -437,16 +441,50 @@ def get_options():
                         metavar='accounts_file.yaml',
                         help='Output accounts yaml file')
 
+
+def get_options():
+    usage_string = ('tempest-account-generator [-h] <ARG> ...\n\n'
+                    'To see help on specific argument, do:\n'
+                    'tempest-account-generator <ARG> -h')
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        usage=usage_string
+    )
+
+    _parser_add_args(parser)
     opts = parser.parse_args()
-    if opts.config_file:
-        config.CONF.set_config_path(opts.config_file)
     return opts
 
 
+class TempestAccountGenerator(command.Command):
+
+    def get_parser(self, prog_name):
+        parser = super(TempestAccountGenerator, self).get_parser(prog_name)
+        _parser_add_args(parser)
+        return parser
+
+    def take_action(self, parsed_args):
+        try:
+            return main(parsed_args)
+        except Exception:
+            LOG.exception("Failure generating test accounts.")
+            traceback.print_exc()
+            raise
+        return 0
+
+    def get_description(self):
+        return DESCRIPTION
+
+
 def main(opts=None):
-    if not opts:
-        opts = get_options()
     setup_logging()
+    if not opts:
+        LOG.warning("Use of: 'tempest-account-generator' is deprecated, "
+                    "please use: 'tempest account-generator'")
+        opts = get_options()
+    if opts.config_file:
+        config.CONF.set_config_path(opts.config_file)
     resources = generate_resources(opts)
     create_resources(opts, resources)
     dump_accounts(opts, resources)

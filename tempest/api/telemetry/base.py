@@ -13,12 +13,13 @@
 import time
 
 from oslo_utils import timeutils
-from tempest_lib import exceptions as lib_exc
 
 from tempest.common import compute
 from tempest.common.utils import data_utils
+from tempest.common import waiters
 from tempest import config
 from tempest import exceptions
+from tempest.lib import exceptions as lib_exc
 import tempest.test
 
 CONF = config.CONF
@@ -75,10 +76,11 @@ class BaseTelemetryTest(tempest.test.BaseTestCase):
         return body
 
     @classmethod
-    def create_image(cls, client):
-        body = client.create_image(
-            name=data_utils.rand_name('image'), container_format='bare',
-            disk_format='raw', visibility='private')
+    def create_image(cls, client, **kwargs):
+        body = client.create_image(name=data_utils.rand_name('image'),
+                                   container_format='bare',
+                                   disk_format='raw',
+                                   **kwargs)
         # TODO(jswarren) Move ['image'] up to initial body value assignment
         # once both v1 and v2 glance clients include the full response
         # object.
@@ -96,8 +98,14 @@ class BaseTelemetryTest(tempest.test.BaseTestCase):
                 pass
 
     @classmethod
+    def wait_for_server_termination(cls, server_id):
+        waiters.wait_for_server_termination(cls.servers_client,
+                                            server_id)
+
+    @classmethod
     def resource_cleanup(cls):
         cls.cleanup_resources(cls.servers_client.delete_server, cls.server_ids)
+        cls.cleanup_resources(cls.wait_for_server_termination, cls.server_ids)
         cls.cleanup_resources(cls.image_client.delete_image, cls.image_ids)
         super(BaseTelemetryTest, cls).resource_cleanup()
 

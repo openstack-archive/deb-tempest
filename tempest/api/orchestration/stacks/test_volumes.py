@@ -10,18 +10,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import logging
-
-from tempest_lib import exceptions as lib_exc
-
 from tempest.api.orchestration import base
 from tempest.common.utils import data_utils
 from tempest import config
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 
 CONF = config.CONF
-LOG = logging.getLogger(__name__)
 
 
 class CinderResourcesTest(base.BaseOrchestrationTest):

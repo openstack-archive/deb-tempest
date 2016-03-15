@@ -16,8 +16,6 @@
 import logging
 
 from six.moves.urllib import parse as urlparse
-from tempest_lib import decorators
-from tempest_lib import exceptions as lib_exc
 import testtools
 
 from tempest.api.compute import base
@@ -25,6 +23,8 @@ from tempest.common.utils import data_utils
 from tempest.common.utils.linux import remote_client
 from tempest.common import waiters
 from tempest import config
+from tempest.lib import decorators
+from tempest.lib import exceptions as lib_exc
 from tempest import test
 
 CONF = config.CONF
@@ -172,11 +172,16 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         self.assertEqual(new_name, server['name'])
 
         if CONF.validation.run_validation:
-            # TODO(jlanoux) add authentication with the provided password
+            # Authentication is attempted in the following order of priority:
+            # 1.The key passed in, if one was passed in.
+            # 2.Any key we can find through an SSH agent (if allowed).
+            # 3.Any "id_rsa", "id_dsa" or "id_ecdsa" key discoverable in
+            #   ~/.ssh/ (if allowed).
+            # 4.Plain username/password auth, if a password was given.
             linux_client = remote_client.RemoteClient(
                 self.get_server_ip(rebuilt_server),
                 self.ssh_user,
-                self.password,
+                password,
                 self.validation_resources['keypair']['private_key'])
             linux_client.validate_authentication()
 
@@ -453,7 +458,7 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         server = self.client.show_server(self.server_id)['server']
         image_name = server['name'] + '-shelved'
         params = {'name': image_name}
-        images = self.images_client.list_images(**params)['images']
+        images = self.compute_images_client.list_images(**params)['images']
         self.assertEqual(1, len(images))
         self.assertEqual(image_name, images[0]['name'])
 
