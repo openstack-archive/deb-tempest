@@ -7,6 +7,7 @@ tempest (10.0.0-1) experimental; urgency=medium
   [ Thomas Goirand ]
   * New upstream release.
   * Fixed (build-)depends for this release.
+  * Added patch to remove the use of git in sphinx's conf.py.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 15 Mar 2016 13:10:03 +0100
 

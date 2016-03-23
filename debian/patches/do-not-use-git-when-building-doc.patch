@@ -1,0 +1,26 @@
+Description: Do not use git when building doc
+ html_last_updated_fmt is already defined in debian/rules, so we don't need
+ conf.py to define it.
+Author: Thomas Goirand <zigo@debian.org>
+Forwarded: no
+Last-Update: 2016-03-23
+
+--- tempest-10.0.0.orig/doc/source/conf.py
++++ tempest-10.0.0/doc/source/conf.py
+@@ -127,11 +127,11 @@ html_static_path = ['_static']
+ 
+ # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
+ # using the given strftime format.
+-git_cmd = ["git", "log", "--pretty=format:'%ad, commit %h'", "--date=local",
+-   "-n1"]
+-html_last_updated_fmt = subprocess.Popen(git_cmd,
+-                                         stdout=subprocess.PIPE).\
+-                                         communicate()[0]
++#git_cmd = ["git", "log", "--pretty=format:'%ad, commit %h'", "--date=local",
++#   "-n1"]
++#html_last_updated_fmt = subprocess.Popen(git_cmd,
++#                                         stdout=subprocess.PIPE).\
++#                                         communicate()[0]
+ 
+ # If true, SmartyPants will be used to convert quotes and dashes to
+ # typographically correct entities.
