@@ -2,10 +2,6 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: tempest
 Source: git://github.com/openstack/tempest.git
 
-Files: debian/*
-Copyright: 2012, Thomas Goirand <zigo@debian.org> License:
-License: Apache-2
-
 Files: *
 Copyright: (c) 2011-2014, RedHat Inc.
            (c) 2011-2014, IBM Corp.
@@ -21,6 +17,10 @@ Copyright: (c) 2011-2014, RedHat Inc.
                      Administrator of the NASA.
            (C) 2011-2014, eNovance SAS <licensing@enovance.com>
            (c) 2001-2010, Twisted Matrix Laboratories.
+License: Apache-2
+
+Files: debian/*
+Copyright: 2012, Thomas Goirand <zigo@debian.org> License:
 License: Apache-2
 
 License: Apache-2
