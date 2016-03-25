@@ -13,18 +13,11 @@ tempest (10.0.0-1) experimental; urgency=medium
     mistral, murano (and therefore, build-depends on them).
   * Fixed debian/copyright ordering.
   * Standards-Version: 3.9.7 (no change).
-
- -- Thomas Goirand <zigo@debian.org>  Tue, 15 Mar 2016 13:10:03 +0100
-
-tempest (9-1) experimental; urgency=medium
-
-  * New upstream release.
-  * Fixed (build-)depends for this release.
   * Do not copy tools/colorizer.py.
   * Fix a few config option defaults.
   * Also install missing .yaml files.
 
- -- Thomas Goirand <zigo@debian.org>  Fri, 29 Jan 2016 18:39:30 +0800
+ -- Thomas Goirand <zigo@debian.org>  Tue, 15 Mar 2016 13:10:03 +0100
 
 tempest (6-1) unstable; urgency=medium
 
