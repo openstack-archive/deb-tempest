@@ -12,6 +12,7 @@ tempest (10.0.0-1) experimental; urgency=medium
   * Generating tempest.conf with the namespace for the congress, manila,
     mistral, murano (and therefore, build-depends on them).
   * Fixed debian/copyright ordering.
+  * Standards-Version: 3.9.7 (no change).
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 15 Mar 2016 13:10:03 +0100
 
