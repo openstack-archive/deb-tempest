@@ -86,7 +86,7 @@ override_dh_auto_install:
 	mkdir -p $(CURDIR)/debian/tempest/var/lib/tempest
 	ln -s /usr/lib/python2.7/dist-packages/tempest $(CURDIR)/debian/tempest/var/lib/tempest/tempest
 	cp .testr.conf $(CURDIR)/debian/tempest/var/lib/tempest
-	install -D -m 775 debian/tempest_shell_wrapper $(CURDIR)/debian/tempest/usr/bin/tempest
+	install -D -m 775 debian/tempest_shell_wrapper $(CURDIR)/debian/tempest/usr/bin/tempest_debian_shell_wrapper
 
 	rm -fr $(CURDIR)/debian/tempest/usr/etc
 
