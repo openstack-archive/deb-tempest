@@ -3,6 +3,7 @@ tempest (10.0.0-2) UNRELEASED; urgency=medium
   * Standards-Version is 3.9.8 now (no change)
   * Added python-murano as build-depends to be able to generate the
     tempest.conf options for it.
+  * d/rules: Removed UPSTREAM_GIT with default value
 
  -- Ondřej Nový <novy@ondrej.org>  Sat, 09 Apr 2016 19:32:56 +0200
 
