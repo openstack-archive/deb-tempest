@@ -1,6 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: tempest
-Source: git://github.com/openstack/tempest.git
+Source: https://github.com/openstack/tempest
 
 Files: *
 Copyright: (c) 2011-2014, RedHat Inc.
