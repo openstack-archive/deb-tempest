@@ -1,12 +1,16 @@
-tempest (10.0.0-2) UNRELEASED; urgency=medium
+tempest (12.0.0-1) UNRELEASED; urgency=medium
 
+  [ Ondřej Nový ]
   * Standards-Version is 3.9.8 now (no change)
   * Added python-murano as build-depends to be able to generate the
     tempest.conf options for it.
   * d/rules: Removed UPSTREAM_GIT with default value
   * d/copyright: Changed source URL to https protocol
 
- -- Ondřej Nový <novy@ondrej.org>  Sat, 09 Apr 2016 19:32:56 +0200
+  [ Corey Bryant ]
+  * New upstream release.
+
+ -- Corey Bryant <corey.bryant@canonical.com>  Tue, 31 May 2016 14:02:44 -0400
 
 tempest (10.0.0-1) experimental; urgency=medium
 
