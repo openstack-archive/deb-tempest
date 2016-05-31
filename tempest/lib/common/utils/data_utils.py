@@ -39,7 +39,7 @@ def rand_uuid_hex():
 
 
 def rand_name(name='', prefix=None):
-    """Generate a random name that inclues a random number
+    """Generate a random name that includes a random number
 
     :param str name: The name that you want to include
     :param str prefix: The prefix that you want to include
@@ -81,7 +81,7 @@ def rand_password(length=15):
 
 
 def rand_url():
-    """Generate a random url that inclues a random number
+    """Generate a random url that includes a random number
 
     :return: a random url. The format is 'https://url-<random number>.com'.
              (e.g. 'https://url-154876201.com')
@@ -119,6 +119,18 @@ def rand_mac_address():
            random.randint(0x00, 0xff),
            random.randint(0x00, 0xff)]
     return ':'.join(["%02x" % x for x in mac])
+
+
+def rand_infiniband_guid_address():
+    """Generate an Infiniband GUID address
+
+    :return: an random Infiniband GUID address
+    :rtype: string
+    """
+    guid = []
+    for i in range(8):
+        guid.append("%02x" % random.randint(0x00, 0xff))
+    return ':'.join(guid)
 
 
 def parse_image_id(image_ref):

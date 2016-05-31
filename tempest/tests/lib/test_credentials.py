@@ -19,7 +19,7 @@ from tempest.lib import auth
 from tempest.lib import exceptions
 from tempest.lib.services.identity.v2 import token_client as v2_client
 from tempest.lib.services.identity.v3 import token_client as v3_client
-from tempest.tests.lib import base
+from tempest.tests import base
 from tempest.tests.lib import fake_identity
 
 
@@ -72,8 +72,8 @@ class KeystoneV2CredentialsTests(CredentialsTests):
 
     def setUp(self):
         super(KeystoneV2CredentialsTests, self).setUp()
-        self.stubs.Set(self.tokenclient_class, 'raw_request',
-                       self.identity_response)
+        self.patchobject(self.tokenclient_class, 'raw_request',
+                         self.identity_response)
 
     def _verify_credentials(self, credentials_class, creds_dict, filled=True):
         creds = auth.get_credentials(fake_identity.FAKE_AUTH_URL,

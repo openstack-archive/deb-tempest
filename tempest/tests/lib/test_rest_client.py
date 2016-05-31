@@ -15,16 +15,17 @@
 import copy
 import json
 
-import httplib2
 import jsonschema
 from oslotest import mockpatch
 import six
 
+from tempest.lib.common import http
 from tempest.lib.common import rest_client
 from tempest.lib import exceptions
-from tempest.tests.lib import base
+from tempest.tests import base
 from tempest.tests.lib import fake_auth_provider
 from tempest.tests.lib import fake_http
+import tempest.tests.utils as utils
 
 
 class BaseRestClientTestClass(base.TestCase):
@@ -36,7 +37,7 @@ class BaseRestClientTestClass(base.TestCase):
         self.fake_auth_provider = fake_auth_provider.FakeAuthProvider()
         self.rest_client = rest_client.RestClient(
             self.fake_auth_provider, None, None)
-        self.stubs.Set(httplib2.Http, 'request', self.fake_http.request)
+        self.patchobject(http.ClosingHttp, 'request', self.fake_http.request)
         self.useFixture(mockpatch.PatchObject(self.rest_client,
                                               '_log_request'))
 
@@ -291,7 +292,9 @@ class TestRestClientErrorCheckerJSON(base.TestCase):
         if absolute_limit is False:
             resp_dict.update({'retry-after': 120})
             resp_body.update({'overLimit': {'message': 'fake_message'}})
-        resp = httplib2.Response(resp_dict)
+        resp = fake_http.fake_http_response(headers=resp_dict,
+                                            status=int(r_code),
+                                            body=json.dumps(resp_body))
         data = {
             "method": "fake_method",
             "url": "fake_url",
@@ -511,10 +514,19 @@ class TestRestClientUtils(BaseRestClientTestClass):
     def test_wait_for_resource_deletion_not_deleted(self):
         self.patch('time.sleep')
         # Set timeout to be very quick to force exception faster
-        self.rest_client.build_timeout = 1
+        timeout = 1
+        self.rest_client.build_timeout = timeout
+
+        time_mock = self.patch('time.time')
+        time_mock.side_effect = utils.generate_timeout_series(timeout)
+
         self.assertRaises(exceptions.TimeoutException,
                           self.rest_client.wait_for_resource_deletion,
                           '1234')
+
+        # time.time() should be called twice, first to start the timer
+        # and then to compute the timedelta
+        self.assertEqual(2, time_mock.call_count)
 
     def test_wait_for_deletion_with_unimplemented_deleted_method(self):
         self.rest_client.is_resource_deleted = self.original_deleted_method

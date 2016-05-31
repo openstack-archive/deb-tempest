@@ -12,6 +12,7 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+from oslo_log import log
 
 from tempest import clients
 from tempest.common.utils import data_utils
@@ -20,6 +21,7 @@ from tempest.scenario import manager
 from tempest import test
 
 CONF = config.CONF
+LOG = log.getLogger(__name__)
 
 
 class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
@@ -42,6 +44,12 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
     ssh connection.
     success - ping returns
     failure - ping_timeout reached
+
+    multi-node:
+        Multi-Node mode is enabled when CONF.compute.min_compute_nodes > 1.
+        Tests connectivity between servers on different compute nodes.
+        When enabled, test will boot each new server to different
+        compute nodes.
 
     setup:
         for primary tenant:
@@ -128,9 +136,9 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
             msg = ('Not currently supported when using vnic_type'
                    ' direct or macvtap')
             raise cls.skipException(msg)
-        if not (CONF.network.tenant_networks_reachable or
+        if not (CONF.network.project_networks_reachable or
                 CONF.network.public_network_id):
-            msg = ('Either tenant_networks_reachable must be "true", or '
+            msg = ('Either project_networks_reachable must be "true", or '
                    'public_network_id must be defined.')
             raise cls.skipException(msg)
         if not test.is_extension_enabled('security-group', 'network'):
@@ -151,6 +159,14 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
     @classmethod
     def resource_setup(cls):
         super(TestSecurityGroupsBasicOps, cls).resource_setup()
+
+        cls.multi_node = CONF.compute.min_compute_nodes > 1 and \
+            test.is_scheduler_filter_enabled("DifferentHostFilter")
+        if cls.multi_node:
+            LOG.info("Working in Multi Node mode")
+        else:
+            LOG.info("Working in Single Node mode")
+
         cls.floating_ips = {}
         cls.tenants = {}
         creds = cls.manager.credentials
@@ -162,6 +178,12 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         cls.floating_ip_access = not CONF.network.public_router_id
 
     def setUp(self):
+        """Set up a single tenant with an accessible server.
+
+        If multi-host is enabled, save created server uuids.
+        """
+        self.servers = []
+
         super(TestSecurityGroupsBasicOps, self).setUp()
         self._deploy_tenant(self.primary_tenant)
         self._verify_network_details(self.primary_tenant)
@@ -178,7 +200,7 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
             client=tenant.manager.security_groups_client
         )
 
-        # don't use default secgroup since it allows in-tenant traffic
+        # don't use default secgroup since it allows in-project traffic
         def_sg = self._create_empty_security_group(
             namestart='secgroup_general-',
             tenant_id=tenant.creds.tenant_id,
@@ -233,21 +255,44 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         # and distributed routers; 'device_owner' is "" by default.
         return port['device_owner'].startswith('network:router_interface')
 
-    def _create_server(self, name, tenant, security_groups=None):
-        """creates a server and assigns to security group"""
+    def _create_server(self, name, tenant, security_groups=None, **kwargs):
+        """Creates a server and assigns it to security group.
+
+        If multi-host is enabled, Ensures servers are created on different
+        compute nodes, by storing created servers' ids and uses different_host
+        as scheduler_hints on creation.
+        Validates servers are created as requested, using admin client.
+        """
         if security_groups is None:
             security_groups = [tenant.security_groups['default']]
         security_groups_names = [{'name': s['name']} for s in security_groups]
+        if self.multi_node:
+            kwargs["scheduler_hints"] = {'different_host': self.servers}
         server = self.create_server(
             name=name,
             networks=[{'uuid': tenant.network.id}],
             key_name=tenant.keypair['name'],
             security_groups=security_groups_names,
             wait_until='ACTIVE',
-            clients=tenant.manager)
+            clients=tenant.manager,
+            **kwargs)
         self.assertEqual(
             sorted([s['name'] for s in security_groups]),
             sorted([s['name'] for s in server['security_groups']]))
+
+        # Verify servers are on different compute nodes
+        if self.multi_node:
+            adm_get_server = self.admin_manager.servers_client.show_server
+            new_host = adm_get_server(server["id"])["server"][
+                "OS-EXT-SRV-ATTR:host"]
+            host_list = [adm_get_server(s)["server"]["OS-EXT-SRV-ATTR:host"]
+                         for s in self.servers]
+            self.assertNotIn(new_host, host_list,
+                             message="Failed to boot servers on different "
+                                     "Compute nodes.")
+
+            self.servers.append(server["id"])
+
         return server
 
     def _create_tenant_servers(self, tenant, num=1):
@@ -262,7 +307,7 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
 
     def _set_access_point(self, tenant):
         # creates a server in a secgroup with rule allowing external ssh
-        # in order to access tenant internal network
+        # in order to access project internal network
         # workaround ip namespace
         secgroups = tenant.security_groups.values()
         name = 'server-{tenant}-access_point'.format(
@@ -282,8 +327,8 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
 
     def _create_tenant_network(self, tenant):
         network, subnet, router = self.create_networks(
-            client=tenant.manager.network_client,
             networks_client=tenant.manager.networks_client,
+            routers_client=tenant.manager.routers_client,
             subnets_client=tenant.manager.subnets_client)
         tenant.set_network(network, subnet, router)
 
@@ -348,6 +393,7 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         )
         self._create_security_group_rule(
             secgroup=tenant.security_groups['default'],
+            security_groups_client=tenant.manager.security_groups_client,
             **ruleset
         )
         access_point_ssh = self._connect_to_access_point(tenant)
@@ -427,7 +473,7 @@ class TestSecurityGroupsBasicOps(manager.NetworkScenarioTest):
         if not self.credentials_provider.is_multi_tenant():
             raise self.skipException("No secondary tenant defined")
         try:
-            # deploy new tenant
+            # deploy new project
             self._deploy_tenant(self.alt_tenant)
             self._verify_network_details(self.alt_tenant)
             self._verify_mac_addr(self.alt_tenant)

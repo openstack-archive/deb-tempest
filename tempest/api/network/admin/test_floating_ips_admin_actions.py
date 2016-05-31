@@ -28,7 +28,6 @@ class FloatingIPAdminTestJSON(base.BaseAdminNetworkTest):
     @classmethod
     def setup_clients(cls):
         super(FloatingIPAdminTestJSON, cls).setup_clients()
-        cls.alt_client = cls.alt_manager.network_client
         cls.alt_floating_ips_client = cls.alt_manager.floating_ips_client
 
     @classmethod
@@ -68,7 +67,7 @@ class FloatingIPAdminTestJSON(base.BaseAdminNetworkTest):
         body = self.floating_ips_client.list_floatingips()
         floating_ip_ids = [f['id'] for f in body['floatingips']]
         # Check that nonadmin user doesn't see floating ip created from admin
-        # and floating ip that is created in another tenant (alt user)
+        # and floating ip that is created in another project (alt user)
         self.assertIn(self.floating_ip['id'], floating_ip_ids)
         self.assertNotIn(floating_ip_admin['floatingip']['id'],
                          floating_ip_ids)

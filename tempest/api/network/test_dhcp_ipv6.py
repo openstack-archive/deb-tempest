@@ -68,8 +68,8 @@ class NetworksTestDHCPv6(base.BaseNetworkTest):
         for port in ports:
             if (port['device_owner'].startswith('network:router_interface') and
                 port['device_id'] in [r['id'] for r in self.routers]):
-                self.client.remove_router_interface(port['device_id'],
-                                                    port_id=port['id'])
+                self.routers_client.remove_router_interface(port['device_id'],
+                                                            port_id=port['id'])
             else:
                 if port['id'] in [p['id'] for p in self.ports]:
                     self.ports_client.delete_port(port['id'])
@@ -80,11 +80,11 @@ class NetworksTestDHCPv6(base.BaseNetworkTest):
             if subnet['id'] in [s['id'] for s in self.subnets]:
                 self.subnets_client.delete_subnet(subnet['id'])
                 self._remove_from_list_by_index(self.subnets, subnet)
-        body = self.client.list_routers()
+        body = self.routers_client.list_routers()
         routers = body['routers']
         for router in routers:
             if router['id'] in [r['id'] for r in self.routers]:
-                self.client.delete_router(router['id'])
+                self.routers_client.delete_router(router['id'])
                 self._remove_from_list_by_index(self.routers, router)
 
     def _get_ips_from_subnet(self, **kwargs):
@@ -338,12 +338,12 @@ class NetworksTestDHCPv6(base.BaseNetworkTest):
                          fixed_ips=[
                              {'subnet_id': subnet['id'],
                               'ip_address': ip}])
-        self.assertRaisesRegexp(lib_exc.Conflict,
-                                "object with that identifier already exists",
-                                self.create_port,
-                                self.network,
-                                fixed_ips=[{'subnet_id': subnet['id'],
-                                            'ip_address': ip}])
+        self.assertRaisesRegex(lib_exc.Conflict,
+                               "object with that identifier already exists",
+                               self.create_port,
+                               self.network,
+                               fixed_ips=[{'subnet_id': subnet['id'],
+                                           'ip_address': ip}])
 
     def _create_subnet_router(self, kwargs):
         subnet = self.create_subnet(self.network, **kwargs)

@@ -24,7 +24,7 @@ from tempest.common import waiters
 from tempest import config
 from tempest import exceptions
 from tempest.scenario import manager
-from tempest.services.network import resources as net_resources
+from tempest.scenario import network_resources
 from tempest import test
 
 CONF = config.CONF
@@ -59,7 +59,7 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
      Determine which types of networks to test as follows:
 
      * Configure tenant network checks (via the
-       'tenant_networks_reachable' key) if the Tempest host should
+       'project_networks_reachable' key) if the Tempest host should
        have direct connectivity to tenant networks.  This is likely to
        be the case if Tempest is running on the same host as a
        single-node devstack installation with IP namespaces disabled.
@@ -81,9 +81,9 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
     @classmethod
     def skip_checks(cls):
         super(TestNetworkBasicOps, cls).skip_checks()
-        if not (CONF.network.tenant_networks_reachable
+        if not (CONF.network.project_networks_reachable
                 or CONF.network.public_network_id):
-            msg = ('Either tenant_networks_reachable must be "true", or '
+            msg = ('Either project_networks_reachable must be "true", or '
                    'public_network_id must be defined.')
             raise cls.skipException(msg)
         for ext in ['router', 'security-group']:
@@ -250,9 +250,8 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
         interface = self.interface_client.create_interface(
             server_id=server['id'],
             net_id=self.new_net.id)['interfaceAttachment']
-        self.addCleanup(self.network_client.wait_for_resource_deletion,
-                        'port',
-                        interface['port_id'], client=self.ports_client)
+        self.addCleanup(self.ports_client.wait_for_resource_deletion,
+                        interface['port_id'])
         self.addCleanup(self.delete_wrapper,
                         self.interface_client.delete_interface,
                         server['id'], interface['port_id'])
@@ -270,8 +269,9 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
                 "Old port: %s. Number of new ports: %d" % (
                     CONF.network.build_timeout, old_port,
                     len(self.new_port_list)))
-        new_port = net_resources.DeletablePort(ports_client=self.ports_client,
-                                               **self.new_port_list[0])
+        new_port = network_resources.DeletablePort(
+            ports_client=self.ports_client,
+            **self.new_port_list[0])
 
         def check_new_nic():
             new_nic_list = self._get_server_nics(ssh_client)
@@ -680,20 +680,21 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
         # TODO(yfried): refactor this test to be used for other agents (dhcp)
         # as well
 
-        list_hosts = (self.admin_manager.network_client.
+        list_hosts = (self.admin_manager.routers_client.
                       list_l3_agents_hosting_router)
         schedule_router = (self.admin_manager.network_agents_client.
                            create_router_on_l3_agent)
         unschedule_router = (self.admin_manager.network_agents_client.
                              delete_router_from_l3_agent)
 
-        agent_list = set(a["id"] for a in
-                         self._list_agents(agent_type="L3 agent"))
+        agent_list_alive = set(a["id"] for a in
+                               self._list_agents(agent_type="L3 agent") if
+                               a["alive"] is True)
         self._setup_network_and_servers()
 
         # NOTE(kevinbenton): we have to use the admin credentials to check
-        # for the distributed flag because self.router only has a tenant view.
-        admin = self.admin_manager.network_client.show_router(self.router.id)
+        # for the distributed flag because self.router only has a project view.
+        admin = self.admin_manager.routers_client.show_router(self.router.id)
         if admin['router'].get('distributed', False):
             msg = "Rescheduling test does not apply to distributed routers."
             raise self.skipException(msg)
@@ -703,7 +704,7 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
         # remove resource from agents
         hosting_agents = set(a["id"] for a in
                              list_hosts(self.router.id)['agents'])
-        no_migration = agent_list == hosting_agents
+        no_migration = agent_list_alive == hosting_agents
         LOG.info("Router will be assigned to {mig} hosting agent".
                  format(mig="the same" if no_migration else "a new"))
 
@@ -723,7 +724,7 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
 
         # schedule resource to new agent
         target_agent = list(hosting_agents if no_migration else
-                            agent_list - hosting_agents)[0]
+                            agent_list_alive - hosting_agents)[0]
         schedule_router(target_agent,
                         router_id=self.router['id'])
         self.assertEqual(
@@ -776,7 +777,7 @@ class TestNetworkBasicOps(manager.NetworkScenarioTest):
         private_key = self._get_server_key(server)
         ssh_client = self.get_remote_client(fip.floating_ip_address,
                                             private_key=private_key)
-        spoof_nic = ssh_client.get_nic_name(spoof_port["mac_address"])
+        spoof_nic = ssh_client.get_nic_name_by_mac(spoof_port["mac_address"])
         dhcp_ports = self._list_ports(device_owner="network:dhcp",
                                       network_id=self.new_net["id"])
         new_net_dhcp = dhcp_ports[0]["fixed_ips"][0]["ip_address"]

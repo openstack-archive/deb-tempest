@@ -88,8 +88,8 @@ def cleanup():
     LOG.info("Cleanup::remove %s snapshots" % len(snaps))
     for v in snaps:
         try:
-            admin_manager.snapshots_client.\
-                wait_for_snapshot_status(v['id'], 'available')
+            waiters.wait_for_snapshot_status(
+                admin_manager.snapshots_client, v['id'], 'available')
             admin_manager.snapshots_client.delete_snapshot(v['id'])
         except Exception:
             pass
@@ -105,8 +105,8 @@ def cleanup():
     LOG.info("Cleanup::remove %s volumes" % len(vols))
     for v in vols:
         try:
-            admin_manager.volumes_client.\
-                wait_for_volume_status(v['id'], 'available')
+            waiters.wait_for_volume_status(
+                admin_manager.volumes_client, v['id'], 'available')
             admin_manager.volumes_client.delete_volume(v['id'])
         except Exception:
             pass

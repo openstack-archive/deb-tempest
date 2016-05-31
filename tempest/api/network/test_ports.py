@@ -75,7 +75,7 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
         network2 = self.create_network(network_name=name)
         network_list = [network1['id'], network2['id']]
         port_list = [{'network_id': net_id} for net_id in network_list]
-        body = self.client.create_bulk_port(ports=port_list)
+        body = self.ports_client.create_bulk_ports(ports=port_list)
         created_ports = body['ports']
         port1 = created_ports[0]
         port2 = created_ports[1]
@@ -90,12 +90,12 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
     def _get_ipaddress_from_tempest_conf(cls):
         """Return subnet with mask bits for configured CIDR """
         if cls._ip_version == 4:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
-            cidr.prefixlen = CONF.network.tenant_network_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_cidr)
+            cidr.prefixlen = CONF.network.project_network_mask_bits
 
         elif cls._ip_version == 6:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr)
-            cidr.prefixlen = CONF.network.tenant_network_v6_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_v6_cidr)
+            cidr.prefixlen = CONF.network.project_network_v6_mask_bits
 
         return cidr
 
@@ -131,12 +131,15 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
         body = self.ports_client.show_port(self.port['id'])
         port = body['port']
         self.assertIn('id', port)
-        # TODO(Santosh)- This is a temporary workaround to compare create_port
-        # and show_port dict elements.Remove this once extra_dhcp_opts issue
-        # gets fixed in neutron.( bug - 1365341.)
+        # NOTE(rfolco): created_at and updated_at may get inconsistent values
+        # due to possible delay between POST request and resource creation.
+        # TODO(rfolco): Neutron Bug #1365341 is fixed, can remove the key
+        # extra_dhcp_opts in the O release (K/L gate jobs still need it).
         self.assertThat(self.port,
                         custom_matchers.MatchesDictExceptForKeys
-                        (port, excluded_keys=['extra_dhcp_opts']))
+                        (port, excluded_keys=['extra_dhcp_opts',
+                                              'created_at',
+                                              'updated_at']))
 
     @test.idempotent_id('45fcdaf2-dab0-4c13-ac6c-fcddfb579dbd')
     def test_show_port_fields(self):
@@ -197,13 +200,13 @@ class PortsTestJSON(sec_base.BaseSecGroupTest):
         subnet = self.create_subnet(network)
         self.addCleanup(self.subnets_client.delete_subnet, subnet['id'])
         router = self.create_router(data_utils.rand_name('router-'))
-        self.addCleanup(self.client.delete_router, router['id'])
+        self.addCleanup(self.routers_client.delete_router, router['id'])
         port = self.ports_client.create_port(network_id=network['id'])
         # Add router interface to port created above
-        self.client.add_router_interface(router['id'],
-                                         port_id=port['port']['id'])
-        self.addCleanup(self.client.remove_router_interface, router['id'],
-                        port_id=port['port']['id'])
+        self.routers_client.add_router_interface(router['id'],
+                                                 port_id=port['port']['id'])
+        self.addCleanup(self.routers_client.remove_router_interface,
+                        router['id'], port_id=port['port']['id'])
         # List ports filtered by router_id
         port_list = self.ports_client.list_ports(device_id=router['id'])
         ports = port_list['ports']
@@ -425,11 +428,7 @@ class PortsAdminExtendedAttrsTestJSON(base.BaseAdminNetworkTest):
 
 class PortsIpV6TestJSON(PortsTestJSON):
     _ip_version = 6
-    _tenant_network_cidr = CONF.network.tenant_network_v6_cidr
-    _tenant_network_mask_bits = CONF.network.tenant_network_v6_mask_bits
 
 
 class PortsAdminExtendedAttrsIpV6TestJSON(PortsAdminExtendedAttrsTestJSON):
     _ip_version = 6
-    _tenant_network_cidr = CONF.network.tenant_network_v6_cidr
-    _tenant_network_mask_bits = CONF.network.tenant_network_v6_mask_bits

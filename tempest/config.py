@@ -15,6 +15,7 @@
 
 from __future__ import print_function
 
+import functools
 import logging as std_logging
 import os
 import tempfile
@@ -22,6 +23,7 @@ import tempfile
 from oslo_concurrency import lockutils
 from oslo_config import cfg
 from oslo_log import log as logging
+import testtools
 
 from tempest.test_discover import plugins
 
@@ -56,7 +58,7 @@ AuthGroup = [
                     "number of concurrent test processes."),
     cfg.BoolOpt('use_dynamic_credentials',
                 default=True,
-                help="Allows test cases to create/destroy tenants and "
+                help="Allows test cases to create/destroy projects and "
                      "users. This option requires that OpenStack Identity "
                      "API admin credentials are known. If false, isolated "
                      "test cases and parallel execution, can still be "
@@ -81,23 +83,26 @@ AuthGroup = [
                 default=True,
                 help="If use_dynamic_credentials is set to True and Neutron "
                      "is enabled Tempest will try to create a usable network, "
-                     "subnet, and router when needed for each tenant it "
+                     "subnet, and router when needed for each project it "
                      "creates. However in some neutron configurations, like "
                      "with VLAN provider networks, this doesn't work. So if "
                      "set to False the isolated networks will not be created"),
     cfg.StrOpt('admin_username',
                help="Username for an administrative user. This is needed for "
-                    "authenticating requests made by tenant isolation to "
+                    "authenticating requests made by project isolation to "
                     "create users and projects",
                deprecated_group='identity'),
-    cfg.StrOpt('admin_tenant_name',
-               help="Tenant name to use for an  administrative user. This is "
-                    "needed for authenticating requests made by tenant "
+    cfg.StrOpt('admin_project_name',
+               help="Project name to use for an administrative user. This is "
+                    "needed for authenticating requests made by project "
                     "isolation to create users and projects",
-               deprecated_group='identity'),
+               deprecated_opts=[cfg.DeprecatedOpt('admin_tenant_name',
+                                                  group='auth'),
+                                cfg.DeprecatedOpt('admin_tenant_name',
+                                                  group='identity')]),
     cfg.StrOpt('admin_password',
-               help="Password to use for an  administrative user. This is "
-                    "needed for authenticating requests made by tenant "
+               help="Password to use for an administrative user. This is "
+                    "needed for authenticating requests made by project "
                     "isolation to create users and projects",
                secret=True,
                deprecated_group='identity'),
@@ -158,8 +163,9 @@ IdentityGroup = [
     cfg.StrOpt('username',
                help="Username to use for Nova API requests.",
                deprecated_for_removal=True),
-    cfg.StrOpt('tenant_name',
-               help="Tenant name to use for Nova API requests.",
+    cfg.StrOpt('project_name',
+               deprecated_name='tenant_name',
+               help="Project name to use for Nova API requests.",
                deprecated_for_removal=True),
     cfg.StrOpt('admin_role',
                default='admin',
@@ -176,8 +182,9 @@ IdentityGroup = [
                help="Username of alternate user to use for Nova API "
                     "requests.",
                deprecated_for_removal=True),
-    cfg.StrOpt('alt_tenant_name',
-               help="Alternate user's Tenant name to use for Nova API "
+    cfg.StrOpt('alt_project_name',
+               deprecated_name='alt_tenant_name',
+               help="Alternate user's Project name to use for Nova API "
                     "requests.",
                deprecated_for_removal=True),
     cfg.StrOpt('alt_password',
@@ -246,10 +253,10 @@ ComputeGroup = [
                     "no OS-EXT-STS extension available"),
     cfg.StrOpt('fixed_network_name',
                help="Name of the fixed network that is visible to all test "
-                    "tenants. If multiple networks are available for a tenant"
-                    " this is the network which will be used for creating "
-                    "servers if tempest does not create a network or a "
-                    "network is not specified elsewhere. It may be used for "
+                    "projects. If multiple networks are available for a "
+                    "project, this is the network which will be used for "
+                    "creating servers if tempest does not create a network or "
+                    "s network is not specified elsewhere. It may be used for "
                     "ssh validation only if floating IPs are disabled."),
     cfg.StrOpt('catalog_type',
                default='compute',
@@ -281,13 +288,7 @@ ComputeGroup = [
                help=('The minimum number of compute nodes expected. This will '
                      'be utilized by some multinode specific tests to ensure '
                      'that requests match the expected size of the cluster '
-                     'you are testing with.'))
-]
-
-compute_features_group = cfg.OptGroup(name='compute-feature-enabled',
-                                      title="Enabled Compute Service Features")
-
-ComputeFeaturesGroup = [
+                     'you are testing with.')),
     cfg.StrOpt('min_microversion',
                default=None,
                help="Lower version of the test target microversion range. "
@@ -296,7 +297,8 @@ ComputeFeaturesGroup = [
                     "min_microversion and max_microversion. "
                     "If both values are not specified, Tempest avoids tests "
                     "which require a microversion. Valid values are string "
-                    "with format 'X.Y' or string 'latest'"),
+                    "with format 'X.Y' or string 'latest'",
+                    deprecated_group='compute-feature-enabled'),
     cfg.StrOpt('max_microversion',
                default=None,
                help="Upper version of the test target microversion range. "
@@ -305,7 +307,14 @@ ComputeFeaturesGroup = [
                     "min_microversion and max_microversion. "
                     "If both values are not specified, Tempest avoids tests "
                     "which require a microversion. Valid values are string "
-                    "with format 'X.Y' or string 'latest'"),
+                    "with format 'X.Y' or string 'latest'",
+                    deprecated_group='compute-feature-enabled'),
+]
+
+compute_features_group = cfg.OptGroup(name='compute-feature-enabled',
+                                      title="Enabled Compute Service Features")
+
+ComputeFeaturesGroup = [
     cfg.BoolOpt('disk_config',
                 default=True,
                 help="If false, skip disk config tests"),
@@ -404,6 +413,15 @@ ComputeFeaturesGroup = [
     cfg.BoolOpt('config_drive',
                 default=True,
                 help='Enable special configuration drive with metadata.'),
+    cfg.ListOpt('scheduler_available_filters',
+                default=['all'],
+                help="A list of enabled filters that nova will accept as hints"
+                     " to the scheduler when creating a server. A special "
+                     "entry 'all' indicates all filters are enabled. Empty "
+                     "list indicates all filters are disabled. The full "
+                     "available list of filters is in nova.conf: "
+                     "DEFAULT.scheduler_available_filters"),
+
 ]
 
 
@@ -482,21 +500,26 @@ NetworkGroup = [
                choices=['public', 'admin', 'internal',
                         'publicURL', 'adminURL', 'internalURL'],
                help="The endpoint type to use for the network service."),
-    cfg.StrOpt('tenant_network_cidr',
+    cfg.StrOpt('project_network_cidr',
+               deprecated_name='tenant_network_cidr',
                default="10.100.0.0/16",
-               help="The cidr block to allocate tenant ipv4 subnets from"),
-    cfg.IntOpt('tenant_network_mask_bits',
+               help="The cidr block to allocate project ipv4 subnets from"),
+    cfg.IntOpt('project_network_mask_bits',
+               deprecated_name='tenant_network_mask_bits',
                default=28,
-               help="The mask bits for tenant ipv4 subnets"),
-    cfg.StrOpt('tenant_network_v6_cidr',
+               help="The mask bits for project ipv4 subnets"),
+    cfg.StrOpt('project_network_v6_cidr',
+               deprecated_name='tenant_network_v6_cidr',
                default="2003::/48",
-               help="The cidr block to allocate tenant ipv6 subnets from"),
-    cfg.IntOpt('tenant_network_v6_mask_bits',
+               help="The cidr block to allocate project ipv6 subnets from"),
+    cfg.IntOpt('project_network_v6_mask_bits',
+               deprecated_name='tenant_network_v6_mask_bits',
                default=64,
-               help="The mask bits for tenant ipv6 subnets"),
-    cfg.BoolOpt('tenant_networks_reachable',
+               help="The mask bits for project ipv6 subnets"),
+    cfg.BoolOpt('project_networks_reachable',
+                deprecated_name='tenant_networks_reachable',
                 default=False,
-                help="Whether tenant networks can be reached directly from "
+                help="Whether project networks can be reached directly from "
                      "the test client. This must be set to True when the "
                      "'fixed' ssh_connect_method is selected."),
     cfg.StrOpt('public_network_id',
@@ -679,22 +702,10 @@ VolumeGroup = [
                choices=['public', 'admin', 'internal',
                         'publicURL', 'adminURL', 'internalURL'],
                help="The endpoint type to use for the volume service."),
-    cfg.StrOpt('backend1_name',
-               default='',
-               help='Name of the backend1 (must be declared in cinder.conf)',
-               deprecated_for_removal=True),
-    cfg.StrOpt('backend2_name',
-               default='',
-               help='Name of the backend2 (must be declared in cinder.conf)',
-               deprecated_for_removal=True),
     cfg.ListOpt('backend_names',
                 default=['BACKEND_1', 'BACKEND_2'],
                 help='A list of backend names separated by comma. '
-                     'The backend name must be declared in cinder.conf',
-                deprecated_opts=[cfg.DeprecatedOpt('BACKEND_1',
-                                                   group='volume'),
-                                 cfg.DeprecatedOpt('BACKEND_2',
-                                                   group='volume')]),
+                     'The backend name must be declared in cinder.conf'),
     cfg.StrOpt('storage_protocol',
                default='iSCSI',
                help='Backend protocol to target when creating volume types'),
@@ -953,7 +964,7 @@ data_processing_feature_group = cfg.OptGroup(
 
 DataProcessingFeaturesGroup = [
     cfg.ListOpt('plugins',
-                default=["vanilla", "hdp"],
+                default=["vanilla", "cdh"],
                 deprecated_group="data_processing-feature-enabled",
                 help="List of enabled data processing plugins")
 ]
@@ -992,7 +1003,7 @@ StressGroup = [
                 default=False,
                 help='Allows a full cleaning process after a stress test.'
                      ' Caution : this cleanup will remove every objects of'
-                     ' every tenant.')
+                     ' every project.')
 ]
 
 
@@ -1138,7 +1149,7 @@ baremetal_group = cfg.OptGroup(name='baremetal',
                                     'shelve, snapshot, and suspend')
 
 
-# NOTE(deva): Ironic tests have been ported to tempest-lib. New config options
+# NOTE(deva): Ironic tests have been ported to tempest.lib. New config options
 #             should be added to ironic/ironic_tempest_plugin/config.py.
 #             However, these options need to remain here for testing stable
 #             branches until Liberty release reaches EOL.
@@ -1376,3 +1387,72 @@ class TempestConfigProxy(object):
 
 
 CONF = TempestConfigProxy()
+
+
+def skip_unless_config(*args):
+    """Decorator to raise a skip if a config opt doesn't exist or is False
+
+    :param str group: The first arg, the option group to check
+    :param str name: The second arg, the option name to check
+    :param str msg: Optional third arg, the skip msg to use if a skip is raised
+    :raises testtools.TestCaseskipException: If the specified config option
+        doesn't exist or it exists and evaluates to False
+    """
+    def decorator(f):
+        group = args[0]
+        name = args[1]
+
+        @functools.wraps(f)
+        def wrapper(self, *func_args, **func_kwargs):
+            if not hasattr(CONF, group):
+                msg = "Config group %s doesn't exist" % group
+                raise testtools.TestCase.skipException(msg)
+
+            conf_group = getattr(CONF, group)
+            if not hasattr(conf_group, name):
+                msg = "Config option %s.%s doesn't exist" % (group,
+                                                             name)
+                raise testtools.TestCase.skipException(msg)
+
+            value = getattr(conf_group, name)
+            if not value:
+                if len(args) == 3:
+                    msg = args[2]
+                else:
+                    msg = "Config option %s.%s is false" % (group,
+                                                            name)
+                raise testtools.TestCase.skipException(msg)
+            return f(self, *func_args, **func_kwargs)
+        return wrapper
+    return decorator
+
+
+def skip_if_config(*args):
+    """Raise a skipException if a config exists and is True
+
+    :param str group: The first arg, the option group to check
+    :param str name: The second arg, the option name to check
+    :param str msg: Optional third arg, the skip msg to use if a skip is raised
+    :raises testtools.TestCase.skipException: If the specified config option
+        exists and evaluates to True
+    """
+    def decorator(f):
+        group = args[0]
+        name = args[1]
+
+        @functools.wraps(f)
+        def wrapper(self, *func_args, **func_kwargs):
+            if hasattr(CONF, group):
+                conf_group = getattr(CONF, group)
+                if hasattr(conf_group, name):
+                    value = getattr(conf_group, name)
+                    if value:
+                        if len(args) == 3:
+                            msg = args[2]
+                        else:
+                            msg = "Config option %s.%s is false" % (group,
+                                                                    name)
+                        raise testtools.TestCase.skipException(msg)
+            return f(self, *func_args, **func_kwargs)
+        return wrapper
+    return decorator

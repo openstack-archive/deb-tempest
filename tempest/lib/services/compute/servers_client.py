@@ -20,10 +20,17 @@ from oslo_serialization import jsonutils as json
 from six.moves.urllib import parse as urllib
 
 from tempest.lib.api_schema.response.compute.v2_1 import servers as schema
+from tempest.lib.api_schema.response.compute.v2_19 import servers as schemav219
+from tempest.lib.api_schema.response.compute.v2_9 import servers as schemav29
 from tempest.lib.common import rest_client
+from tempest.lib.services.compute import base_compute_client
 
 
-class ServersClient(rest_client.RestClient):
+class ServersClient(base_compute_client.BaseComputeClient):
+    schema_versions_info = [
+        {'min': None, 'max': '2.8', 'schema': schema},
+        {'min': '2.9', 'max': '2.18', 'schema': schemav29},
+        {'min': '2.19', 'max': None, 'schema': schemav219}]
 
     def __init__(self, auth_provider, service, region,
                  enable_instance_password=True, **kwargs):
@@ -54,7 +61,7 @@ class ServersClient(rest_client.RestClient):
         post_body = {'server': body}
 
         if hints:
-            post_body = dict(post_body.items() + hints.items())
+            post_body.update(hints)
 
         post_body = json.dumps(post_body)
         resp, body = self.post('servers', post_body)
@@ -87,6 +94,7 @@ class ServersClient(rest_client.RestClient):
         post_body = json.dumps({'server': kwargs})
         resp, body = self.put("servers/%s" % server_id, post_body)
         body = json.loads(body)
+        schema = self.get_schema(self.schema_versions_info)
         self.validate_response(schema.update_server, resp, body)
         return rest_client.ResponseBody(resp, body)
 
@@ -94,6 +102,7 @@ class ServersClient(rest_client.RestClient):
         """Get server details."""
         resp, body = self.get("servers/%s" % server_id)
         body = json.loads(body)
+        schema = self.get_schema(self.schema_versions_info)
         self.validate_response(schema.get_server, resp, body)
         return rest_client.ResponseBody(resp, body)
 
@@ -113,6 +122,7 @@ class ServersClient(rest_client.RestClient):
         """
 
         url = 'servers'
+        schema = self.get_schema(self.schema_versions_info)
         _schema = schema.list_servers
 
         if detail:
@@ -208,6 +218,7 @@ class ServersClient(rest_client.RestClient):
         kwargs['imageRef'] = image_ref
         if 'disk_config' in kwargs:
             kwargs['OS-DCF:diskConfig'] = kwargs.pop('disk_config')
+        schema = self.get_schema(self.schema_versions_info)
         if self.enable_instance_password:
             rebuild_schema = schema.rebuild_server_with_admin_pass
         else:

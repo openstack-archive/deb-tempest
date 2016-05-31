@@ -17,10 +17,10 @@ import six
 from six.moves import http_client as httplib
 from six.moves.urllib import parse as urlparse
 
-from tempest.common import service_client
+from tempest.lib.common import rest_client
 
 
-class ObjectClient(service_client.ServiceClient):
+class ObjectClient(rest_client.RestClient):
 
     def create_object(self, container, object_name, data,
                       params=None, metadata=None, headers=None):
@@ -150,9 +150,6 @@ class ObjectClient(service_client.ServiceClient):
 
     def put_object_with_chunk(self, container, name, contents, chunk_size):
         """Put an object with Transfer-Encoding header"""
-        if self.base_url is None:
-            self._set_auth()
-
         headers = {'Transfer-Encoding': 'chunked'}
         if self.token:
             headers['X-Auth-Token'] = self.token
@@ -182,8 +179,6 @@ class ObjectClient(service_client.ServiceClient):
         if not data:
             headers['content-length'] = '0'
 
-        if self.base_url is None:
-            self._set_auth()
         headers['X-Auth-Token'] = self.token
 
         conn = put_object_connection(self.base_url, str(container),
@@ -210,7 +205,7 @@ def put_object_connection(base_url, container, name, contents=None,
     :param contents: a string or a file like object to read object data
                      from; if None, a zero-byte put will be done
     :param chunk_size: chunk size of data to write; it defaults to 65536;
-                       used only if the the contents object has a 'read'
+                       used only if the contents object has a 'read'
                        method, eg. file-like objects, ignored otherwise
     :param headers: additional headers to include in the request, if any
     :param query_string: if set will be appended with '?' to generated path

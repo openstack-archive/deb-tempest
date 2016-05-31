@@ -31,6 +31,39 @@ ISO8601_INT_SECONDS = '%Y-%m-%dT%H:%M:%SZ'
 LOG = logging.getLogger(__name__)
 
 
+def replace_version(url, new_version):
+    parts = urlparse.urlparse(url)
+    version_path = '/%s' % new_version
+    path, subs = re.subn(r'(^|/)+v\d+(?:\.\d+)?',
+                         version_path,
+                         parts.path,
+                         count=1)
+    if not subs:
+        path = '%s%s' % (parts.path.rstrip('/'), version_path)
+    url = urlparse.urlunparse((parts.scheme,
+                               parts.netloc,
+                               path,
+                               parts.params,
+                               parts.query,
+                               parts.fragment))
+    return url
+
+
+def apply_url_filters(url, filters):
+    if filters.get('api_version', None) is not None:
+        url = replace_version(url, filters['api_version'])
+    parts = urlparse.urlparse(url)
+    if filters.get('skip_path', None) is not None and parts.path != '':
+        url = urlparse.urlunparse((parts.scheme,
+                                   parts.netloc,
+                                   '/',
+                                   parts.params,
+                                   parts.query,
+                                   parts.fragment))
+
+    return url
+
+
 @six.add_metaclass(abc.ABCMeta)
 class AuthProvider(object):
     """Provide authentication"""
@@ -319,19 +352,10 @@ class KeystoneV2AuthProvider(KeystoneAuthProvider):
                     _base_url = ep['endpoints'][0].get(endpoint_type)
                 break
         if _base_url is None:
-            raise exceptions.EndpointNotFound(service)
-
-        parts = urlparse.urlparse(_base_url)
-        if filters.get('api_version', None) is not None:
-            path = "/" + filters['api_version']
-            noversion_path = "/".join(parts.path.split("/")[2:])
-            if noversion_path != "":
-                path += "/" + noversion_path
-            _base_url = _base_url.replace(parts.path, path)
-        if filters.get('skip_path', None) is not None and parts.path != '':
-            _base_url = _base_url.replace(parts.path, "/")
-
-        return _base_url
+            raise exceptions.EndpointNotFound(
+                "service: %s, region: %s, endpoint_type: %s" %
+                (service, region, endpoint_type))
+        return apply_url_filters(_base_url, filters)
 
     def is_expired(self, auth_data):
         _, access = auth_data
@@ -442,18 +466,7 @@ class KeystoneV3AuthProvider(KeystoneAuthProvider):
         _base_url = filtered_catalog[0].get('url', None)
         if _base_url is None:
                 raise exceptions.EndpointNotFound(service)
-
-        parts = urlparse.urlparse(_base_url)
-        if filters.get('api_version', None) is not None:
-            path = "/" + filters['api_version']
-            noversion_path = "/".join(parts.path.split("/")[2:])
-            if noversion_path != "":
-                path += "/" + noversion_path
-            _base_url = _base_url.replace(parts.path, path)
-        if filters.get('skip_path', None) is not None:
-            _base_url = _base_url.replace(parts.path, "/")
-
-        return _base_url
+        return apply_url_filters(_base_url, filters)
 
     def is_expired(self, auth_data):
         _, access = auth_data
@@ -598,6 +611,9 @@ class KeystoneV2Credentials(Credentials):
         return None not in (self.username, self.password)
 
 
+COLLISIONS = [('project_name', 'tenant_name'), ('project_id', 'tenant_id')]
+
+
 class KeystoneV3Credentials(Credentials):
     """Credentials suitable for the Keystone Identity V3 API"""
 
@@ -605,6 +621,16 @@ class KeystoneV3Credentials(Credentials):
                   'project_domain_id', 'project_domain_name', 'project_id',
                   'project_name', 'tenant_id', 'tenant_name', 'user_domain_id',
                   'user_domain_name', 'user_id']
+
+    def _apply_credentials(self, attr):
+        for (key1, key2) in COLLISIONS:
+            val1 = attr.get(key1)
+            val2 = attr.get(key2)
+            if val1 and val2 and val1 != val2:
+                msg = ('Cannot have conflicting values for %s and %s' %
+                       (key1, key2))
+                raise exceptions.InvalidCredentials(msg)
+        super(KeystoneV3Credentials, self)._apply_credentials(attr)
 
     def __setattr__(self, key, value):
         parent = super(KeystoneV3Credentials, self)
@@ -633,8 +659,10 @@ class KeystoneV3Credentials(Credentials):
                 parent.__setattr__('user_domain_name', value)
         # support domain_name coming from config
         if key == 'domain_name':
-            parent.__setattr__('user_domain_name', value)
-            parent.__setattr__('project_domain_name', value)
+            if self.user_domain_name is None:
+                parent.__setattr__('user_domain_name', value)
+            if self.project_domain_name is None:
+                parent.__setattr__('project_domain_name', value)
         # finally trigger default behaviour for all attributes
         parent.__setattr__(key, value)
 

@@ -17,7 +17,7 @@ import testtools
 
 from tempest.api.compute import base as compute_base
 from tempest import config
-from tempest import exceptions
+from tempest.lib import exceptions
 from tempest.tests import base
 from tempest.tests import fake_config
 
@@ -57,16 +57,16 @@ class TestMicroversionsTestsClass(base.TestCase):
     def setUp(self):
         super(TestMicroversionsTestsClass, self).setUp()
         self.useFixture(fake_config.ConfigFixture())
-        self.stubs.Set(config, 'TempestConfigPrivate',
-                       fake_config.FakePrivate)
+        self.patchobject(config, 'TempestConfigPrivate',
+                         fake_config.FakePrivate)
 
     def _test_version(self, cfg_min, cfg_max,
                       expected_pass_tests,
                       expected_skip_tests):
         cfg.CONF.set_default('min_microversion',
-                             cfg_min, group='compute-feature-enabled')
+                             cfg_min, group='compute')
         cfg.CONF.set_default('max_microversion',
-                             cfg_max, group='compute-feature-enabled')
+                             cfg_max, group='compute')
         try:
             for test_class in expected_pass_tests:
                 test_class.skip_checks()
@@ -138,16 +138,16 @@ class TestMicroversionsTestsClass(base.TestCase):
 
     def test_config_invalid_version(self):
         cfg.CONF.set_default('min_microversion',
-                             '2.5', group='compute-feature-enabled')
+                             '2.5', group='compute')
         cfg.CONF.set_default('max_microversion',
-                             '2.1', group='compute-feature-enabled')
+                             '2.1', group='compute')
         self.assertRaises(exceptions.InvalidAPIVersionRange,
                           VersionTestNoneTolatest.skip_checks)
 
     def test_config_version_invalid_test_version(self):
         cfg.CONF.set_default('min_microversion',
-                             None, group='compute-feature-enabled')
+                             None, group='compute')
         cfg.CONF.set_default('max_microversion',
-                             '2.13', group='compute-feature-enabled')
+                             '2.13', group='compute')
         self.assertRaises(exceptions.InvalidAPIVersionRange,
                           InvalidVersionTest.skip_checks)

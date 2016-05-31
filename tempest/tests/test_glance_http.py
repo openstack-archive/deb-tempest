@@ -13,6 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import socket
+
 import mock
 from oslotest import mockpatch
 import six
@@ -22,18 +24,13 @@ from tempest.common import glance_http
 from tempest import exceptions
 from tempest.tests import base
 from tempest.tests import fake_auth_provider
-from tempest.tests import fake_http
+from tempest.tests.lib import fake_http
 
 
 class TestGlanceHTTPClient(base.TestCase):
 
     def setUp(self):
         super(TestGlanceHTTPClient, self).setUp()
-        self.fake_http = fake_http.fake_httplib2(return_type=200)
-        # NOTE(maurosr): using http here implies that we will be using httplib
-        # directly. With https glance_client would use an httpS version, but
-        # the real backend would still be httplib anyway and since we mock it
-        # that there is no reason to care.
         self.endpoint = 'http://fake_url.com'
         self.fake_auth = fake_auth_provider.FakeAuthProvider()
 
@@ -42,12 +39,12 @@ class TestGlanceHTTPClient(base.TestCase):
         self.useFixture(mockpatch.PatchObject(
             httplib.HTTPConnection,
             'request',
-            side_effect=self.fake_http.request(self.endpoint)[1]))
+            side_effect=b'fake_body'))
         self.client = glance_http.HTTPClient(self.fake_auth, {})
 
     def _set_response_fixture(self, header, status, resp_body):
-        resp = fake_http.fake_httplib(header, status=status,
-                                      body=six.StringIO(resp_body))
+        resp = fake_http.fake_http_response(header, status=status,
+                                            body=six.StringIO(resp_body))
         self.useFixture(mockpatch.PatchObject(httplib.HTTPConnection,
                         'getresponse', return_value=resp))
         return resp
@@ -91,15 +88,29 @@ class TestGlanceHTTPClient(base.TestCase):
         self.assertEqual(httplib.HTTPConnection, conn_class)
 
     def test_get_connection_http(self):
-        self.assertTrue(isinstance(self.client._get_connection(),
-                                   httplib.HTTPConnection))
+        self.assertIsInstance(self.client._get_connection(),
+                              httplib.HTTPConnection)
 
     def test_get_connection_https(self):
         endpoint = 'https://fake_url.com'
         self.fake_auth.base_url = mock.MagicMock(return_value=endpoint)
         self.client = glance_http.HTTPClient(self.fake_auth, {})
-        self.assertTrue(isinstance(self.client._get_connection(),
-                                   glance_http.VerifiedHTTPSConnection))
+        self.assertIsInstance(self.client._get_connection(),
+                              glance_http.VerifiedHTTPSConnection)
+
+    def test_get_connection_ipv4_https(self):
+        endpoint = 'https://127.0.0.1'
+        self.fake_auth.base_url = mock.MagicMock(return_value=endpoint)
+        self.client = glance_http.HTTPClient(self.fake_auth, {})
+        self.assertIsInstance(self.client._get_connection(),
+                              glance_http.VerifiedHTTPSConnection)
+
+    def test_get_connection_ipv6_https(self):
+        endpoint = 'https://[::1]'
+        self.fake_auth.base_url = mock.MagicMock(return_value=endpoint)
+        self.client = glance_http.HTTPClient(self.fake_auth, {})
+        self.assertIsInstance(self.client._get_connection(),
+                              glance_http.VerifiedHTTPSConnection)
 
     def test_get_connection_url_not_fount(self):
         self.useFixture(mockpatch.PatchObject(self.client, 'connection_class',
@@ -146,10 +157,68 @@ class TestGlanceHTTPClient(base.TestCase):
         self.assertEqual(6, len(kwargs.keys()))
 
 
+class TestVerifiedHTTPSConnection(base.TestCase):
+
+    @mock.patch('socket.socket')
+    @mock.patch('tempest.common.glance_http.OpenSSLConnectionDelegator')
+    def test_connect_ipv4(self, mock_delegator, mock_socket):
+        connection = glance_http.VerifiedHTTPSConnection('127.0.0.1')
+        connection.connect()
+
+        mock_socket.assert_called_once_with(socket.AF_INET, socket.SOCK_STREAM)
+        mock_delegator.assert_called_once_with(connection.context,
+                                               mock_socket.return_value)
+        mock_delegator.return_value.connect.assert_called_once_with(
+            (connection.host, 443))
+
+    @mock.patch('socket.socket')
+    @mock.patch('tempest.common.glance_http.OpenSSLConnectionDelegator')
+    def test_connect_ipv6(self, mock_delegator, mock_socket):
+        connection = glance_http.VerifiedHTTPSConnection('[::1]')
+        connection.connect()
+
+        mock_socket.assert_called_once_with(socket.AF_INET6,
+                                            socket.SOCK_STREAM)
+        mock_delegator.assert_called_once_with(connection.context,
+                                               mock_socket.return_value)
+        mock_delegator.return_value.connect.assert_called_once_with(
+            (connection.host, 443, 0, 0))
+
+    @mock.patch('tempest.common.glance_http.OpenSSLConnectionDelegator')
+    @mock.patch('socket.getaddrinfo',
+                side_effect=OSError('Gettaddrinfo failed'))
+    def test_connect_with_address_lookup_failure(self, mock_getaddrinfo,
+                                                 mock_delegator):
+        connection = glance_http.VerifiedHTTPSConnection('127.0.0.1')
+        self.assertRaises(exceptions.RestClientException, connection.connect)
+
+        mock_getaddrinfo.assert_called_once_with(
+            connection.host, connection.port, 0, socket.SOCK_STREAM)
+
+    @mock.patch('socket.socket')
+    @mock.patch('socket.getaddrinfo',
+                return_value=[(2, 1, 6, '', ('127.0.0.1', 443))])
+    @mock.patch('tempest.common.glance_http.OpenSSLConnectionDelegator')
+    def test_connect_with_socket_failure(self, mock_delegator,
+                                         mock_getaddrinfo,
+                                         mock_socket):
+        mock_delegator.return_value.connect.side_effect = \
+            OSError('Connect failed')
+
+        connection = glance_http.VerifiedHTTPSConnection('127.0.0.1')
+        self.assertRaises(exceptions.RestClientException, connection.connect)
+
+        mock_getaddrinfo.assert_called_once_with(
+            connection.host, connection.port, 0, socket.SOCK_STREAM)
+        mock_socket.assert_called_once_with(socket.AF_INET, socket.SOCK_STREAM)
+        mock_delegator.return_value.connect.\
+            assert_called_once_with((connection.host, 443))
+
+
 class TestResponseBodyIterator(base.TestCase):
 
     def test_iter_default_chunk_size_64k(self):
-        resp = fake_http.fake_httplib({}, six.StringIO(
+        resp = fake_http.fake_http_response({}, six.StringIO(
             'X' * (glance_http.CHUNKSIZE + 1)))
         iterator = glance_http.ResponseBodyIterator(resp)
         chunks = list(iterator)

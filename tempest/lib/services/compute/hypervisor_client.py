@@ -17,9 +17,10 @@ from oslo_serialization import jsonutils as json
 
 from tempest.lib.api_schema.response.compute.v2_1 import hypervisors as schema
 from tempest.lib.common import rest_client
+from tempest.lib.services.compute import base_compute_client
 
 
-class HypervisorClient(rest_client.RestClient):
+class HypervisorClient(base_compute_client.BaseComputeClient):
 
     def list_hypervisors(self, detail=False):
         """List hypervisors information."""
@@ -62,7 +63,9 @@ class HypervisorClient(rest_client.RestClient):
         self.validate_response(schema.get_hypervisor_uptime, resp, body)
         return rest_client.ResponseBody(resp, body)
 
-    def search_hypervisor(self, hypervisor_name):
+    def search_hypervisor(self, hypervisor_name):  # noqa
+        # NOTE: This noqa is for passing T110 check and we cannot rename
+        #       to keep backwards compatibility.
         """Search specified hypervisor."""
         resp, body = self.get('os-hypervisors/%s/search' % hypervisor_name)
         body = json.loads(body)

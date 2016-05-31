@@ -12,10 +12,9 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-import itertools
-
 import netaddr
 import six
+import testtools
 
 from tempest.api.network import base
 from tempest.common import custom_matchers
@@ -30,12 +29,12 @@ CONF = config.CONF
 class NetworksTest(base.BaseNetworkTest):
     """Tests the following operations in the Neutron API:
 
-        create a network for a tenant
-        list tenant's networks
-        show a tenant network details
-        create a subnet for a tenant
-        list tenant's subnets
-        show a tenant subnet details
+        create a network for a project
+        list project's networks
+        show a project network details
+        create a subnet for a project
+        list project's subnets
+        show a project subnet details
         network update
         subnet update
         delete a network also deletes its subnets
@@ -46,15 +45,15 @@ class NetworksTest(base.BaseNetworkTest):
     v2.0 of the Neutron API is assumed. It is also assumed that the following
     options are defined in the [network] section of etc/tempest.conf:
 
-        tenant_network_cidr with a block of cidr's from which smaller blocks
-        can be allocated for tenant ipv4 subnets
+        project_network_cidr with a block of cidr's from which smaller blocks
+        can be allocated for project ipv4 subnets
 
-        tenant_network_v6_cidr is the equivalent for ipv6 subnets
+        project_network_v6_cidr is the equivalent for ipv6 subnets
 
-        tenant_network_mask_bits with the mask bits to be used to partition the
-        block defined by tenant_network_cidr
+        project_network_mask_bits with the mask bits to be used to partition
+        the block defined by project_network_cidr
 
-        tenant_network_v6_mask_bits is the equivalent for ipv6 subnets
+        project_network_v6_mask_bits is the equivalent for ipv6 subnets
     """
 
     @classmethod
@@ -93,14 +92,14 @@ class NetworksTest(base.BaseNetworkTest):
 
     @classmethod
     def _create_subnet_with_last_subnet_block(cls, network, ip_version):
-        # Derive last subnet CIDR block from tenant CIDR and
+        # Derive last subnet CIDR block from project CIDR and
         # create the subnet with that derived CIDR
         if ip_version == 4:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
-            mask_bits = CONF.network.tenant_network_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_cidr)
+            mask_bits = CONF.network.project_network_mask_bits
         elif ip_version == 6:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr)
-            mask_bits = CONF.network.tenant_network_v6_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_v6_cidr)
+            mask_bits = CONF.network.project_network_v6_mask_bits
 
         subnet_cidr = list(cidr.subnet(mask_bits))[-1]
         gateway_ip = str(netaddr.IPAddress(subnet_cidr) + 1)
@@ -111,11 +110,11 @@ class NetworksTest(base.BaseNetworkTest):
     def _get_gateway_from_tempest_conf(cls, ip_version):
         """Return first subnet gateway for configured CIDR """
         if ip_version == 4:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
-            mask_bits = CONF.network.tenant_network_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_cidr)
+            mask_bits = CONF.network.project_network_mask_bits
         elif ip_version == 6:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr)
-            mask_bits = CONF.network.tenant_network_v6_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_v6_cidr)
+            mask_bits = CONF.network.project_network_v6_mask_bits
 
         if mask_bits >= cidr.prefixlen:
             return netaddr.IPAddress(cidr) + 1
@@ -376,6 +375,9 @@ class NetworksTest(base.BaseNetworkTest):
 
     @test.attr(type='smoke')
     @test.idempotent_id('af774677-42a9-4e4b-bb58-16fe6a5bc1ec')
+    @test.requires_ext(extension='external-net', service='network')
+    @testtools.skipUnless(CONF.network.public_network_id,
+                          'The public_network_id option must be specified.')
     def test_external_network_visibility(self):
         """Verifies user can see external networks but not subnets."""
         body = self.networks_client.list_networks(**{'router:external': True})
@@ -387,35 +389,30 @@ class NetworksTest(base.BaseNetworkTest):
         self.assertEmpty(nonexternal, "Found non-external networks"
                                       " in filtered list (%s)." % nonexternal)
         self.assertIn(CONF.network.public_network_id, networks)
-
-        subnets_iter = (network['subnets']
-                        for network in body['networks']
-                        if not network['shared'])
-        # subnets_iter is a list (iterator) of lists. This flattens it to a
-        # list of UUIDs
-        public_subnets_iter = itertools.chain(*subnets_iter)
-        body = self.subnets_client.list_subnets()
-        subnets = [sub['id'] for sub in body['subnets']
-                   if sub['id'] in public_subnets_iter]
-        self.assertEmpty(subnets, "Public subnets visible")
+        # only check the public network ID because the other networks may
+        # belong to other tests and their state may have changed during this
+        # test
+        body = self.subnets_client.list_subnets(
+            network_id=CONF.network.public_network_id)
+        self.assertEmpty(body['subnets'], "Public subnets visible")
 
 
-class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
+class BulkNetworkOpsTest(base.BaseNetworkTest):
     """Tests the following operations in the Neutron API:
 
         bulk network creation
         bulk subnet creation
         bulk port creation
-        list tenant's networks
+        list project's networks
 
     v2.0 of the Neutron API is assumed. It is also assumed that the following
     options are defined in the [network] section of etc/tempest.conf:
 
-        tenant_network_cidr with a block of cidr's from which smaller blocks
-        can be allocated for tenant networks
+        project_network_cidr with a block of cidr's from which smaller blocks
+        can be allocated for project networks
 
-        tenant_network_mask_bits with the mask bits to be used to partition the
-        block defined by tenant-network_cidr
+        project_network_mask_bits with the mask bits to be used to partition
+        the block defined by project-network_cidr
     """
 
     def _delete_networks(self, created_networks):
@@ -451,7 +448,7 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
         # Creates 2 networks in one request
         network_list = [{'name': data_utils.rand_name('network-')},
                         {'name': data_utils.rand_name('network-')}]
-        body = self.client.create_bulk_network(networks=network_list)
+        body = self.networks_client.create_bulk_networks(networks=network_list)
         created_networks = body['networks']
         self.addCleanup(self._delete_networks, created_networks)
         # Asserting that the networks are found in the list after creation
@@ -467,11 +464,11 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
         networks = [self.create_network(), self.create_network()]
         # Creates 2 subnets in one request
         if self._ip_version == 4:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
-            mask_bits = CONF.network.tenant_network_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_cidr)
+            mask_bits = CONF.network.project_network_mask_bits
         else:
-            cidr = netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr)
-            mask_bits = CONF.network.tenant_network_v6_mask_bits
+            cidr = netaddr.IPNetwork(CONF.network.project_network_v6_cidr)
+            mask_bits = CONF.network.project_network_v6_mask_bits
 
         cidrs = [subnet_cidr for subnet_cidr in cidr.subnet(mask_bits)]
 
@@ -486,7 +483,7 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
             }
             subnets_list.append(p1)
         del subnets_list[1]['name']
-        body = self.client.create_bulk_subnet(subnets=subnets_list)
+        body = self.subnets_client.create_bulk_subnets(subnets=subnets_list)
         created_subnets = body['subnets']
         self.addCleanup(self._delete_subnets, created_subnets)
         # Asserting that the subnets are found in the list after creation
@@ -512,7 +509,7 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
             }
             port_list.append(p1)
         del port_list[1]['name']
-        body = self.client.create_bulk_port(ports=port_list)
+        body = self.ports_client.create_bulk_ports(ports=port_list)
         created_ports = body['ports']
         self.addCleanup(self._delete_ports, created_ports)
         # Asserting that the ports are found in the list after creation
@@ -523,16 +520,16 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
             self.assertIn(n['id'], ports_list)
 
 
-class BulkNetworkOpsIpV6TestJSON(BulkNetworkOpsTestJSON):
+class BulkNetworkOpsIpV6Test(BulkNetworkOpsTest):
     _ip_version = 6
 
 
-class NetworksIpV6TestJSON(NetworksTest):
+class NetworksIpV6Test(NetworksTest):
     _ip_version = 6
 
     @test.idempotent_id('e41a4888-65a6-418c-a095-f7c2ef4ad59a')
     def test_create_delete_subnet_with_gw(self):
-        net = netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr)
+        net = netaddr.IPNetwork(CONF.network.project_network_v6_cidr)
         gateway = str(netaddr.IPAddress(net.first + 2))
         name = data_utils.rand_name('network-')
         network = self.create_network(network_name=name)
@@ -542,7 +539,7 @@ class NetworksIpV6TestJSON(NetworksTest):
 
     @test.idempotent_id('ebb4fd95-524f-46af-83c1-0305b239338f')
     def test_create_delete_subnet_with_default_gw(self):
-        net = netaddr.IPNetwork(CONF.network.tenant_network_v6_cidr)
+        net = netaddr.IPNetwork(CONF.network.project_network_v6_cidr)
         gateway_ip = str(netaddr.IPAddress(net.first + 1))
         name = data_utils.rand_name('network-')
         network = self.create_network(network_name=name)
@@ -579,7 +576,7 @@ class NetworksIpV6TestJSON(NetworksTest):
                               'Subnet are not in the same network')
 
 
-class NetworksIpV6TestAttrs(NetworksIpV6TestJSON):
+class NetworksIpV6TestAttrs(NetworksIpV6Test):
 
     @classmethod
     def skip_checks(cls):
@@ -621,7 +618,7 @@ class NetworksIpV6TestAttrs(NetworksIpV6TestJSON):
         subnet_ids = [subnet['id'] for subnet in subnets['subnets']]
         self.assertNotIn(subnet_slaac['id'], subnet_ids,
                          "Subnet wasn't deleted")
-        self.assertRaisesRegexp(
+        self.assertRaisesRegex(
             lib_exc.Conflict,
             "There are one or more ports still in use on the network",
             self.networks_client.delete_network,

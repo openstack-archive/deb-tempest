@@ -13,6 +13,7 @@
 import six
 from tempest.api.volume import base
 from tempest.common.utils import data_utils
+from tempest.common import waiters
 from tempest import config
 from tempest import test
 
@@ -31,14 +32,9 @@ class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
     @classmethod
     def resource_setup(cls):
         super(VolumeMultiBackendV2Test, cls).resource_setup()
-        # support 2 backends names, deprecated_for_removal.
-        # keep support 2 backend names, in case they are not empty
-        if CONF.volume.backend1_name and CONF.volume.backend2_name:
-            cls.backend_names = {CONF.volume.backend1_name,
-                                 CONF.volume.backend2_name}
-        else:
-            # read backend name from a list .
-            cls.backend_names = set(CONF.volume.backend_names)
+
+        # read backend name from a list .
+        cls.backend_names = set(CONF.volume.backend_names)
 
         cls.name_field = cls.special_fields['name_field']
         cls.volume_type_id_list = []
@@ -80,8 +76,8 @@ class VolumeMultiBackendV2Test(base.BaseVolumeAdminTest):
         else:
             self.volume_id_list_without_prefix.append(
                 self.volume['id'])
-        self.admin_volume_client.wait_for_volume_status(
-            self.volume['id'], 'available')
+        waiters.wait_for_volume_status(self.admin_volume_client,
+                                       self.volume['id'], 'available')
 
     @classmethod
     def resource_cleanup(cls):

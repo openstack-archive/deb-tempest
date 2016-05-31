@@ -19,6 +19,7 @@ from six.moves.urllib import parse as urlparse
 import testtools
 
 from tempest.api.compute import base
+from tempest.common import compute
 from tempest.common.utils import data_utils
 from tempest.common.utils.linux import remote_client
 from tempest.common import waiters
@@ -90,7 +91,9 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
             linux_client = remote_client.RemoteClient(
                 self.get_server_ip(server),
                 self.ssh_user,
-                new_password)
+                new_password,
+                server=server,
+                servers_client=self.client)
             linux_client.validate_authentication()
 
     def _test_reboot_server(self, reboot_type):
@@ -101,7 +104,9 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                 self.get_server_ip(server),
                 self.ssh_user,
                 self.password,
-                self.validation_resources['keypair']['private_key'])
+                self.validation_resources['keypair']['private_key'],
+                server=server,
+                servers_client=self.client)
             boot_time = linux_client.get_boot_time()
 
         self.client.reboot_server(self.server_id, type=reboot_type)
@@ -113,7 +118,9 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                 self.get_server_ip(server),
                 self.ssh_user,
                 self.password,
-                self.validation_resources['keypair']['private_key'])
+                self.validation_resources['keypair']['private_key'],
+                server=server,
+                servers_client=self.client)
             new_boot_time = linux_client.get_boot_time()
             self.assertTrue(new_boot_time > boot_time,
                             '%s > %s' % (new_boot_time, boot_time))
@@ -182,7 +189,9 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                 self.get_server_ip(rebuilt_server),
                 self.ssh_user,
                 password,
-                self.validation_resources['keypair']['private_key'])
+                self.validation_resources['keypair']['private_key'],
+                server=rebuilt_server,
+                servers_client=self.client)
             linux_client.validate_authentication()
 
     @test.idempotent_id('30449a88-5aff-4f9b-9866-6ee9b17f906d')
@@ -440,20 +449,8 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
     @testtools.skipUnless(CONF.compute_feature_enabled.shelve,
                           'Shelve is not available.')
     def test_shelve_unshelve_server(self):
-        self.client.shelve_server(self.server_id)
-
-        offload_time = CONF.compute.shelved_offload_time
-        if offload_time >= 0:
-            waiters.wait_for_server_status(self.client, self.server_id,
-                                           'SHELVED_OFFLOADED',
-                                           extra_timeout=offload_time)
-        else:
-            waiters.wait_for_server_status(self.client, self.server_id,
-                                           'SHELVED')
-
-            self.client.shelve_offload_server(self.server_id)
-            waiters.wait_for_server_status(self.client, self.server_id,
-                                           'SHELVED_OFFLOADED')
+        compute.shelve_server(self.client, self.server_id,
+                              force_shelve_offload=True)
 
         server = self.client.show_server(self.server_id)['server']
         image_name = server['name'] + '-shelved'

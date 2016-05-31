@@ -12,8 +12,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import uuid
-
 import mock
 from oslo_config import cfg
 from oslotest import mockpatch
@@ -21,6 +19,7 @@ import testtools
 
 from tempest import config
 from tempest import exceptions
+from tempest.lib.common.utils import data_utils
 from tempest import test
 from tempest.tests import base
 from tempest.tests import fake_config
@@ -30,7 +29,8 @@ class BaseDecoratorsTest(base.TestCase):
     def setUp(self):
         super(BaseDecoratorsTest, self).setUp()
         self.config_fixture = self.useFixture(fake_config.ConfigFixture())
-        self.stubs.Set(config, 'TempestConfigPrivate', fake_config.FakePrivate)
+        self.patchobject(config, 'TempestConfigPrivate',
+                         fake_config.FakePrivate)
 
 
 class TestAttrDecorator(BaseDecoratorsTest):
@@ -79,13 +79,13 @@ class TestIdempotentIdDecorator(BaseDecoratorsTest):
         return foo
 
     def test_positive(self):
-        _id = str(uuid.uuid4())
+        _id = data_utils.rand_uuid()
         foo = self._test_helper(_id)
         self.assertIn('id-%s' % _id, getattr(foo, '__testtools_attrs'))
         self.assertTrue(foo.__doc__.startswith('Test idempotent id: %s' % _id))
 
     def test_positive_without_doc(self):
-        _id = str(uuid.uuid4())
+        _id = data_utils.rand_uuid()
         foo = self._test_helper_without_doc(_id)
         self.assertTrue(foo.__doc__.startswith('Test idempotent id: %s' % _id))
 
@@ -201,7 +201,13 @@ class TestRequiresExtDecorator(BaseDecoratorsTest):
         if expected_to_skip:
             self.assertRaises(testtools.TestCase.skipException, t.test_bar)
         else:
-            self.assertEqual(t.test_bar(), 0)
+            try:
+                self.assertEqual(t.test_bar(), 0)
+            except testtools.TestCase.skipException:
+                # We caught a skipException but we didn't expect to skip
+                # this test so raise a hard test failure instead.
+                raise testtools.TestCase.failureException(
+                    "Not supposed to skip")
 
     def test_requires_ext_decorator(self):
         self._test_requires_ext_helper(expected_to_skip=False,
@@ -213,7 +219,7 @@ class TestRequiresExtDecorator(BaseDecoratorsTest):
                                        service='compute')
 
     def test_requires_ext_decorator_with_all_ext_enabled(self):
-        cfg.CONF.set_default('api_extensions', 'all',
+        cfg.CONF.set_default('api_extensions', ['all'],
                              group='compute-feature-enabled')
         self._test_requires_ext_helper(expected_to_skip=False,
                                        extension='random_ext',
@@ -240,3 +246,75 @@ class TestSimpleNegativeDecorator(BaseDecoratorsTest):
         self.assertIn("test_fake_negative", dir(obj))
         obj.test_fake_negative()
         mock.assert_called_once_with(self.FakeNegativeJSONTest._schema)
+
+
+class TestConfigDecorators(BaseDecoratorsTest):
+    def setUp(self):
+        super(TestConfigDecorators, self).setUp()
+        cfg.CONF.set_default('nova', True, 'service_available')
+        cfg.CONF.set_default('glance', False, 'service_available')
+
+    def _test_skip_unless_config(self, expected_to_skip=True, *decorator_args):
+
+        class TestFoo(test.BaseTestCase):
+            @config.skip_unless_config(*decorator_args)
+            def test_bar(self):
+                return 0
+
+        t = TestFoo('test_bar')
+        if expected_to_skip:
+            self.assertRaises(testtools.TestCase.skipException, t.test_bar)
+        else:
+            try:
+                self.assertEqual(t.test_bar(), 0)
+            except testtools.TestCase.skipException:
+                # We caught a skipException but we didn't expect to skip
+                # this test so raise a hard test failure instead.
+                raise testtools.TestCase.failureException(
+                    "Not supposed to skip")
+
+    def _test_skip_if_config(self, expected_to_skip=True,
+                             *decorator_args):
+
+        class TestFoo(test.BaseTestCase):
+            @config.skip_if_config(*decorator_args)
+            def test_bar(self):
+                return 0
+
+        t = TestFoo('test_bar')
+        if expected_to_skip:
+            self.assertRaises(testtools.TestCase.skipException, t.test_bar)
+        else:
+            try:
+                self.assertEqual(t.test_bar(), 0)
+            except testtools.TestCase.skipException:
+                # We caught a skipException but we didn't expect to skip
+                # this test so raise a hard test failure instead.
+                raise testtools.TestCase.failureException(
+                    "Not supposed to skip")
+
+    def test_skip_unless_no_group(self):
+        self._test_skip_unless_config(True, 'fake_group', 'an_option')
+
+    def test_skip_unless_no_option(self):
+        self._test_skip_unless_config(True, 'service_available',
+                                      'not_an_option')
+
+    def test_skip_unless_false_option(self):
+        self._test_skip_unless_config(True, 'service_available', 'glance')
+
+    def test_skip_unless_true_option(self):
+        self._test_skip_unless_config(False,
+                                      'service_available', 'nova')
+
+    def test_skip_if_no_group(self):
+        self._test_skip_if_config(False, 'fake_group', 'an_option')
+
+    def test_skip_if_no_option(self):
+        self._test_skip_if_config(False, 'service_available', 'not_an_option')
+
+    def test_skip_if_false_option(self):
+        self._test_skip_if_config(False, 'service_available', 'glance')
+
+    def test_skip_if_true_option(self):
+        self._test_skip_if_config(True, 'service_available', 'nova')

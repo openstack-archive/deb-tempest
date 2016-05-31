@@ -44,7 +44,6 @@ class NeutronResourcesTestJSON(base.BaseOrchestrationTest):
     @classmethod
     def setup_clients(cls):
         super(NeutronResourcesTestJSON, cls).setup_clients()
-        cls.network_client = cls.os.network_client
         cls.subnets_client = cls.os.subnets_client
         cls.ports_client = cls.os.ports_client
 
@@ -58,8 +57,8 @@ class NeutronResourcesTestJSON(base.BaseOrchestrationTest):
                             cls._create_keypair()['name'])
         cls.external_network_id = CONF.network.public_network_id
 
-        tenant_cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
-        mask_bits = CONF.network.tenant_network_mask_bits
+        tenant_cidr = netaddr.IPNetwork(CONF.network.project_network_cidr)
+        mask_bits = CONF.network.project_network_mask_bits
         cls.subnet_cidr = tenant_cidr.subnet(mask_bits).next()
 
         # create the stack
@@ -151,7 +150,7 @@ class NeutronResourcesTestJSON(base.BaseOrchestrationTest):
     def test_created_router(self):
         """Verifies created router."""
         router_id = self.test_resources.get('Router')['physical_resource_id']
-        body = self.network_client.show_router(router_id)
+        body = self.routers_client.show_router(router_id)
         router = body['router']
         self.assertEqual(self.neutron_basic_template['resources'][
             'Router']['properties']['name'], router['name'])

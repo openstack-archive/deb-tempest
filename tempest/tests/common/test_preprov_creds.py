@@ -30,8 +30,7 @@ from tempest.lib import exceptions as lib_exc
 from tempest.lib.services.identity.v2 import token_client
 from tempest.tests import base
 from tempest.tests import fake_config
-from tempest.tests import fake_http
-from tempest.tests import fake_identity
+from tempest.tests.lib import fake_identity
 
 
 class TestPreProvisionedCredentials(base.TestCase):
@@ -47,10 +46,10 @@ class TestPreProvisionedCredentials(base.TestCase):
     def setUp(self):
         super(TestPreProvisionedCredentials, self).setUp()
         self.useFixture(fake_config.ConfigFixture())
-        self.stubs.Set(config, 'TempestConfigPrivate', fake_config.FakePrivate)
-        self.fake_http = fake_http.fake_httplib2(return_type=200)
-        self.stubs.Set(token_client.TokenClient, 'raw_request',
-                       fake_identity._fake_v2_response)
+        self.patchobject(config, 'TempestConfigPrivate',
+                         fake_config.FakePrivate)
+        self.patchobject(token_client.TokenClient, 'raw_request',
+                         fake_identity._fake_v2_response)
         self.useFixture(lockutils_fixtures.ExternalLockFixture())
         self.test_accounts = [
             {'username': 'test_user1', 'tenant_name': 'test_tenant1',
@@ -98,8 +97,8 @@ class TestPreProvisionedCredentials(base.TestCase):
         return hash_list
 
     def test_get_hash(self):
-        self.stubs.Set(token_client.TokenClient, 'raw_request',
-                       fake_identity._fake_v2_response)
+        self.patchobject(token_client.TokenClient, 'raw_request',
+                         fake_identity._fake_v2_response)
         test_account_class = preprov_creds.PreProvisionedCredentialProvider(
             **self.fixed_params)
         hash_list = self._get_hash_list(self.test_accounts)
@@ -190,7 +189,7 @@ class TestPreProvisionedCredentials(base.TestCase):
                 return False
             return True
 
-        self.stubs.Set(os.path, 'isfile', _fake_is_file)
+        self.patchobject(os.path, 'isfile', _fake_is_file)
         with mock.patch('six.moves.builtins.open', mock.mock_open(),
                         create=True) as open_mock:
             test_account_class._get_free_hash(hash_list)
@@ -325,7 +324,7 @@ class TestPreProvisionedCredentials(base.TestCase):
                                                     'id': 'fake-id',
                                                     'label': 'network-2'}]}):
             creds = test_accounts_class.get_creds_by_roles(['role-7'])
-        self.assertTrue(isinstance(creds, cred_provider.TestResources))
+        self.assertIsInstance(creds, cred_provider.TestResources)
         network = creds.network
         self.assertIsNotNone(network)
         self.assertIn('name', network)

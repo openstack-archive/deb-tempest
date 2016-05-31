@@ -15,6 +15,7 @@
 
 from tempest.api.volume import base
 from tempest.common.utils import data_utils
+from tempest.common import waiters
 from tempest import config
 from tempest import test
 
@@ -26,9 +27,6 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
     def _delete_volume(self, volume_id):
         self.volumes_client.delete_volume(volume_id)
         self.volumes_client.wait_for_resource_deletion(volume_id)
-
-    def _delete_volume_type(self, volume_type_id):
-        self.volume_types_client.delete_volume_type(volume_type_id)
 
     @test.idempotent_id('9d9b28e3-1b2e-4483-a2cc-24aa0ea1de54')
     def test_volume_type_list(self):
@@ -53,7 +51,8 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
                 name=vol_type_name,
                 extra_specs=extra_specs)['volume_type']
             volume_types.append(vol_type)
-            self.addCleanup(self._delete_volume_type, vol_type['id'])
+            self.addCleanup(self.volume_types_client.delete_volume_type,
+                            vol_type['id'])
         params = {self.name_field: vol_name,
                   'volume_type': volume_types[0]['id']}
 
@@ -66,12 +65,14 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
                          "to the requested name")
         self.assertIsNotNone(volume['id'],
                              "Field volume id is empty or not found.")
-        self.volumes_client.wait_for_volume_status(volume['id'], 'available')
+        waiters.wait_for_volume_status(self.volumes_client,
+                                       volume['id'], 'available')
 
         # Update volume with new volume_type
         self.volumes_client.retype_volume(volume['id'],
                                           new_type=volume_types[1]['id'])
-        self.volumes_client.wait_for_volume_status(volume['id'], 'available')
+        waiters.wait_for_volume_status(self.volumes_client,
+                                       volume['id'], 'available')
 
         # Get volume details and Verify
         fetched_volume = self.volumes_client.show_volume(
@@ -100,7 +101,8 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
             name=name,
             extra_specs=extra_specs)['volume_type']
         self.assertIn('id', body)
-        self.addCleanup(self._delete_volume_type, body['id'])
+        self.addCleanup(self.volume_types_client.delete_volume_type,
+                        body['id'])
         self.assertIn('name', body)
         self.assertEqual(body['name'], name,
                          "The created volume_type name is not equal "
@@ -127,7 +129,8 @@ class VolumeTypesV2Test(base.BaseVolumeAdminTest):
         name = data_utils.rand_name("volume-type")
         body = self.volume_types_client.create_volume_type(
             name=name)['volume_type']
-        self.addCleanup(self._delete_volume_type, body['id'])
+        self.addCleanup(self.volume_types_client.delete_volume_type,
+                        body['id'])
 
         # Create encryption type
         encryption_type = self.volume_types_client.create_encryption_type(

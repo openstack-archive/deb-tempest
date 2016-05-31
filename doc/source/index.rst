@@ -11,7 +11,9 @@ Contents:
    HACKING
    REVIEWING
    plugin
+   plugin-registry
    library
+   microversion_testing
 
 ------------
 Field Guides

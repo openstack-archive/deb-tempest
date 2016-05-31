@@ -17,6 +17,7 @@ from tempest.api.volume import base
 from tempest.common.utils import data_utils
 from tempest.common import waiters
 from tempest import config
+from tempest.lib import exceptions
 from tempest import test
 import testtools
 
@@ -34,7 +35,6 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
     @classmethod
     def resource_setup(cls):
         super(VolumesV2ActionsTest, cls).resource_setup()
-
         # Create a test shared instance
         srv_name = data_utils.rand_name(cls.__name__ + '-Instance')
         cls.server = cls.create_server(
@@ -43,7 +43,8 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
 
         # Create a test shared volume for attach/detach tests
         cls.volume = cls.create_volume()
-        cls.client.wait_for_volume_status(cls.volume['id'], 'available')
+        waiters.wait_for_volume_status(cls.client,
+                                       cls.volume['id'], 'available')
 
     @classmethod
     def resource_cleanup(cls):
@@ -60,13 +61,15 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
     @test.services('compute')
     def test_attach_detach_volume_to_instance(self):
         # Volume is attached and detached successfully from an instance
-        mountpoint = '/dev/vdc'
         self.client.attach_volume(self.volume['id'],
                                   instance_uuid=self.server['id'],
-                                  mountpoint=mountpoint)
-        self.client.wait_for_volume_status(self.volume['id'], 'in-use')
+                                  mountpoint='/dev/%s' %
+                                             CONF.compute.volume_device_name)
+        waiters.wait_for_volume_status(self.client,
+                                       self.volume['id'], 'in-use')
         self.client.detach_volume(self.volume['id'])
-        self.client.wait_for_volume_status(self.volume['id'], 'available')
+        waiters.wait_for_volume_status(self.client,
+                                       self.volume['id'], 'available')
 
     @test.idempotent_id('63e21b4c-0a0c-41f6-bfc3-7c2816815599')
     @testtools.skipUnless(CONF.volume_feature_enabled.bootable,
@@ -87,21 +90,24 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
     @test.services('compute')
     def test_get_volume_attachment(self):
         # Verify that a volume's attachment information is retrieved
-        mountpoint = '/dev/vdc'
         self.client.attach_volume(self.volume['id'],
                                   instance_uuid=self.server['id'],
-                                  mountpoint=mountpoint)
-        self.client.wait_for_volume_status(self.volume['id'], 'in-use')
+                                  mountpoint='/dev/%s' %
+                                             CONF.compute.volume_device_name)
+        waiters.wait_for_volume_status(self.client,
+                                       self.volume['id'], 'in-use')
         # NOTE(gfidente): added in reverse order because functions will be
         # called in reverse order to the order they are added (LIFO)
-        self.addCleanup(self.client.wait_for_volume_status,
+        self.addCleanup(waiters.wait_for_volume_status, self.client,
                         self.volume['id'],
                         'available')
         self.addCleanup(self.client.detach_volume, self.volume['id'])
         volume = self.client.show_volume(self.volume['id'])['volume']
         self.assertIn('attachments', volume)
         attachment = self.client.get_attachment_from_volume(volume)
-        self.assertEqual(mountpoint, attachment['device'])
+        self.assertEqual('/dev/%s' %
+                         CONF.compute.volume_device_name,
+                         attachment['device'])
         self.assertEqual(self.server['id'], attachment['server_id'])
         self.assertEqual(self.volume['id'], attachment['id'])
         self.assertEqual(self.volume['id'], attachment['volume_id'])
@@ -118,9 +124,18 @@ class VolumesV2ActionsTest(base.BaseVolumeTest):
             self.volume['id'], image_name=image_name,
             disk_format=CONF.volume.disk_format)['os-volume_upload_image']
         image_id = body["image_id"]
-        self.addCleanup(self.image_client.delete_image, image_id)
+        self.addCleanup(self._cleanup_image, image_id)
         self.image_client.wait_for_image_status(image_id, 'active')
-        self.client.wait_for_volume_status(self.volume['id'], 'available')
+        waiters.wait_for_volume_status(self.client,
+                                       self.volume['id'], 'available')
+
+    def _cleanup_image(self, image_id):
+        # Ignores the image deletion
+        # in the case that image wasn't created in the first place
+        try:
+            self.image_client.delete_image(image_id)
+        except exceptions.NotFound:
+            pass
 
     @test.idempotent_id('92c4ef64-51b2-40c0-9f7e-4749fbaaba33')
     def test_reserve_unreserve_volume(self):

@@ -54,21 +54,28 @@ def get_tempest_default_config_dir():
     real_prefix = getattr(sys, 'real_prefix', None)
     base_prefix = getattr(sys, 'base_prefix', None)
     prefix = sys.prefix
+    global_conf_dir = '/etc/tempest'
     if (real_prefix is None and
-            (base_prefix is None or base_prefix == prefix)):
+            (base_prefix is None or base_prefix == prefix) and
+            os.path.isdir(global_conf_dir)):
         # Probably not running in a virtual environment.
         # NOTE(andreaf) we cannot distinguish this case from the case of
         # a virtual environment created with virtualenv, and running python3.
         # Also if it appears we are not in virtual env and fail to find
         # global config: '/etc/tempest', fall back to
         # '[sys.prefix]/etc/tempest'
-        global_conf_dir = '/etc/tempest'
-        if os.path.isdir(global_conf_dir):
-            return global_conf_dir
-        else:
-            return os.path.join(prefix, 'etc/tempest')
+        return global_conf_dir
     else:
-        return os.path.join(prefix, 'etc/tempest')
+        conf_dir = os.path.join(prefix, 'etc/tempest')
+        if os.path.isdir(conf_dir):
+            return conf_dir
+        else:
+            # NOTE: The prefix is gotten from the path which pyconfig.h is
+            # installed under. Some envs contain it under /usr/include, not
+            # /user/local/include. Then prefix becomes /usr on such envs.
+            # However, etc/tempest is installed under /usr/local and the bove
+            # path logic mismatches. This is a workaround for such envs.
+            return os.path.join(prefix, 'local/etc/tempest')
 
 
 class TempestInit(command.Command):
@@ -78,6 +85,10 @@ class TempestInit(command.Command):
         parser = super(TempestInit, self).get_parser(prog_name)
         parser.add_argument('dir', nargs='?', default=os.getcwd())
         parser.add_argument('--config-dir', '-c', default=None)
+        parser.add_argument('--show-global-config-dir', '-s',
+                            action='store_true', dest='show_global_dir',
+                            help="Print the global config dir location, "
+                                 "then exit")
         return parser
 
     def generate_testr_conf(self, local_path):
@@ -91,8 +102,7 @@ class TempestInit(command.Command):
     def update_local_conf(self, conf_path, lock_dir, log_dir):
         config_parse = moves.configparser.SafeConfigParser()
         config_parse.optionxform = str
-        with open(conf_path, 'w+') as conf_file:
-            config_parse.readfp(conf_file)
+        with open(conf_path, 'a+') as conf_file:
             # Set local lock_dir in tempest conf
             if not config_parse.has_section('oslo_concurrency'):
                 config_parse.add_section('oslo_concurrency')
@@ -101,6 +111,7 @@ class TempestInit(command.Command):
             config_parse.set('DEFAULT', 'log_dir', log_dir)
             # Set default log filename to tempest.log
             config_parse.set('DEFAULT', 'log_file', 'tempest.log')
+            config_parse.write(conf_file)
 
     def copy_config(self, etc_dir, config_dir):
         shutil.copytree(config_dir, etc_dir)
@@ -149,4 +160,7 @@ class TempestInit(command.Command):
 
     def take_action(self, parsed_args):
         config_dir = parsed_args.config_dir or get_tempest_default_config_dir()
+        if parsed_args.show_global_dir:
+            print("Global config dir is located at: %s" % config_dir)
+            sys.exit(0)
         self.create_working_dir(parsed_args.dir, config_dir)

@@ -19,9 +19,10 @@ from six.moves.urllib import parse as urllib
 from tempest.lib.api_schema.response.compute.v2_1 import images as schema
 from tempest.lib.common import rest_client
 from tempest.lib import exceptions as lib_exc
+from tempest.lib.services.compute import base_compute_client
 
 
-class ImagesClient(rest_client.RestClient):
+class ImagesClient(base_compute_client.BaseComputeClient):
 
     def create_image(self, server_id, **kwargs):
         """Create an image of the original server.
@@ -130,8 +131,10 @@ class ImagesClient(rest_client.RestClient):
         return rest_client.ResponseBody(resp, body)
 
     def is_resource_deleted(self, id):
+        # Added status check for user with admin role
         try:
-            self.show_image(id)
+            if self.show_image(id)['image']['status'] == 'DELETED':
+                return True
         except lib_exc.NotFound:
             return True
         return False

@@ -44,9 +44,9 @@ class TestGettingAddress(manager.NetworkScenarioTest):
         if not (CONF.network_feature_enabled.ipv6
                 and CONF.network_feature_enabled.ipv6_subnet_attributes):
             raise cls.skipException('IPv6 or its attributes not supported')
-        if not (CONF.network.tenant_networks_reachable
+        if not (CONF.network.project_networks_reachable
                 or CONF.network.public_network_id):
-            msg = ('Either tenant_networks_reachable must be "true", or '
+            msg = ('Either project_networks_reachable must be "true", or '
                    'public_network_id must be defined.')
             raise cls.skipException(msg)
         if CONF.baremetal.driver_enabled:
@@ -145,7 +145,7 @@ class TestGettingAddress(manager.NetworkScenarioTest):
                                   "ports: %s")
                          % (self.network_v6, ports))
         mac6 = ports[0]
-        ssh.set_nic_state(ssh.get_nic_name(mac6))
+        ssh.set_nic_state(ssh.get_nic_name_by_mac(mac6))
 
     def _prepare_and_test(self, address6_mode, n_subnets6=1, dualnet=False):
         net_list = self.prepare_network(address6_mode=address6_mode,

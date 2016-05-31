@@ -16,8 +16,11 @@ Tempest Specific Commandments
 - [T107] Check that a service tag isn't in the module path
 - [T108] Check no hyphen at the end of rand_name() argument
 - [T109] Cannot use testtools.skip decorator; instead use
-         decorators.skip_because from tempest-lib
+         decorators.skip_because from tempest.lib
 - [T110] Check that service client names of GET should be consistent
+- [T111] Check that service client names of DELETE should be consistent
+- [T112] Check that tempest.lib should not import local tempest code
+- [T113] Check that tests use data_utils.rand_uuid() instead of uuid.uuid4()
 - [N322] Method's default argument shouldn't be mutable
 
 Test Data/Configuration
@@ -154,33 +157,7 @@ not there even if the cloud was configured with it.
 
 Negative Tests
 --------------
-Newly added negative tests should use the negative test framework. First step
-is to create an interface description in a python file under
-`tempest/api_schema/request/`. These descriptions consists of two important
-sections for the test (one of those is mandatory):
-
- - A resource (part of the URL of the request): Resources needed for a test
-   must be created in `setUpClass` and registered with `set_resource` e.g.:
-   `cls.set_resource("server", server['id'])`
-
- - A json schema: defines properties for a request.
-
-After that a test class must be added to automatically generate test scenarios
-out of the given interface description::
-
-    load_tests = test.NegativeAutoTest.load_tests
-
-    @test.SimpleNegativeAutoTest
-    class SampleTestNegativeTestJSON(<your base class>, test.NegativeAutoTest):
-        _service = 'compute'
-        _schema = <your schema file>
-
-The class decorator `SimpleNegativeAutoTest` will automatically generate test
-cases out of the given schema in the attribute `_schema`.
-
-All negative tests should be added into a separate negative test file.
-If such a file doesn't exist for the particular resource being tested a new
-test file should be added.
+TODO: Write the guideline related to negative tests.
 
 Test skips because of Known Bugs
 --------------------------------
@@ -212,9 +189,9 @@ conditions between tests outside the same class. But there are still a few of
 things to watch out for to try to avoid issues when running your tests in
 parallel.
 
-- Resources outside of a tenant scope still have the potential to conflict. This
+- Resources outside of a project scope still have the potential to conflict. This
   is a larger concern for the admin tests since most resources and actions that
-  require admin privileges are outside of tenants.
+  require admin privileges are outside of projects.
 
 - Races between methods in the same class are not a problem because
   parallelization in tempest is at the test class level, but if there is a json
@@ -330,9 +307,9 @@ format of the metadata looks like::
         # The created server should be in the detailed list of all servers
         ...
 
-Tempest-lib includes a ``check-uuid`` tool that will test for the existence
+Tempest.lib includes a ``check-uuid`` tool that will test for the existence
 and uniqueness of idempotent_id metadata for every test. If you have
-tempest-lib installed you run the tool against Tempest by calling from the
+tempest installed you run the tool against Tempest by calling from the
 tempest repo::
 
     check-uuid

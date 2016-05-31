@@ -14,7 +14,6 @@
 
 from io import StringIO
 import socket
-import time
 
 import mock
 import six
@@ -22,7 +21,8 @@ import testtools
 
 from tempest.lib.common import ssh
 from tempest.lib import exceptions
-from tempest.tests.lib import base
+from tempest.tests import base
+import tempest.tests.utils as utils
 
 
 class TestSshClient(base.TestCase):
@@ -79,7 +79,8 @@ class TestSshClient(base.TestCase):
         self.assertEqual(expected_connect, client_mock.connect.mock_calls)
         self.assertEqual(0, s_mock.call_count)
 
-    def test_get_ssh_connection_two_attemps(self):
+    @mock.patch('time.sleep')
+    def test_get_ssh_connection_two_attemps(self, sleep_mock):
         c_mock, aa_mock, client_mock = self._set_ssh_connection_mocks()
 
         c_mock.return_value = client_mock
@@ -89,14 +90,17 @@ class TestSshClient(base.TestCase):
         ]
 
         client = ssh.Client('localhost', 'root', timeout=1)
-        start_time = int(time.time())
         client._get_ssh_connection(sleep=1)
-        end_time = int(time.time())
-        self.assertLess((end_time - start_time), 4)
-        self.assertGreater((end_time - start_time), 1)
+        # We slept 2 seconds: because sleep is "1" and backoff is "1" too
+        sleep_mock.assert_called_once_with(2)
+        self.assertEqual(2, client_mock.connect.call_count)
 
     def test_get_ssh_connection_timeout(self):
         c_mock, aa_mock, client_mock = self._set_ssh_connection_mocks()
+
+        timeout = 2
+        time_mock = self.patch('time.time')
+        time_mock.side_effect = utils.generate_timeout_series(timeout + 1)
 
         c_mock.return_value = client_mock
         client_mock.connect.side_effect = [
@@ -105,13 +109,16 @@ class TestSshClient(base.TestCase):
             socket.error,
         ]
 
-        client = ssh.Client('localhost', 'root', timeout=2)
-        start_time = int(time.time())
-        with testtools.ExpectedException(exceptions.SSHTimeout):
-            client._get_ssh_connection()
-        end_time = int(time.time())
-        self.assertLess((end_time - start_time), 5)
-        self.assertGreaterEqual((end_time - start_time), 2)
+        client = ssh.Client('localhost', 'root', timeout=timeout)
+        # We need to mock LOG here because LOG.info() calls time.time()
+        # in order to preprend a timestamp.
+        with mock.patch.object(ssh, 'LOG'):
+            self.assertRaises(exceptions.SSHTimeout,
+                              client._get_ssh_connection)
+
+        # time.time() should be called twice, first to start the timer
+        # and then to compute the timedelta
+        self.assertEqual(2, time_mock.call_count)
 
     @mock.patch('select.POLLIN', SELECT_POLLIN, create=True)
     def test_timeout_in_exec_command(self):
@@ -134,8 +141,6 @@ class TestSshClient(base.TestCase):
     def test_exec_command(self):
         chan_mock, poll_mock, select_mock = (
             self._set_mocks_for_select([[1, 0, 0]], True))
-        closed_prop = mock.PropertyMock(return_value=True)
-        type(chan_mock).closed = closed_prop
 
         chan_mock.recv_exit_status.return_value = 0
         chan_mock.recv.return_value = b''
@@ -157,7 +162,6 @@ class TestSshClient(base.TestCase):
         chan_mock.recv_stderr_ready.assert_called_once_with()
         chan_mock.recv_stderr.assert_called_once_with(1024)
         chan_mock.recv_exit_status.assert_called_once_with()
-        closed_prop.assert_called_once_with()
 
     def _set_mocks_for_select(self, poll_data, ito_value=False):
         gsc_mock = self.patch('tempest.lib.common.ssh.Client.'
@@ -177,7 +181,7 @@ class TestSshClient(base.TestCase):
         gsc_mock.return_value = client_mock
         ito_mock.return_value = ito_value
         client_mock.get_transport.return_value = tran_mock
-        tran_mock.open_session.return_value = chan_mock
+        tran_mock.open_session().__enter__.return_value = chan_mock
         if isinstance(poll_data[0], list):
             poll_mock.poll.side_effect = poll_data
         else:
@@ -235,7 +239,7 @@ class TestSshClient(base.TestCase):
 
         gsc_mock.return_value = client_mock
         client_mock.get_transport.return_value = tran_mock
-        tran_mock.open_session.return_value = chan_mock
+        tran_mock.open_session().__enter__.return_value = chan_mock
         chan_mock.recv_exit_status.return_value = 0
 
         std_out_mock = mock.MagicMock(StringIO)
