@@ -1,4 +1,4 @@
-tempest (1:12.0.0-1) UNRELEASED; urgency=medium
+tempest (1:12.0.0-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Standards-Version is 3.9.8 now (no change)
@@ -13,7 +13,10 @@ tempest (1:12.0.0-1) UNRELEASED; urgency=medium
   * d/control: Align (Build-)Depends with upstream.
   * d/changelog: Add epoch 1 to version to replace Ubuntu version 2014.1.*.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Tue, 31 May 2016 14:02:44 -0400
+  [ Thomas Goirand ]
+  * Added Corey Bryant <corey.bryant@canonical.com> as uploaders.
+
+ -- Thomas Goirand <zigo@debian.org>  Sun, 05 Jun 2016 22:42:33 +0000
 
 tempest (10.0.0-1) experimental; urgency=medium
 
