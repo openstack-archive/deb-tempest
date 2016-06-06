@@ -3,6 +3,7 @@ tempest (1:12.0.0-2) experimental; urgency=medium
   * Added Python3 support.
   * Renamed the tempest man page to tempest_shell_wrapper.1
   * Remove privacy breanch in docs.
+  * Add Breaks+Replaces+Provides: python{3,}-tempest-lib.
 
  -- Thomas Goirand <zigo@debian.org>  Mon, 06 Jun 2016 10:32:52 +0200
 
