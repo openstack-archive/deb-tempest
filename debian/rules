@@ -1,5 +1,8 @@
 #!/usr/bin/make -f
 
+PYTHONS:=$(shell pyversions -vr)
+PYTHON3S:=$(shell py3versions -vr)
+
 include /usr/share/openstack-pkg-tools/pkgos.make
 
 export OSLO_PACKAGE_VERSION=$(VERSION)
@@ -8,19 +11,32 @@ LAST_CHANGE = $(shell dpkg-parsechangelog -S Date)
 BUILD_DATE  = $(shell LC_ALL=C date -u "+%B %d, %Y" -d "$(LAST_CHANGE)")
 
 %:
-	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
+	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
 
 override_dh_auto_clean:
 	dh_auto_clean -O--buildsystem=python_distutils
 	rm -f .testrepository
 
 override_dh_auto_install:
-	dh_auto_install -O--buildsystem=python_distutils
+	set -e ; for pyvers in $(PYTHONS); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python-tempest; \
+	done
 	mkdir -p $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest/api/orchestration/stacks/templates
 	cp tempest/api/orchestration/stacks/templates/*.yaml $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest/api/orchestration/stacks/templates
 	cp tempest/api/orchestration/stacks/templates/*.json $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest/api/orchestration/stacks/templates
+	set -e ; for pyvers in $(PYTHON3S); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-tempest; \
+	done
+	mkdir -p $(CURDIR)/debian/tempest/usr/lib/python3/dist-packages/tempest/api/orchestration/stacks/templates
+	cp tempest/api/orchestration/stacks/templates/*.yaml $(CURDIR)/debian/tempest/usr/lib/python3/dist-packages/tempest/api/orchestration/stacks/templates
+	cp tempest/api/orchestration/stacks/templates/*.json $(CURDIR)/debian/tempest/usr/lib/python3/dist-packages/tempest/api/orchestration/stacks/templates
+	rm -f $(CURDIR)/debian/python*/usr/lib/python*/dist-packages/*.pth
+
+	#dh_auto_install -O--buildsystem=python_distutils
 	mkdir -p $(CURDIR)/debian/tempest/etc/tempest
-	PYTHONPATH=$(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages oslo-config-generator --output-file $(CURDIR)/debian/tempest/etc/tempest/tempest.conf \
+	PYTHONPATH=$(CURDIR)/debian/python-tempest/usr/lib/python2.7/dist-packages oslo-config-generator --output-file $(CURDIR)/debian/tempest/etc/tempest/tempest.conf \
 		--wrap-width 140 \
 		--namespace tempest.config \
 		--namespace oslo.concurrency \
@@ -91,15 +107,18 @@ override_dh_auto_install:
 
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
-	rm -rf .testrepository
-	testr init
-	set -e && \
-		TEMP_REZ=`mktemp -t` && \
-		export OS_TEST_PATH=./tempest/tests && \
-		PYTHONPATH=$(CURDIR) testr run --parallel --subunit 'tests\.(?!.*test_pretty_tox.*)' | tee $$TEMP_REZ | subunit2pyunit || true ; \
+	@echo "===> Running tests"
+	set -e ; set -x ; for i in 2.7 $(PYTHON3S) ; do \
+		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
+		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
+		rm -rf .testrepository ; \
+		testr-python$$PYMAJOR init ; \
+		TEMP_REZ=`mktemp -t` ; \
+		PYTHONPATH=$(CURDIR) PYTHON=python$$i testr-python$$PYMAJOR run --subunit 'tests\.(?!.*test_pretty_tox.*)' | tee $$TEMP_REZ | subunit2pyunit || true ; \
 		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats || true ; \
-		rm -f $$TEMP_REZ ;
-	testr slowest
+		rm -f $$TEMP_REZ ; \
+		testr-python$$PYMAJOR slowest ; \
+	done
 endif
 
 override_dh_sphinxdoc:
