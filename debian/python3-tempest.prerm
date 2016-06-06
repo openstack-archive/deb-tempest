@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ] ; then
+	update-alternatives --remove check-uuid /usr/bin/python3-check-uuid
+	update-alternatives --remove javelin2 /usr/bin/python3-javelin2
+	update-alternatives --remove run-tempest-stress /usr/bin/python3-run-tempest-stress
+	update-alternatives --remove skip-tracker /usr/bin/python3-skip-tracker
+	update-alternatives --remove tempest /usr/bin/python3-tempest
+	update-alternatives --remove tempest-account-generator /usr/bin/python3-tempest-account-generator
+	update-alternatives --remove tempest-cleanup /usr/bin/python3-tempest-cleanup
+	update-alternatives --remove verify-tempest-config /usr/bin/python3-verify-tempest-config
+fi
+
+#DEBHELPER#
+
+exit 0

@@ -18,6 +18,7 @@ override_dh_auto_clean:
 	rm -f .testrepository
 
 override_dh_auto_install:
+	# Install Python 2.7
 	set -e ; for pyvers in $(PYTHONS); do \
 		python$$pyvers setup.py install --install-layout=deb \
 			--root $(CURDIR)/debian/python-tempest; \
@@ -25,6 +26,8 @@ override_dh_auto_install:
 	mkdir -p $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest/api/orchestration/stacks/templates
 	cp tempest/api/orchestration/stacks/templates/*.yaml $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest/api/orchestration/stacks/templates
 	cp tempest/api/orchestration/stacks/templates/*.json $(CURDIR)/debian/tempest/usr/lib/python2.7/dist-packages/tempest/api/orchestration/stacks/templates
+
+	# Install Python 3.x
 	set -e ; for pyvers in $(PYTHON3S); do \
 		python$$pyvers setup.py install --install-layout=deb \
 			--root $(CURDIR)/debian/python3-tempest; \
@@ -32,9 +35,28 @@ override_dh_auto_install:
 	mkdir -p $(CURDIR)/debian/tempest/usr/lib/python3/dist-packages/tempest/api/orchestration/stacks/templates
 	cp tempest/api/orchestration/stacks/templates/*.yaml $(CURDIR)/debian/tempest/usr/lib/python3/dist-packages/tempest/api/orchestration/stacks/templates
 	cp tempest/api/orchestration/stacks/templates/*.json $(CURDIR)/debian/tempest/usr/lib/python3/dist-packages/tempest/api/orchestration/stacks/templates
-	rm -f $(CURDIR)/debian/python*/usr/lib/python*/dist-packages/*.pth
 
-	#dh_auto_install -O--buildsystem=python_distutils
+	# Cleanups
+	rm -f $(CURDIR)/debian/python*/usr/lib/python*/dist-packages/*.pth
+	rm -rf $(CURDIR)/debian/python*/usr/etc
+
+	mv $(CURDIR)/debian/python-tempest/usr/bin/check-uuid $(CURDIR)/debian/python-tempest/usr/bin/python2-check-uuid
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/check-uuid $(CURDIR)/debian/python3-tempest/usr/bin/python3-check-uuid
+	mv $(CURDIR)/debian/python-tempest/usr/bin/javelin2 $(CURDIR)/debian/python-tempest/usr/bin/python2-javelin2
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/javelin2 $(CURDIR)/debian/python3-tempest/usr/bin/python3-javelin2
+	mv $(CURDIR)/debian/python-tempest/usr/bin/run-tempest-stress $(CURDIR)/debian/python-tempest/usr/bin/python2-run-tempest-stress
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/run-tempest-stress $(CURDIR)/debian/python3-tempest/usr/bin/python3-run-tempest-stress
+	mv $(CURDIR)/debian/python-tempest/usr/bin/skip-tracker $(CURDIR)/debian/python-tempest/usr/bin/python2-skip-tracker
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/skip-tracker $(CURDIR)/debian/python3-tempest/usr/bin/python3-skip-tracker
+	mv $(CURDIR)/debian/python-tempest/usr/bin/tempest $(CURDIR)/debian/python-tempest/usr/bin/python2-tempest
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/tempest $(CURDIR)/debian/python3-tempest/usr/bin/python3-tempest
+	mv $(CURDIR)/debian/python-tempest/usr/bin/tempest-account-generator $(CURDIR)/debian/python-tempest/usr/bin/python2-tempest-account-generator
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/tempest-account-generator $(CURDIR)/debian/python3-tempest/usr/bin/python3-tempest-account-generator
+	mv $(CURDIR)/debian/python-tempest/usr/bin/tempest-cleanup $(CURDIR)/debian/python-tempest/usr/bin/python2-tempest-cleanup
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/tempest-cleanup $(CURDIR)/debian/python3-tempest/usr/bin/python3-tempest-cleanup
+	mv $(CURDIR)/debian/python-tempest/usr/bin/verify-tempest-config $(CURDIR)/debian/python-tempest/usr/bin/python2-verify-tempest-config
+	mv $(CURDIR)/debian/python3-tempest/usr/bin/verify-tempest-config $(CURDIR)/debian/python3-tempest/usr/bin/python3-verify-tempest-config
+
 	mkdir -p $(CURDIR)/debian/tempest/etc/tempest
 	PYTHONPATH=$(CURDIR)/debian/python-tempest/usr/lib/python2.7/dist-packages oslo-config-generator --output-file $(CURDIR)/debian/tempest/etc/tempest/tempest.conf \
 		--wrap-width 140 \
