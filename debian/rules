@@ -118,6 +118,9 @@ override_dh_auto_install:
 
 	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf volume region regionOne
 
+	# Otherwise, there's some cinder tempest failures
+	pkgos-fix-config-default $(CURDIR)/debian/tempest/etc/tempest/tempest.conf volume-feature-enabled volume_services true
+
 	# Package stuff in /var/lib/tempest, since we need read/write access
 	# to run the testr stuff
 	mkdir -p $(CURDIR)/debian/tempest/var/lib/tempest
