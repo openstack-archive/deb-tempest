@@ -40,8 +40,9 @@ class CredsClient(object):
         self.roles_client = roles_client
 
     def create_user(self, username, password, project, email):
-        user = self.users_client.create_user(
-            username, password, project['id'], email)
+        params = self._create_user_params(username, password,
+                                          project['id'], email)
+        user = self.users_client.create_user(**params)
         if 'user' in user:
             user = user['user']
         return user
@@ -101,6 +102,13 @@ class V2CredsClient(CredsClient):
                                             users_client,
                                             roles_client)
 
+    def _create_user_params(self, username, password, project_id, email):
+        params = {'name': username,
+                  'password': password,
+                  'tenantId': project_id,
+                  'email': email}
+        return params
+
     def create_project(self, name, description):
         tenant = self.projects_client.create_tenant(
             name=name, description=description)['tenant']
@@ -121,8 +129,9 @@ class V2CredsClient(CredsClient):
             password=password)
 
     def _assign_user_role(self, project, user, role):
-        self.roles_client.assign_user_role(project['id'], user['id'],
-                                           role['id'])
+        self.roles_client.create_user_role_on_project(project['id'],
+                                                      user['id'],
+                                                      role['id'])
 
 
 class V3CredsClient(CredsClient):
@@ -143,6 +152,13 @@ class V3CredsClient(CredsClient):
             msg = "Requested domain %s could not be found" % domain_name
             raise lib_exc.InvalidCredentials(msg)
 
+    def _create_user_params(self, username, password, project_id, email):
+        params = {'user_name': username,
+                  'password': password,
+                  'project_id': project_id,
+                  'email': email}
+        return params
+
     def create_project(self, name, description):
         project = self.projects_client.create_project(
             name=name, description=description,
@@ -155,6 +171,9 @@ class V3CredsClient(CredsClient):
     def get_credentials(self, user, project, password):
         # User, project and domain already include both ID and name here,
         # so there's no need to use the fill_in mode.
+        # NOTE(andreaf) We need to set all fields in the returned credentials.
+        # Scope is then used to pick only those relevant for the type of
+        # token needed by each service client.
         return auth.get_credentials(
             auth_url=None,
             fill_in=False,
@@ -163,12 +182,37 @@ class V3CredsClient(CredsClient):
             project_name=project['name'], project_id=project['id'],
             password=password,
             project_domain_id=self.creds_domain['id'],
-            project_domain_name=self.creds_domain['name'])
+            project_domain_name=self.creds_domain['name'],
+            domain_id=self.creds_domain['id'],
+            domain_name=self.creds_domain['name'])
 
     def _assign_user_role(self, project, user, role):
         self.roles_client.assign_user_role_on_project(project['id'],
                                                       user['id'],
                                                       role['id'])
+
+    def assign_user_role_on_domain(self, user, role_name, domain=None):
+        """Assign the specified role on a domain
+
+        :param user: a user dict
+        :param role_name: name of the role to be assigned
+        :param domain: (optional) The domain to assign the role on. If not
+                                  specified the default domain of cred_client
+        """
+        # NOTE(andreaf) This method is very specific to the v3 case, and
+        # because of that it's not defined in the parent class.
+        if domain is None:
+            domain = self.creds_domain
+        role = self._check_role_exists(role_name)
+        if not role:
+            msg = 'No "%s" role found' % role_name
+            raise lib_exc.NotFound(msg)
+        try:
+            self.roles_client.assign_user_role_on_domain(
+                domain['id'], user['id'], role['id'])
+        except lib_exc.Conflict:
+            LOG.debug("Role %s already assigned on domain %s for user %s",
+                      role['id'], domain['id'], user['id'])
 
 
 def get_creds_client(identity_client,

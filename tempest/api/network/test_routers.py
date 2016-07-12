@@ -213,7 +213,7 @@ class RoutersTest(base.BaseRouterTest):
     @test.requires_ext(extension='ext-gw-mode', service='network')
     def test_update_router_set_gateway_with_snat_explicit(self):
         router = self._create_router(data_utils.rand_name('router-'))
-        self.admin_routers_client.update_router_with_snat_gw_info(
+        self.admin_routers_client.update_router(
             router['id'],
             external_gateway_info={
                 'network_id': CONF.network.public_network_id,
@@ -228,7 +228,7 @@ class RoutersTest(base.BaseRouterTest):
     @test.requires_ext(extension='ext-gw-mode', service='network')
     def test_update_router_set_gateway_without_snat(self):
         router = self._create_router(data_utils.rand_name('router-'))
-        self.admin_routers_client.update_router_with_snat_gw_info(
+        self.admin_routers_client.update_router(
             router['id'],
             external_gateway_info={
                 'network_id': CONF.network.public_network_id,
@@ -259,7 +259,7 @@ class RoutersTest(base.BaseRouterTest):
         router = self._create_router(
             data_utils.rand_name('router-'),
             external_network_id=CONF.network.public_network_id)
-        self.admin_routers_client.update_router_with_snat_gw_info(
+        self.admin_routers_client.update_router(
             router['id'],
             external_gateway_info={
                 'network_id': CONF.network.public_network_id,
@@ -303,7 +303,7 @@ class RoutersTest(base.BaseRouterTest):
             )
 
         test_routes.sort(key=lambda x: x['destination'])
-        extra_route = self.routers_client.update_extra_routes(
+        extra_route = self.routers_client.update_router(
             router['id'], routes=test_routes)
         show_body = self.routers_client.show_router(router['id'])
         # Assert the number of routes
@@ -325,13 +325,13 @@ class RoutersTest(base.BaseRouterTest):
                              routes[i]['destination'])
             self.assertEqual(test_routes[i]['nexthop'], routes[i]['nexthop'])
 
-        self.routers_client.delete_extra_routes(router['id'])
+        self._delete_extra_routes(router['id'])
         show_body_after_deletion = self.routers_client.show_router(
             router['id'])
         self.assertEmpty(show_body_after_deletion['router']['routes'])
 
     def _delete_extra_routes(self, router_id):
-        self.routers_client.delete_extra_routes(router_id)
+        self.routers_client.update_router(router_id, routes=None)
 
     @test.idempotent_id('a8902683-c788-4246-95c7-ad9c6d63a4d9')
     def test_update_router_admin_state(self):

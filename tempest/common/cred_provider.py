@@ -16,8 +16,8 @@ import abc
 
 import six
 
-from tempest import exceptions
 from tempest.lib import auth
+from tempest.lib import exceptions
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -87,6 +87,11 @@ class TestResources(object):
 
     def __getattr__(self, item):
         return getattr(self._credentials, item)
+
+    def __str__(self):
+        _format = "Credentials: %s, Network: %s, Subnet: %s, Router: %s"
+        return _format % (self._credentials, self.network, self.subnet,
+                          self.router)
 
     def set_resources(self, **kwargs):
         for key in kwargs.keys():

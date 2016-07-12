@@ -282,12 +282,9 @@ def check_service_availability(os, update):
         'object_storage': 'swift',
         'compute': 'nova',
         'orchestration': 'heat',
-        'metering': 'ceilometer',
-        'telemetry': 'ceilometer',
         'data_processing': 'sahara',
         'baremetal': 'ironic',
         'identity': 'keystone',
-        'database': 'trove'
     }
     # Get catalog list for endpoints to use for validation
     _token, auth_data = os.auth_provider.get_auth()
@@ -386,7 +383,7 @@ def main(opts=None):
     icreds = credentials.get_credentials_provider(
         'verify_tempest_config', network_resources=net_resources)
     try:
-        os = clients.Manager(icreds.get_primary_creds())
+        os = clients.Manager(icreds.get_primary_creds().credentials)
         services = check_service_availability(os, update)
         results = {}
         for service in ['nova', 'cinder', 'neutron', 'swift']:
@@ -420,12 +417,11 @@ class TempestVerifyConfig(command.Command):
 
     def take_action(self, parsed_args):
         try:
-            return main(parsed_args)
+            main(parsed_args)
         except Exception:
             LOG.exception("Failure verifying configuration.")
             traceback.print_exc()
             raise
-        return 0
 
 if __name__ == "__main__":
     main()

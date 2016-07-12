@@ -160,44 +160,16 @@ IdentityGroup = [
                         'publicURL', 'adminURL', 'internalURL'],
                help="The endpoint type to use for OpenStack Identity "
                     "(Keystone) API v3"),
-    cfg.StrOpt('username',
-               help="Username to use for Nova API requests.",
-               deprecated_for_removal=True),
-    cfg.StrOpt('project_name',
-               deprecated_name='tenant_name',
-               help="Project name to use for Nova API requests.",
-               deprecated_for_removal=True),
     cfg.StrOpt('admin_role',
                default='admin',
                help="Role required to administrate keystone."),
-    cfg.StrOpt('password',
-               help="API key to use when authenticating.",
-               secret=True,
-               deprecated_for_removal=True),
-    cfg.StrOpt('domain_name',
-               help="Domain name for authentication (Keystone V3)."
-                    "The same domain applies to user and project",
-               deprecated_for_removal=True),
-    cfg.StrOpt('alt_username',
-               help="Username of alternate user to use for Nova API "
-                    "requests.",
-               deprecated_for_removal=True),
-    cfg.StrOpt('alt_project_name',
-               deprecated_name='alt_tenant_name',
-               help="Alternate user's Project name to use for Nova API "
-                    "requests.",
-               deprecated_for_removal=True),
-    cfg.StrOpt('alt_password',
-               help="API key to use when authenticating as alternate user.",
-               secret=True,
-               deprecated_for_removal=True),
-    cfg.StrOpt('alt_domain_name',
-               help="Alternate domain name for authentication (Keystone V3)."
-                    "The same domain applies to user and project",
-               deprecated_for_removal=True),
     cfg.StrOpt('default_domain_id',
                default='default',
                help="ID of the default domain"),
+    cfg.BoolOpt('admin_domain_scope',
+                default=False,
+                help="Whether keystone identity v3 policy required "
+                     "a domain scoped token to use admin APIs")
 ]
 
 identity_feature_group = cfg.OptGroup(name='identity-feature-enabled',
@@ -402,14 +374,6 @@ ComputeFeaturesGroup = [
                      'encrypted volume to a running server instance? This may '
                      'depend on the combination of compute_driver in nova and '
                      'the volume_driver(s) in cinder.'),
-    # TODO(mriedem): Remove allow_duplicate_networks once kilo-eol happens
-    # since the option was removed from nova in Liberty and is the default
-    # behavior starting in Liberty.
-    cfg.BoolOpt('allow_duplicate_networks',
-                default=False,
-                help='Does the test environment support creating instances '
-                     'with multiple ports on the same network? This is only '
-                     'valid when using Neutron.'),
     cfg.BoolOpt('config_drive',
                 default=True,
                 help='Enable special configuration drive with metadata.'),
@@ -672,7 +636,7 @@ ValidationGroup = [
     cfg.StrOpt('network_for_ssh',
                default='public',
                help="Network used for SSH connections. Ignored if "
-                    "use_floatingip_for_ssh=true or run_validation=false.",
+                    "connect_method=floating or run_validation=false.",
                deprecated_opts=[cfg.DeprecatedOpt('network_for_ssh',
                                                   group='compute')]),
 ]
@@ -718,6 +682,24 @@ VolumeGroup = [
     cfg.IntOpt('volume_size',
                default=1,
                help='Default size in GB for volumes created by volumes tests'),
+    cfg.StrOpt('min_microversion',
+               default=None,
+               help="Lower version of the test target microversion range. "
+                    "The format is 'X.Y', where 'X' and 'Y' are int values. "
+                    "Tempest selects tests based on the range between "
+                    "min_microversion and max_microversion. "
+                    "If both values are not specified, Tempest avoids tests "
+                    "which require a microversion. Valid values are string "
+                    "with format 'X.Y' or string 'latest'",),
+    cfg.StrOpt('max_microversion',
+               default=None,
+               help="Upper version of the test target microversion range. "
+                    "The format is 'X.Y', where 'X' and 'Y' are int values. "
+                    "Tempest selects tests based on the range between "
+                    "min_microversion and max_microversion. "
+                    "If both values are not specified, Tempest avoids tests "
+                    "which require a microversion. Valid values are string "
+                    "with format 'X.Y' or string 'latest'",),
 ]
 
 volume_feature_group = cfg.OptGroup(name='volume-feature-enabled',
@@ -747,6 +729,9 @@ VolumeFeaturesGroup = [
     cfg.BoolOpt('api_v2',
                 default=True,
                 help="Is the v2 volume API enabled"),
+    cfg.BoolOpt('api_v3',
+                default=False,
+                help="Is the v3 volume API enabled"),
     cfg.BoolOpt('bootable',
                 default=True,
                 help='Update bootable status of a volume '
@@ -826,21 +811,6 @@ ObjectStoreFeaturesGroup = [
                 help="Execute discoverability tests"),
 ]
 
-database_group = cfg.OptGroup(name='database',
-                              title='Database Service Options')
-
-DatabaseGroup = [
-    cfg.StrOpt('catalog_type',
-               default='database',
-               help="Catalog type of the Database service."),
-    cfg.StrOpt('db_flavor_ref',
-               default="1",
-               help="Valid primary flavor to use in database tests."),
-    cfg.StrOpt('db_current_version',
-               default="v1.0",
-               help="Current database version to use in database tests."),
-]
-
 orchestration_group = cfg.OptGroup(name='orchestration',
                                    title='Orchestration Service Options')
 
@@ -880,65 +850,6 @@ OrchestrationGroup = [
                default=1000,
                help="Value must match heat configuration of the same name."),
 ]
-
-
-telemetry_group = cfg.OptGroup(name='telemetry',
-                               title='Telemetry Service Options')
-
-TelemetryGroup = [
-    cfg.StrOpt('catalog_type',
-               default='metering',
-               help="Catalog type of the Telemetry service."),
-    cfg.StrOpt('endpoint_type',
-               default='publicURL',
-               choices=['public', 'admin', 'internal',
-                        'publicURL', 'adminURL', 'internalURL'],
-               help="The endpoint type to use for the telemetry service."),
-    cfg.BoolOpt('too_slow_to_test',
-                default=True,
-                deprecated_for_removal=True,
-                help="This variable is used as flag to enable "
-                     "notification tests")
-]
-
-alarming_group = cfg.OptGroup(name='alarming',
-                              title='Alarming Service Options')
-
-AlarmingGroup = [
-    cfg.StrOpt('catalog_type',
-               default='alarming',
-               help="Catalog type of the Alarming service."),
-    cfg.StrOpt('endpoint_type',
-               default='publicURL',
-               choices=['public', 'admin', 'internal',
-                        'publicURL', 'adminURL', 'internalURL'],
-               help="The endpoint type to use for the alarming service."),
-]
-
-
-telemetry_feature_group = cfg.OptGroup(name='telemetry-feature-enabled',
-                                       title='Enabled Ceilometer Features')
-
-TelemetryFeaturesGroup = [
-    cfg.BoolOpt('events',
-                default=False,
-                help="Runs Ceilometer event-related tests"),
-]
-
-
-dashboard_group = cfg.OptGroup(name="dashboard",
-                               title="Dashboard options")
-
-DashboardGroup = [
-    cfg.StrOpt('dashboard_url',
-               default='http://localhost/',
-               help="Where the dashboard can be found"),
-    cfg.StrOpt('login_url',
-               default='http://localhost/auth/login/',
-               help="Login page for the dashboard",
-               deprecated_for_removal=True),
-]
-
 
 data_processing_group = cfg.OptGroup(name="data-processing",
                                      title="Data Processing options")
@@ -1070,24 +981,12 @@ ServiceAvailableGroup = [
     cfg.BoolOpt('heat',
                 default=False,
                 help="Whether or not Heat is expected to be available"),
-    cfg.BoolOpt('ceilometer',
-                default=True,
-                help="Whether or not Ceilometer is expected to be available"),
-    cfg.BoolOpt('aodh',
-                default=False,
-                help="Whether or not Aodh is expected to be available"),
-    cfg.BoolOpt('horizon',
-                default=True,
-                help="Whether or not Horizon is expected to be available"),
     cfg.BoolOpt('sahara',
                 default=False,
                 help="Whether or not Sahara is expected to be available"),
     cfg.BoolOpt('ironic',
                 default=False,
                 help="Whether or not Ironic is expected to be available"),
-    cfg.BoolOpt('trove',
-                default=False,
-                help="Whether or not Trove is expected to be available"),
 ]
 
 debug_group = cfg.OptGroup(name="debug",
@@ -1118,23 +1017,28 @@ specify .* as the regex.
 
 input_scenario_group = cfg.OptGroup(name="input-scenario",
                                     title="Filters and values for"
-                                          " input scenarios")
+                                          " input scenarios[DEPRECATED]")
+
 
 InputScenarioGroup = [
     cfg.StrOpt('image_regex',
                default='^cirros-0.3.1-x86_64-uec$',
-               help="Matching images become parameters for scenario tests"),
+               help="Matching images become parameters for scenario tests",
+               deprecated_for_removal=True),
     cfg.StrOpt('flavor_regex',
                default='^m1.nano$',
-               help="Matching flavors become parameters for scenario tests"),
+               help="Matching flavors become parameters for scenario tests",
+               deprecated_for_removal=True),
     cfg.StrOpt('non_ssh_image_regex',
                default='^.*[Ww]in.*$',
                help="SSH verification in tests is skipped"
-                    "for matching images"),
+                    "for matching images",
+               deprecated_for_removal=True),
     cfg.StrOpt('ssh_user_regex',
                default="[[\"^.*[Cc]irros.*$\", \"cirros\"]]",
                help="List of user mapped to regex "
-                    "to matching image names."),
+                    "to matching image names.",
+               deprecated_for_removal=True),
 ]
 
 
@@ -1219,12 +1123,7 @@ _opts = [
     (volume_feature_group, VolumeFeaturesGroup),
     (object_storage_group, ObjectStoreGroup),
     (object_storage_feature_group, ObjectStoreFeaturesGroup),
-    (database_group, DatabaseGroup),
     (orchestration_group, OrchestrationGroup),
-    (telemetry_group, TelemetryGroup),
-    (telemetry_feature_group, TelemetryFeaturesGroup),
-    (alarming_group, AlarmingGroup),
-    (dashboard_group, DashboardGroup),
     (data_processing_group, DataProcessingGroup),
     (data_processing_feature_group, DataProcessingFeaturesGroup),
     (stress_group, StressGroup),
@@ -1290,11 +1189,7 @@ class TempestConfigPrivate(object):
         self.object_storage = _CONF['object-storage']
         self.object_storage_feature_enabled = _CONF[
             'object-storage-feature-enabled']
-        self.database = _CONF.database
         self.orchestration = _CONF.orchestration
-        self.telemetry = _CONF.telemetry
-        self.telemetry_feature_enabled = _CONF['telemetry-feature-enabled']
-        self.dashboard = _CONF.dashboard
         self.data_processing = _CONF['data-processing']
         self.data_processing_feature_enabled = _CONF[
             'data-processing-feature-enabled']
@@ -1305,12 +1200,6 @@ class TempestConfigPrivate(object):
         self.baremetal = _CONF.baremetal
         self.input_scenario = _CONF['input-scenario']
         self.negative = _CONF.negative
-        _CONF.set_default('domain_name',
-                          self.auth.default_credentials_domain_name,
-                          group='identity')
-        _CONF.set_default('alt_domain_name',
-                          self.auth.default_credentials_domain_name,
-                          group='identity')
         logging.tempest_set_log_file('tempest.log')
 
     def __init__(self, parse_conf=True, config_path=None):

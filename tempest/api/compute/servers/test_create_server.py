@@ -136,7 +136,10 @@ class ServersTestJSON(base.BaseV2ComputeTest):
             self.validation_resources['keypair']['private_key'],
             server=self.server,
             servers_client=self.client)
-        self.assertTrue(linux_client.hostname_equals_servername(self.name))
+        hostname = linux_client.get_hostname()
+        msg = ('Failed while verifying servername equals hostname. Expected '
+               'hostname "%s" but got "%s".' % (self.name, hostname))
+        self.assertEqual(self.name, hostname, msg)
 
     @test.idempotent_id('ed20d3fb-9d1f-4329-b160-543fbd5d9811')
     def test_create_server_with_scheduler_hint_group(self):
@@ -204,10 +207,6 @@ class ServersTestJSON(base.BaseV2ComputeTest):
     @test.idempotent_id('1678d144-ed74-43f8-8e57-ab10dbf9b3c2')
     @testtools.skipUnless(CONF.service_available.neutron,
                           'Neutron service must be available.')
-    # The below skipUnless should be removed once Kilo-eol happens.
-    @testtools.skipUnless(CONF.compute_feature_enabled.
-                          allow_duplicate_networks,
-                          'Duplicate networks must be allowed')
     def test_verify_duplicate_network_nics(self):
         # Verify that server creation does not fail when more than one nic
         # is created on the same network.

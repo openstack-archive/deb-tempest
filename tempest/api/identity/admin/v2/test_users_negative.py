@@ -35,9 +35,9 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.data.setup_test_tenant()
         self.assertRaises(lib_exc.Forbidden,
                           self.non_admin_users_client.create_user,
-                          self.alt_user, self.alt_password,
-                          self.data.tenant['id'],
-                          self.alt_email)
+                          name=self.alt_user, password=self.alt_password,
+                          tenantId=self.data.tenant['id'],
+                          email=self.alt_email)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('d80d0c2f-4514-4d1e-806d-0930dfc5a187')
@@ -45,8 +45,9 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         # User with an empty name should not be created
         self.data.setup_test_tenant()
         self.assertRaises(lib_exc.BadRequest, self.users_client.create_user,
-                          '', self.alt_password, self.data.tenant['id'],
-                          self.alt_email)
+                          name='', password=self.alt_password,
+                          tenantId=self.data.tenant['id'],
+                          email=self.alt_email)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('7704b4f3-3b75-4b82-87cc-931d41c8f780')
@@ -54,8 +55,9 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         # Length of user name filed should be restricted to 255 characters
         self.data.setup_test_tenant()
         self.assertRaises(lib_exc.BadRequest, self.users_client.create_user,
-                          'a' * 256, self.alt_password,
-                          self.data.tenant['id'], self.alt_email)
+                          name='a' * 256, password=self.alt_password,
+                          tenantId=self.data.tenant['id'],
+                          email=self.alt_email)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('57ae8558-120c-4723-9308-3751474e7ecf')
@@ -63,16 +65,20 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         # Duplicate user should not be created
         self.data.setup_test_user()
         self.assertRaises(lib_exc.Conflict, self.users_client.create_user,
-                          self.data.user['name'], self.data.user_password,
-                          self.data.tenant['id'], self.data.user['email'])
+                          name=self.data.user['name'],
+                          password=self.data.user_password,
+                          tenantId=self.data.tenant['id'],
+                          email=self.data.user['email'])
 
     @test.attr(type=['negative'])
     @test.idempotent_id('0132cc22-7c4f-42e1-9e50-ac6aad31d59a')
     def test_create_user_for_non_existent_tenant(self):
         # Attempt to create a user in a non-existent tenant should fail
         self.assertRaises(lib_exc.NotFound, self.users_client.create_user,
-                          self.alt_user, self.alt_password, '49ffgg99999',
-                          self.alt_email)
+                          name=self.alt_user,
+                          password=self.alt_password,
+                          tenantId='49ffgg99999',
+                          email=self.alt_email)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('55bbb103-d1ae-437b-989b-bcdf8175c1f4')
@@ -83,12 +89,14 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         token = self.client.auth_provider.get_token()
         # Delete the token from database
         self.client.delete_token(token)
-        self.assertRaises(lib_exc.Unauthorized, self.users_client.create_user,
-                          self.alt_user, self.alt_password,
-                          self.data.tenant['id'], self.alt_email)
 
         # Unset the token to allow further tests to generate a new token
-        self.client.auth_provider.clear_auth()
+        self.addCleanup(self.client.auth_provider.clear_auth)
+
+        self.assertRaises(lib_exc.Unauthorized, self.users_client.create_user,
+                          name=self.alt_user, password=self.alt_password,
+                          tenantId=self.data.tenant['id'],
+                          email=self.alt_email)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('23a2f3da-4a1a-41da-abdd-632328a861ad')
@@ -97,9 +105,9 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         self.data.setup_test_tenant()
         name = data_utils.rand_name('test_user')
         self.assertRaises(lib_exc.BadRequest, self.users_client.create_user,
-                          name, self.alt_password,
-                          self.data.tenant['id'],
-                          self.alt_email, enabled=3)
+                          name=name, password=self.alt_password,
+                          tenantId=self.data.tenant['id'],
+                          email=self.alt_email, enabled=3)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('3d07e294-27a0-4144-b780-a2a1bf6fee19')
@@ -119,11 +127,12 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         token = self.client.auth_provider.get_token()
         # Delete the token from database
         self.client.delete_token(token)
-        self.assertRaises(lib_exc.Unauthorized, self.users_client.update_user,
-                          self.alt_user)
 
         # Unset the token to allow further tests to generate a new token
-        self.client.auth_provider.clear_auth()
+        self.addCleanup(self.client.auth_provider.clear_auth)
+
+        self.assertRaises(lib_exc.Unauthorized, self.users_client.update_user,
+                          self.alt_user)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('424868d5-18a7-43e1-8903-a64f95ee3aac')
@@ -159,11 +168,12 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         token = self.client.auth_provider.get_token()
         # Delete the token from database
         self.client.delete_token(token)
-        self.assertRaises(lib_exc.Unauthorized, self.users_client.delete_user,
-                          self.alt_user)
 
         # Unset the token to allow further tests to generate a new token
-        self.client.auth_provider.clear_auth()
+        self.addCleanup(self.client.auth_provider.clear_auth)
+
+        self.assertRaises(lib_exc.Unauthorized, self.users_client.delete_user,
+                          self.alt_user)
 
     @test.attr(type=['negative'])
     @test.idempotent_id('593a4981-f6d4-460a-99a1-57a78bf20829')
@@ -229,8 +239,11 @@ class UsersNegativeTestJSON(base.BaseIdentityV2AdminTest):
         # Request to get list of users without a valid token should fail
         token = self.client.auth_provider.get_token()
         self.client.delete_token(token)
+
+        # Unset the token to allow further tests to generate a new token
+        self.addCleanup(self.client.auth_provider.clear_auth)
+
         self.assertRaises(lib_exc.Unauthorized, self.users_client.list_users)
-        self.client.auth_provider.clear_auth()
 
     @test.attr(type=['negative'])
     @test.idempotent_id('f5d39046-fc5f-425c-b29e-bac2632da28e')

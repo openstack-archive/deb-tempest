@@ -24,6 +24,7 @@ from tempest.common.utils import data_utils
 from tempest.common.utils.linux import remote_client
 from tempest.common import waiters
 from tempest import config
+from tempest import exceptions
 from tempest.lib import decorators
 from tempest.lib import exceptions as lib_exc
 from tempest import test
@@ -226,6 +227,35 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
 
         self.client.start_server(self.server_id)
 
+    @test.idempotent_id('b68bd8d6-855d-4212-b59b-2e704044dace')
+    @test.services('volume')
+    def test_rebuild_server_with_volume_attached(self):
+        # create a new volume and attach it to the server
+        volume = self.volumes_client.create_volume(
+            size=CONF.volume.volume_size)
+        volume = volume['volume']
+        self.addCleanup(self.volumes_client.delete_volume, volume['id'])
+        waiters.wait_for_volume_status(self.volumes_client, volume['id'],
+                                       'available')
+
+        self.client.attach_volume(self.server_id, volumeId=volume['id'])
+        self.addCleanup(waiters.wait_for_volume_status, self.volumes_client,
+                        volume['id'], 'available')
+        self.addCleanup(self.client.detach_volume,
+                        self.server_id, volume['id'])
+        waiters.wait_for_volume_status(self.volumes_client, volume['id'],
+                                       'in-use')
+
+        # run general rebuild test
+        self.test_rebuild_server()
+
+        # make sure the volume is attached to the instance after rebuild
+        vol_after_rebuild = self.volumes_client.show_volume(volume['id'])
+        vol_after_rebuild = vol_after_rebuild['volume']
+        self.assertEqual('in-use', vol_after_rebuild['status'])
+        self.assertEqual(self.server_id,
+                         vol_after_rebuild['attachments'][0]['server_id'])
+
     def _test_resize_server_confirm(self, stop=False):
         # The server's RAM and disk space should be modified to that of
         # the provided flavor
@@ -291,6 +321,19 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
     def test_create_backup(self):
         # Positive test:create backup successfully and rotate backups correctly
         # create the first and the second backup
+
+        # Check if glance v1 is available to determine which client to use. We
+        # prefer glance v1 for the compute API tests since the compute image
+        # API proxy was written for glance v1.
+        if CONF.image_feature_enabled.api_v1:
+            glance_client = self.os.image_client
+        elif CONF.image_feature_enabled.api_v2:
+            glance_client = self.os.image_client_v2
+        else:
+            raise exceptions.InvalidConfiguration(
+                'Either api_v1 or api_v2 must be True in '
+                '[image-feature-enabled].')
+
         backup1 = data_utils.rand_name('backup-1')
         resp = self.client.create_backup(self.server_id,
                                          backup_type='daily',
@@ -302,7 +345,7 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         def _clean_oldest_backup(oldest_backup):
             if oldest_backup_exist:
                 try:
-                    self.os.image_client.delete_image(oldest_backup)
+                    glance_client.delete_image(oldest_backup)
                 except lib_exc.NotFound:
                     pass
                 else:
@@ -312,7 +355,8 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
 
         image1_id = data_utils.parse_image_id(resp['location'])
         self.addCleanup(_clean_oldest_backup, image1_id)
-        self.os.image_client.wait_for_image_status(image1_id, 'active')
+        waiters.wait_for_image_status(glance_client,
+                                      image1_id, 'active')
 
         backup2 = data_utils.rand_name('backup-2')
         waiters.wait_for_server_status(self.client, self.server_id, 'ACTIVE')
@@ -321,8 +365,9 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                                          rotation=2,
                                          name=backup2).response
         image2_id = data_utils.parse_image_id(resp['location'])
-        self.addCleanup(self.os.image_client.delete_image, image2_id)
-        self.os.image_client.wait_for_image_status(image2_id, 'active')
+        self.addCleanup(glance_client.delete_image, image2_id)
+        waiters.wait_for_image_status(glance_client,
+                                      image2_id, 'active')
 
         # verify they have been created
         properties = {
@@ -330,12 +375,22 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
             'backup_type': "daily",
             'instance_uuid': self.server_id,
         }
-        image_list = self.os.image_client.list_images(
-            detail=True,
-            properties=properties,
-            status='active',
-            sort_key='created_at',
-            sort_dir='asc')['images']
+        params = {
+            'status': 'active',
+            'sort_key': 'created_at',
+            'sort_dir': 'asc'
+        }
+        if CONF.image_feature_enabled.api_v1:
+            for key, value in properties.items():
+                params['property-%s' % key] = value
+            image_list = glance_client.list_images(
+                detail=True,
+                **params)['images']
+        else:
+            # Additional properties are flattened in glance v2.
+            params.update(properties)
+            image_list = glance_client.list_images(params)['images']
+
         self.assertEqual(2, len(image_list))
         self.assertEqual((backup1, backup2),
                          (image_list[0]['name'], image_list[1]['name']))
@@ -349,17 +404,16 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                                          rotation=2,
                                          name=backup3).response
         image3_id = data_utils.parse_image_id(resp['location'])
-        self.addCleanup(self.os.image_client.delete_image, image3_id)
+        self.addCleanup(glance_client.delete_image, image3_id)
         # the first back up should be deleted
         waiters.wait_for_server_status(self.client, self.server_id, 'ACTIVE')
-        self.os.image_client.wait_for_resource_deletion(image1_id)
+        glance_client.wait_for_resource_deletion(image1_id)
         oldest_backup_exist = False
-        image_list = self.os.image_client.list_images(
-            detail=True,
-            properties=properties,
-            status='active',
-            sort_key='created_at',
-            sort_dir='asc')['images']
+        if CONF.image_feature_enabled.api_v1:
+            image_list = glance_client.list_images(
+                detail=True, **params)['images']
+        else:
+            image_list = glance_client.list_images(params)['images']
         self.assertEqual(2, len(image_list),
                          'Unexpected number of images for '
                          'v2:test_create_backup; was the oldest backup not '

@@ -27,11 +27,13 @@ class TokensTestJSON(base.BaseIdentityV2AdminTest):
         user_password = data_utils.rand_password()
         # first:create a tenant
         tenant_name = data_utils.rand_name(name='tenant')
-        tenant = self.tenants_client.create_tenant(tenant_name)['tenant']
+        tenant = self.tenants_client.create_tenant(name=tenant_name)['tenant']
         self.data.tenants.append(tenant)
         # second:create a user
-        user = self.users_client.create_user(user_name, user_password,
-                                             tenant['id'], '')['user']
+        user = self.users_client.create_user(name=user_name,
+                                             password=user_password,
+                                             tenantId=tenant['id'],
+                                             email='')['user']
         self.data.users.append(user)
         # then get a token for the user
         body = self.token_client.auth(user_name,
@@ -62,17 +64,21 @@ class TokensTestJSON(base.BaseIdentityV2AdminTest):
         user_password = data_utils.rand_password()
         tenant_id = None  # No default tenant so will get unscoped token.
         email = ''
-        user = self.users_client.create_user(user_name, user_password,
-                                             tenant_id, email)['user']
+        user = self.users_client.create_user(name=user_name,
+                                             password=user_password,
+                                             tenantId=tenant_id,
+                                             email=email)['user']
         self.data.users.append(user)
 
         # Create a couple tenants.
         tenant1_name = data_utils.rand_name(name='tenant')
-        tenant1 = self.tenants_client.create_tenant(tenant1_name)['tenant']
+        tenant1 = self.tenants_client.create_tenant(
+            name=tenant1_name)['tenant']
         self.data.tenants.append(tenant1)
 
         tenant2_name = data_utils.rand_name(name='tenant')
-        tenant2 = self.tenants_client.create_tenant(tenant2_name)['tenant']
+        tenant2 = self.tenants_client.create_tenant(
+            name=tenant2_name)['tenant']
         self.data.tenants.append(tenant2)
 
         # Create a role
@@ -81,11 +87,13 @@ class TokensTestJSON(base.BaseIdentityV2AdminTest):
         self.data.roles.append(role)
 
         # Grant the user the role on the tenants.
-        self.roles_client.assign_user_role(tenant1['id'], user['id'],
-                                           role['id'])
+        self.roles_client.create_user_role_on_project(tenant1['id'],
+                                                      user['id'],
+                                                      role['id'])
 
-        self.roles_client.assign_user_role(tenant2['id'], user['id'],
-                                           role['id'])
+        self.roles_client.create_user_role_on_project(tenant2['id'],
+                                                      user['id'],
+                                                      role['id'])
 
         # Get an unscoped token.
         body = self.token_client.auth(user_name, user_password)

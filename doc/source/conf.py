@@ -34,7 +34,7 @@ extensions = ['sphinx.ext.autodoc',
               'oslo_config.sphinxconfiggen',
              ]
 
-config_generator_config_file = '../../etc/config-generator.tempest.conf'
+config_generator_config_file = '../../tempest/cmd/config-generator.tempest.conf'
 sample_config_basename = '_static/tempest'
 
 todo_include_todos = True
@@ -135,7 +135,7 @@ html_last_updated_fmt = subprocess.Popen(git_cmd,
 
 # If true, SmartyPants will be used to convert quotes and dashes to
 # typographically correct entities.
-#html_use_smartypants = True
+html_use_smartypants = False
 
 # Custom sidebar templates, maps document names to template names.
 #html_sidebars = {}

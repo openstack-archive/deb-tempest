@@ -21,6 +21,7 @@ Tempest Specific Commandments
 - [T111] Check that service client names of DELETE should be consistent
 - [T112] Check that tempest.lib should not import local tempest code
 - [T113] Check that tests use data_utils.rand_uuid() instead of uuid.uuid4()
+- [T114] Check that tempest.lib does not use tempest config
 - [N322] Method's default argument shouldn't be mutable
 
 Test Data/Configuration
@@ -132,6 +133,7 @@ overwritten by subclasses (enforced via hacking rule T105).
 
 Set-up is split in a series of steps (setup stages), which can be overwritten
 by test classes. Set-up stages are:
+
 - `skip_checks`
 - `setup_credentials`
 - `setup_clients`
@@ -140,6 +142,7 @@ by test classes. Set-up stages are:
 Tear-down is also split in a series of steps (teardown stages), which are
 stacked for execution only if the corresponding setup stage had been
 reached during the setup phase. Tear-down stages are:
+
 - `clear_credentials` (defined in the base test class)
 - `resource_cleanup`
 
@@ -157,11 +160,17 @@ not there even if the cloud was configured with it.
 
 Negative Tests
 --------------
-TODO: Write the guideline related to negative tests.
+Error handling is an important aspect of API design and usage. Negative
+tests are a way to ensure that an application can gracefully handle
+invalid or unexpected input. However, as a black box integration test
+suite, Tempest is not suitable for handling all negative test cases, as
+the wide variety and complexity of negative tests can lead to long test
+runs and knowledge of internal implementation details. The bulk of
+negative testing should be handled with project function tests. The
+exception to this rule is API tests used for interoperability testing.
 
 Test skips because of Known Bugs
 --------------------------------
-
 If a test is broken because of a bug it is appropriate to skip the test until
 bug has been fixed. You should use the skip_because decorator so that
 Tempest's skip tracking tool can watch the bug status.

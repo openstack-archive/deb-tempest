@@ -14,20 +14,18 @@
 #    under the License.
 
 import json
+import re
 
 from oslo_log import log as logging
 
 from tempest import config
 from tempest import exceptions
 from tempest.scenario import manager
-from tempest.scenario import utils as test_utils
 from tempest import test
 
 CONF = config.CONF
 
 LOG = logging.getLogger(__name__)
-
-load_tests = test_utils.load_tests_input_scenario_utils
 
 
 class TestServerBasicOps(manager.ScenarioTest):
@@ -47,27 +45,10 @@ class TestServerBasicOps(manager.ScenarioTest):
 
     def setUp(self):
         super(TestServerBasicOps, self).setUp()
-        # Setup image and flavor the test instance
-        # Support both configured and injected values
-        if not hasattr(self, 'image_ref'):
-            self.image_ref = CONF.compute.image_ref
-        if not hasattr(self, 'flavor_ref'):
-            self.flavor_ref = CONF.compute.flavor_ref
-        self.image_utils = test_utils.ImageUtils(self.manager)
-        if not self.image_utils.is_flavor_enough(self.flavor_ref,
-                                                 self.image_ref):
-            raise self.skipException(
-                '{image} does not fit in {flavor}'.format(
-                    image=self.image_ref, flavor=self.flavor_ref
-                )
-            )
-        self.run_ssh = CONF.validation.run_validation and \
-            self.image_utils.is_sshable_image(self.image_ref)
-        self.ssh_user = self.image_utils.ssh_user(self.image_ref)
-        LOG.debug('Starting test for i:{image}, f:{flavor}. '
-                  'Run ssh: {ssh}, user: {ssh_user}'.format(
-                      image=self.image_ref, flavor=self.flavor_ref,
-                      ssh=self.run_ssh, ssh_user=self.ssh_user))
+        self.image_ref = CONF.compute.image_ref
+        self.flavor_ref = CONF.compute.flavor_ref
+        self.run_ssh = CONF.validation.run_validation
+        self.ssh_user = CONF.validation.image_ssh_user
 
     def verify_ssh(self, keypair):
         if self.run_ssh:
@@ -76,7 +57,7 @@ class TestServerBasicOps(manager.ScenarioTest):
             # Check ssh
             self.ssh_client = self.get_remote_client(
                 ip_address=self.fip,
-                username=self.image_utils.ssh_user(self.image_ref),
+                username=self.ssh_user,
                 private_key=keypair['private_key'])
 
     def verify_metadata(self):
@@ -103,9 +84,9 @@ class TestServerBasicOps(manager.ScenarioTest):
     def verify_metadata_on_config_drive(self):
         if self.run_ssh and CONF.compute_feature_enabled.config_drive:
             # Verify metadata on config_drive
-            cmd_blkid = 'blkid -t LABEL=config-2 -o device'
-            dev_name = self.ssh_client.exec_command(cmd_blkid)
-            dev_name = dev_name.rstrip()
+            cmd_blkid = 'blkid | grep -i config-2'
+            result = self.ssh_client.exec_command(cmd_blkid)
+            dev_name = re.match('([^:]+)', result).group()
             self.ssh_client.exec_command('sudo mount %s /mnt' % dev_name)
             cmd_md = 'sudo cat /mnt/openstack/latest/meta_data.json'
             result = self.ssh_client.exec_command(cmd_md)

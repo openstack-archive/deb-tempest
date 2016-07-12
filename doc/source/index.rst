@@ -14,6 +14,7 @@ Contents:
    plugin-registry
    library
    microversion_testing
+   test-removal
 
 ------------
 Field Guides
@@ -51,6 +52,9 @@ Command Documentation
    account_generator
    cleanup
    javelin
+   subunit_describe_calls
+   workspace
+   run
 
 ==================
 Indices and tables

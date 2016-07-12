@@ -547,6 +547,65 @@ class TestRestClientUtils(BaseRestClientTestClass):
         self.assertIsNotNone(str(self.rest_client))
 
 
+class TestRateLimiting(BaseRestClientTestClass):
+
+    def setUp(self):
+        self.fake_http = fake_http.fake_httplib2()
+        super(TestRateLimiting, self).setUp()
+
+    def test__get_retry_after_delay_with_integer(self):
+        resp = {'retry-after': '123'}
+        self.assertEqual(123, self.rest_client._get_retry_after_delay(resp))
+
+    def test__get_retry_after_delay_with_http_date(self):
+        resp = {
+            'date': 'Mon, 4 Apr 2016 21:56:23 GMT',
+            'retry-after': 'Mon, 4 Apr 2016 21:58:26 GMT',
+        }
+        self.assertEqual(123, self.rest_client._get_retry_after_delay(resp))
+
+    def test__get_retry_after_delay_of_zero_with_integer(self):
+        resp = {'retry-after': '0'}
+        self.assertEqual(1, self.rest_client._get_retry_after_delay(resp))
+
+    def test__get_retry_after_delay_of_zero_with_http_date(self):
+        resp = {
+            'date': 'Mon, 4 Apr 2016 21:56:23 GMT',
+            'retry-after': 'Mon, 4 Apr 2016 21:56:23 GMT',
+        }
+        self.assertEqual(1, self.rest_client._get_retry_after_delay(resp))
+
+    def test__get_retry_after_delay_with_missing_date_header(self):
+        resp = {
+            'retry-after': 'Mon, 4 Apr 2016 21:58:26 GMT',
+        }
+        self.assertRaises(ValueError, self.rest_client._get_retry_after_delay,
+                          resp)
+
+    def test__get_retry_after_delay_with_invalid_http_date(self):
+        resp = {
+            'retry-after': 'Mon, 4 AAA 2016 21:58:26 GMT',
+            'date': 'Mon, 4 Apr 2016 21:56:23 GMT',
+        }
+        self.assertRaises(ValueError, self.rest_client._get_retry_after_delay,
+                          resp)
+
+    def test__get_retry_after_delay_with_missing_retry_after_header(self):
+        self.assertRaises(ValueError, self.rest_client._get_retry_after_delay,
+                          {})
+
+    def test_is_absolute_limit_gives_false_with_retry_after(self):
+        resp = {'retry-after': 123}
+
+        # is_absolute_limit() requires the overLimit body to be unwrapped
+        resp_body = self.rest_client._parse_resp("""{
+            "overLimit": {
+                "message": ""
+            }
+        }""")
+        self.assertFalse(self.rest_client.is_absolute_limit(resp, resp_body))
+
+
 class TestProperties(BaseRestClientTestClass):
 
     def setUp(self):
@@ -574,6 +633,7 @@ class TestProperties(BaseRestClientTestClass):
         expected = {'api_version': 'v1',
                     'endpoint_type': 'publicURL',
                     'region': None,
+                    'name': None,
                     'service': None,
                     'skip_path': True}
         self.rest_client.skip_path()
@@ -584,6 +644,7 @@ class TestProperties(BaseRestClientTestClass):
         expected = {'api_version': 'v1',
                     'endpoint_type': 'publicURL',
                     'region': None,
+                    'name': None,
                     'service': None}
         self.assertEqual(expected, self.rest_client.filters)
 
@@ -630,6 +691,24 @@ class TestExpectedSuccess(BaseRestClientTestClass):
 
     def test_non_success_expected_list(self):
         expected_code = [404, 202]
+        read_code = 202
+        self.assertRaises(AssertionError, self.rest_client.expected_success,
+                          expected_code, read_code)
+
+    def test_non_success_read_code_as_string(self):
+        expected_code = 202
+        read_code = '202'
+        self.assertRaises(TypeError, self.rest_client.expected_success,
+                          expected_code, read_code)
+
+    def test_non_success_read_code_as_list(self):
+        expected_code = 202
+        read_code = [202]
+        self.assertRaises(TypeError, self.rest_client.expected_success,
+                          expected_code, read_code)
+
+    def test_non_success_expected_code_as_non_int(self):
+        expected_code = ['201', 202]
         read_code = 202
         self.assertRaises(AssertionError, self.rest_client.expected_success,
                           expected_code, read_code)

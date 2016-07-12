@@ -17,7 +17,7 @@ from oslo_log import log as logging
 
 from tempest.common.utils import data_utils
 from tempest import config
-from tempest.lib import exceptions as lib_exc
+from tempest.lib.common.utils import test_utils
 import tempest.test
 
 CONF = config.CONF
@@ -29,7 +29,7 @@ class BaseIdentityTest(tempest.test.BaseTestCase):
     @classmethod
     def disable_user(cls, user_name):
         user = cls.get_user_by_name(user_name)
-        cls.users_client.enable_disable_user(user['id'], enabled=False)
+        cls.users_client.update_user_enabled(user['id'], enabled=False)
 
     @classmethod
     def disable_tenant(cls, tenant_name):
@@ -81,14 +81,6 @@ class BaseIdentityV2Test(BaseIdentityTest):
         cls.non_admin_tenants_client = cls.os.tenants_public_client
         cls.non_admin_users_client = cls.os.users_public_client
 
-    @classmethod
-    def resource_setup(cls):
-        super(BaseIdentityV2Test, cls).resource_setup()
-
-    @classmethod
-    def resource_cleanup(cls):
-        super(BaseIdentityV2Test, cls).resource_cleanup()
-
 
 class BaseIdentityV2AdminTest(BaseIdentityV2Test):
 
@@ -137,10 +129,6 @@ class BaseIdentityV3Test(BaseIdentityTest):
         cls.non_admin_token = cls.os.token_v3_client
         cls.non_admin_projects_client = cls.os.projects_client
 
-    @classmethod
-    def resource_cleanup(cls):
-        super(BaseIdentityV3Test, cls).resource_cleanup()
-
 
 class BaseIdentityV3AdminTest(BaseIdentityV3Test):
 
@@ -162,6 +150,12 @@ class BaseIdentityV3AdminTest(BaseIdentityV3Test):
         cls.creds_client = cls.os_adm.credentials_client
         cls.groups_client = cls.os_adm.groups_client
         cls.projects_client = cls.os_adm.projects_client
+        if CONF.identity.admin_domain_scope:
+            # NOTE(andreaf) When keystone policy requires it, the identity
+            # admin clients for these tests shall use 'domain' scoped tokens.
+            # As the client manager is already created by the base class,
+            # we set the scope for the inner auth provider.
+            cls.os_adm.auth_provider.scope = 'domain'
 
     @classmethod
     def resource_setup(cls):
@@ -209,11 +203,10 @@ class BaseDataGenerator(object):
         self.domains = []
 
     def _create_test_user(self, **kwargs):
-        username = data_utils.rand_name('test_user')
         self.user_password = data_utils.rand_password()
         self.user = self.users_client.create_user(
-            username, password=self.user_password,
-            email=username + '@testmail.tm', **kwargs)['user']
+            password=self.user_password,
+            **kwargs)['user']
         self.users.append(self.user)
 
     def setup_test_role(self):
@@ -222,29 +215,24 @@ class BaseDataGenerator(object):
             name=data_utils.rand_name('test_role'))['role']
         self.roles.append(self.role)
 
-    @staticmethod
-    def _try_wrapper(func, item, **kwargs):
-        try:
-            func(item['id'], **kwargs)
-        except lib_exc.NotFound:
-            pass
-        except Exception:
-            LOG.exception("Unexpected exception occurred in %s deletion. "
-                          "But ignored here." % item['id'])
-
     def teardown_all(self):
         for user in self.users:
-            self._try_wrapper(self.users_client.delete_user, user)
+            test_utils.call_and_ignore_notfound_exc(
+                self.users_client.delete_user, user)
         for tenant in self.tenants:
-            self._try_wrapper(self.projects_client.delete_tenant, tenant)
-        for project in self.projects:
-            self._try_wrapper(self.projects_client.delete_project, project)
+            test_utils.call_and_ignore_notfound_exc(
+                self.projects_client.delete_tenant, tenant)
+        for project in reversed(self.projects):
+            test_utils.call_and_ignore_notfound_exc(
+                self.projects_client.delete_project, project)
         for role in self.roles:
-            self._try_wrapper(self.roles_client.delete_role, role)
+            test_utils.call_and_ignore_notfound_exc(
+                self.roles_client.delete_role, role)
         for domain in self.domains:
-            self._try_wrapper(self.domains_client.update_domain, domain,
-                              enabled=False)
-            self._try_wrapper(self.domains_client.delete_domain, domain)
+            test_utils.call_and_ignore_notfound_exc(
+                self.domains_client.update_domain, domain, enabled=False)
+            test_utils.call_and_ignore_notfound_exc(
+                self.domains_client.delete_domain, domain)
 
 
 class DataGeneratorV2(BaseDataGenerator):
@@ -252,7 +240,10 @@ class DataGeneratorV2(BaseDataGenerator):
     def setup_test_user(self):
         """Set up a test user."""
         self.setup_test_tenant()
-        self._create_test_user(tenant_id=self.tenant['id'])
+        username = data_utils.rand_name('test_user')
+        email = username + '@testmail.tm'
+        self._create_test_user(name=username, email=email,
+                               tenantId=self.tenant['id'])
 
     def setup_test_tenant(self):
         """Set up a test tenant."""
@@ -267,7 +258,10 @@ class DataGeneratorV3(BaseDataGenerator):
     def setup_test_user(self):
         """Set up a test user."""
         self.setup_test_project()
-        self._create_test_user(project_id=self.project['id'])
+        username = data_utils.rand_name('test_user')
+        email = username + '@testmail.tm'
+        self._create_test_user(user_name=username, email=email,
+                               project_id=self.project['id'])
 
     def setup_test_project(self):
         """Set up a test project."""
