@@ -4,6 +4,7 @@ tempest (1:12.1.0-1) experimental; urgency=medium
   * Fixed (build-)depends for this release.
   * Added missing python{3,}-{ddt,oslotest} runtime Depends.
   * Set [volume-feature-enabled]/volume_services to true.
+  * Using pkgos-dh_auto_{test,install} from openstack-pkg-tools >= 52~.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 16 Jun 2016 21:25:28 +0200
 
