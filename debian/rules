@@ -99,7 +99,7 @@ override_dh_auto_install:
 
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
-	pkgos-dh_auto_test 'tests\.(?!.*test_pretty_tox.*)'
+	export OS_TEST_PATH=$(CURDIR)/tempest/tests ; pkgos-dh_auto_test 'tests\.(?!.*test_pretty_tox.*)'
 endif
 
 override_dh_sphinxdoc:
