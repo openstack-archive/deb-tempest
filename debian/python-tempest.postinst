@@ -11,6 +11,7 @@ if [ "$1" = "configure" ] ; then
 	update-alternatives --install /usr/bin/tempest-account-generator tempest-account-generator /usr/bin/python2-tempest-account-generator 300
 	update-alternatives --install /usr/bin/tempest-cleanup tempest-cleanup /usr/bin/python2-tempest-cleanup 300
 	update-alternatives --install /usr/bin/verify-tempest-config verify-tempest-config /usr/bin/python2-verify-tempest-config 300
+	update-alternatives --install /usr/bin/subunit-describe-calls subunit-describe-calls /usr/bin/python2-subunit-describe-calls 300
 fi
 
 #DEBHELPER#

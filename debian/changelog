@@ -8,6 +8,7 @@ tempest (1:12.1.0-1) experimental; urgency=medium
   * Don't attempt to run the test:
     cmd.test_subunit_describe_calls.TestSubunitDescribeCalls.test_return_code
     as subunit-describe-calls is not available in /usr/bin at build time.
+  * Add subunit-describe-calls to the list of update-alternatives programs.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 16 Jun 2016 21:25:28 +0200
 

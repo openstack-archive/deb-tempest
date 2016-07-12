@@ -11,6 +11,7 @@ if [ "$1" = "remove" ] ; then
 	update-alternatives --remove tempest-account-generator /usr/bin/python2-tempest-account-generator
 	update-alternatives --remove tempest-cleanup /usr/bin/python2-tempest-cleanup
 	update-alternatives --remove verify-tempest-config /usr/bin/python2-verify-tempest-config
+	update-alternatives --remove subunit-describe-calls /usr/bin/python2-subunit-describe-calls
 fi
 
 #DEBHELPER#
