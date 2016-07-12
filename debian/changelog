@@ -1,5 +1,6 @@
-tempest (1:12.0.0-3) UNRELEASED; urgency=medium
+tempest (1:12.1.0-1) experimental; urgency=medium
 
+  * New upstream release.
   * Added missing python{3,}-{ddt,oslotest} runtime Depends.
   * Set [volume-feature-enabled]/volume_services to true.
 
