@@ -1,0 +1,10 @@
+#!/usr/bin/python2.7
+# PBR Generated from u'console_scripts'
+
+import sys
+
+from tempest.cmd.main import main
+
+
+if __name__ == "__main__":
+    sys.exit(main())

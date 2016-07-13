@@ -1,3 +1,10 @@
+tempest (1:12.1.0-2) experimental; urgency=medium
+
+  * Added a debian/bin containing a "tempest" shell script, and add that to the
+    $PATH before launching unit tests.
+
+ -- Thomas Goirand <zigo@debian.org>  Wed, 13 Jul 2016 09:20:19 +0000
+
 tempest (1:12.1.0-1) experimental; urgency=medium
 
   * New upstream release.
