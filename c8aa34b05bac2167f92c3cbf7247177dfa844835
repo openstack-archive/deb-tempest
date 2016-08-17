@@ -1,0 +1,9 @@
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Code-Review+2: Masayuki Igawa <masayuki.igawa@gmail.com>
+Workflow+1: Masayuki Igawa <masayuki.igawa@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 03 Aug 2016 04:56:11 +0000
+Reviewed-on: https://review.openstack.org/349458
+Project: openstack/deb-tempest
+Branch: refs/heads/master

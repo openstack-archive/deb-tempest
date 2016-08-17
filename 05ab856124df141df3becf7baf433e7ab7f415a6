@@ -1,0 +1,11 @@
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Code-Review+1: Joseph Lanoux <joseph.lanoux@hpe.com>
+Code-Review+1: Luz Cazares <luz.cazares@intel.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@hpe.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@hpe.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 14 Jul 2016 17:41:53 +0000
+Reviewed-on: https://review.openstack.org/340723
+Project: openstack/deb-tempest
+Branch: refs/heads/master

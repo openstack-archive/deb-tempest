@@ -1,0 +1,10 @@
+Code-Review+2: Masayuki Igawa <masayuki.igawa@gmail.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@hpe.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@hpe.com>
+Code-Review+1: Anusha Ramineni <anusha.ramineni@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 09 Aug 2016 10:27:50 +0000
+Reviewed-on: https://review.openstack.org/352214
+Project: openstack/deb-tempest
+Branch: refs/heads/master

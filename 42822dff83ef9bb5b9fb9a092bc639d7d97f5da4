@@ -1,0 +1,10 @@
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Code-Review+1: Luz Cazares <luz.cazares@intel.com>
+Code-Review+2: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Workflow+1: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 29 Jul 2016 09:26:38 +0000
+Reviewed-on: https://review.openstack.org/348582
+Project: openstack/deb-tempest
+Branch: refs/heads/master

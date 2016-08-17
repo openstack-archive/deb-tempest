@@ -1,0 +1,11 @@
+Code-Review+2: Masayuki Igawa <masayuki.igawa@gmail.com>
+Code-Review+2: afazekas <afazekas@redhat.com>
+Code-Review+1: Joseph Lanoux <joseph.lanoux@hpe.com>
+Code-Review+2: Sean Dague <sean@dague.net>
+Workflow+1: Sean Dague <sean@dague.net>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 25 Jul 2016 18:34:24 +0000
+Reviewed-on: https://review.openstack.org/287605
+Project: openstack/deb-tempest
+Branch: refs/heads/master

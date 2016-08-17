@@ -1,0 +1,9 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Workflow+1: Matthew Treinish <mtreinish@kortar.org>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 06 Jul 2016 00:29:02 +0000
+Reviewed-on: https://review.openstack.org/336674
+Project: openstack/deb-tempest
+Branch: refs/heads/master

@@ -1,0 +1,9 @@
+Code-Review+2: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@hpe.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@hpe.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 09 Aug 2016 10:42:57 +0000
+Reviewed-on: https://review.openstack.org/350290
+Project: openstack/deb-tempest
+Branch: refs/heads/master

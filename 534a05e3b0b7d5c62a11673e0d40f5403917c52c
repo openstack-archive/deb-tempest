@@ -1,0 +1,12 @@
+Code-Review+1: Rodrigo Duarte <rodrigodsousa@gmail.com>
+Code-Review+1: Anthony Washington <anthony.washington@intel.com>
+Code-Review+1: Rahul U Nair <rahulunair@gmail.com>
+Code-Review+2: Masayuki Igawa <masayuki.igawa@gmail.com>
+Code-Review+2: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Workflow+1: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 09 Aug 2016 07:18:44 +0000
+Reviewed-on: https://review.openstack.org/350798
+Project: openstack/deb-tempest
+Branch: refs/heads/master

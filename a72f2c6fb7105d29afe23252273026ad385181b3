@@ -1,0 +1,9 @@
+Code-Review+2: Andrea Frittoli <andrea.frittoli@hpe.com>
+Code-Review+2: Masayuki Igawa <masayuki.igawa@gmail.com>
+Workflow+1: Masayuki Igawa <masayuki.igawa@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 12 Jul 2016 03:17:45 +0000
+Reviewed-on: https://review.openstack.org/340413
+Project: openstack/deb-tempest
+Branch: refs/heads/master

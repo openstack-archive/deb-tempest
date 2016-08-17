@@ -1,0 +1,15 @@
+Code-Review+1: Joshua White <joshua.l.white@intel.com>
+Code-Review+1: Richard Avelar <csravelar@gmail.com>
+Code-Review+1: Akhila Kishore <akhila.kishore@intel.com>
+Code-Review+1: Justin A Wilson <justin.wilson@intel.com>
+Code-Review+1: Mohit Motiani <mohit.motiani@intel.com>
+Code-Review+1: Aastha Dixit <a.dixit2989@gmail.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@hpe.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@hpe.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 14 Jul 2016 17:40:00 +0000
+Reviewed-on: https://review.openstack.org/336157
+Project: openstack/deb-tempest
+Branch: refs/heads/master

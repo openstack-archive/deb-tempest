@@ -1,0 +1,9 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+2: Masayuki Igawa <masayuki.igawa@gmail.com>
+Workflow+1: Masayuki Igawa <masayuki.igawa@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 21 Jul 2016 09:15:59 +0000
+Reviewed-on: https://review.openstack.org/339362
+Project: openstack/deb-tempest
+Branch: refs/heads/master

@@ -1,0 +1,10 @@
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Code-Review+1: Rahul U Nair <rahulunair@gmail.com>
+Code-Review+2: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Workflow+1: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 01 Aug 2016 09:29:31 +0000
+Reviewed-on: https://review.openstack.org/348694
+Project: openstack/deb-tempest
+Branch: refs/heads/master

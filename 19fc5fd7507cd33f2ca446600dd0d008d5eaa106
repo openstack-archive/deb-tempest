@@ -1,0 +1,12 @@
+Code-Review+1: Mike Abrams <m75abrams@gmail.com>
+Code-Review+1: Liron Kuchlani <lkuchlan@redhat.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: Kyrylo Romanenko <kromanenko@mirantis.com>
+Code-Review+2: Masayuki Igawa <masayuki.igawa@gmail.com>
+Workflow+1: Masayuki Igawa <masayuki.igawa@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 27 Jul 2016 13:54:45 +0000
+Reviewed-on: https://review.openstack.org/338135
+Project: openstack/deb-tempest
+Branch: refs/heads/master

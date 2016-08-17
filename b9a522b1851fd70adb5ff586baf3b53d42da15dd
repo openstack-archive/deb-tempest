@@ -1,0 +1,13 @@
+Code-Review+1: Anthony Washington <anthony.washington@intel.com>
+Code-Review+1: Joe Hakim Rahme <joe.hakim.rahme@enovance.com>
+Code-Review+1: Mike Abrams <m75abrams@gmail.com>
+Code-Review+1: Liron Kuchlani <lkuchlan@redhat.com>
+Code-Review+2: afazekas <afazekas@redhat.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Workflow+1: Jordan Pittier <jordan.pittier@scality.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 01 Aug 2016 23:17:38 +0000
+Reviewed-on: https://review.openstack.org/338173
+Project: openstack/deb-tempest
+Branch: refs/heads/master
