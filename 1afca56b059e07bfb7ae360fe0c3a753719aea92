@@ -1,0 +1,11 @@
+Code-Review+1: chenhb <chen.haibing1@zte.com.cn>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@hpe.com>
+Code-Review+1: Cindy Lu <clu@us.ibm.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Workflow+1: Jordan Pittier <jordan.pittier@scality.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 18 Aug 2016 19:13:26 +0000
+Reviewed-on: https://review.openstack.org/349749
+Project: openstack/deb-tempest
+Branch: refs/heads/master

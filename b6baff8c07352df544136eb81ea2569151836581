@@ -1,0 +1,13 @@
+Code-Review+1: Benny Kopilov <bkopilov@redhat.com>
+Code-Review+1: Mike Abrams <m75abrams@gmail.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Code-Review+1: Oleksii Butenko <obutenko@mirantis.com>
+Code-Review+2: afazekas <afazekas@redhat.com>
+Workflow+1: afazekas <afazekas@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 31 Aug 2016 14:17:16 +0000
+Reviewed-on: https://review.openstack.org/323737
+Project: openstack/deb-tempest
+Branch: refs/heads/master

@@ -1,0 +1,10 @@
+Code-Review+1: Joshua White <joshua.l.white@intel.com>
+Code-Review+2: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Workflow+1: Jordan Pittier <jordan.pittier@scality.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 18 Aug 2016 04:56:16 +0000
+Reviewed-on: https://review.openstack.org/351935
+Project: openstack/deb-tempest
+Branch: refs/heads/master

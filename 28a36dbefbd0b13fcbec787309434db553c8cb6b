@@ -1,0 +1,11 @@
+Code-Review+1: Castulo J. Martinez <castulo.martinez@intel.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Code-Review+1: chenhb <chen.haibing1@zte.com.cn>
+Code-Review+2: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Workflow+1: Ghanshyam Mann <ghanshyam.mann@nectechnologies.in>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 15 Aug 2016 09:51:06 +0000
+Reviewed-on: https://review.openstack.org/353937
+Project: openstack/deb-tempest
+Branch: refs/heads/master

@@ -1,0 +1,8 @@
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 07 Sep 2016 17:22:37 +0000
+Reviewed-on: https://review.openstack.org/364960
+Project: openstack/deb-tempest
+Branch: refs/heads/master

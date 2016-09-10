@@ -1,0 +1,10 @@
+Code-Review+2: Andrea Frittoli <andrea.frittoli@hpe.com>
+Code-Review+1: Yoshiki Eguchi <yoshiki.eguchi@gmail.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 31 Aug 2016 19:58:59 +0000
+Reviewed-on: https://review.openstack.org/363716
+Project: openstack/deb-tempest
+Branch: refs/heads/master

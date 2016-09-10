@@ -1,0 +1,10 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: Luz Cazares <luz.cazares@intel.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sun, 21 Aug 2016 17:05:40 +0000
+Reviewed-on: https://review.openstack.org/357797
+Project: openstack/deb-tempest
+Branch: refs/heads/master

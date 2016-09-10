@@ -1,0 +1,11 @@
+Code-Review+1: Tzach Shefi <tshefi@redhat.com>
+Code-Review+1: Mike Abrams <m75abrams@gmail.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+2: afazekas <afazekas@redhat.com>
+Workflow+1: afazekas <afazekas@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 01 Sep 2016 09:34:57 +0000
+Reviewed-on: https://review.openstack.org/356362
+Project: openstack/deb-tempest
+Branch: refs/heads/master
