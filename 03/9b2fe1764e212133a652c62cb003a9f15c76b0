@@ -1,0 +1,10 @@
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Code-Review+1: Alex Schultz <aschultz@redhat.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 16 Sep 2016 04:28:45 +0000
+Reviewed-on: https://review.openstack.org/371092
+Project: openstack/deb-tempest
+Branch: refs/heads/master
