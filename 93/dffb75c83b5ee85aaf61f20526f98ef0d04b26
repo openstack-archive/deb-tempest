@@ -1,0 +1,9 @@
+Code-Review+2: afazekas <afazekas@redhat.com>
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Workflow+1: Masayuki Igawa <masayuki@igawa.me>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 20 Sep 2016 13:27:15 +0000
+Reviewed-on: https://review.openstack.org/371525
+Project: openstack/deb-tempest
+Branch: refs/heads/master
