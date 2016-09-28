@@ -1,3 +1,18 @@
+tempest (1:12.1.0-4) UNRELEASED; urgency=medium
+
+  * Fixed oslotest EPOCH.
+  * Using OpenStack's Gerrit as VCS URLs.
+  * Added .gitreview in extend-diff-ignore.
+
+ -- Thomas Goirand <zigo@debian.org>  Wed, 28 Sep 2016 10:23:17 +0200
+
+tempest (1:12.1.0-3) experimental; urgency=medium
+
+  * Team upload.
+  * Added python-pep8 to build depends (Closes: #834888)
+
+ -- Ondřej Nový <onovy@debian.org>  Sun, 21 Aug 2016 21:29:32 +0200
+
 tempest (1:12.1.0-2) experimental; urgency=medium
 
   * Added a debian/bin containing a "tempest" shell script, and add that to the

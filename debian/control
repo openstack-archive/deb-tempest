@@ -32,7 +32,7 @@ Build-Depends-Indep: git,
                      python-oslo.serialization (>= 1.10.0),
                      python-oslo.utils (>= 3.11.0),
                      python-oslosphinx (>= 2.5.0),
-                     python-oslotest (>= 1.10.0),
+                     python-oslotest (>= 1:1.10.0),
                      python-paramiko (>= 2.0),
                      python-pep8,
                      python-prettytable,
@@ -60,7 +60,7 @@ Build-Depends-Indep: git,
                      python3-oslo.log (>= 1.14.0),
                      python3-oslo.serialization (>= 1.10.0),
                      python3-oslo.utils (>= 3.11.0),
-                     python3-oslotest (>= 1.10.0),
+                     python3-oslotest (>= 1:1.10.0),
                      python3-paramiko (>= 2.0),
                      python3-prettytable,
                      python3-psycopg2,
@@ -75,8 +75,8 @@ Build-Depends-Indep: git,
                      subunit,
                      testrepository,
 Standards-Version: 3.9.8
-Vcs-Browser: https://anonscm.debian.org/cgit/openstack/tempest.git/
-Vcs-Git: https://anonscm.debian.org/git/openstack/tempest.git
+Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-tempest?h=debian%2Fnewton
+Vcs-Git: https://git.openstack.org/openstack/deb-tempest -b debian/newton
 Homepage: https://github.com/openstack/tempest
 
 Package: python-tempest
