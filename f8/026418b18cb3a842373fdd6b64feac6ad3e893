@@ -1,0 +1,9 @@
+Code-Review+2: afazekas <afazekas@redhat.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Workflow+1: Jordan Pittier <jordan.pittier@scality.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 29 Sep 2016 19:47:30 +0000
+Reviewed-on: https://review.openstack.org/368629
+Project: openstack/deb-tempest
+Branch: refs/heads/master
