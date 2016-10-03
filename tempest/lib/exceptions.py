@@ -100,7 +100,7 @@ class RateLimitExceeded(ClientRestClientException):
 
 
 class OverLimit(ClientRestClientException):
-    message = "Quota exceeded"
+    message = "Request entity is too large"
 
 
 class ServerFault(ServerRestClientException):
@@ -225,3 +225,17 @@ class SSHExecCommandFailed(TempestException):
     message = ("Command '%(command)s', exit status: %(exit_status)d, "
                "stderr:\n%(stderr)s\n"
                "stdout:\n%(stdout)s")
+
+
+class UnknownServiceClient(TempestException):
+    message = "Service clients named %(services)s are not known"
+
+
+class ServiceClientRegistrationException(TempestException):
+    message = ("Error registering module %(name)s in path %(module_path)s, "
+               "with service %(service_version)s and clients "
+               "%(client_names)s: %(detailed_error)s")
+
+
+class PluginRegistrationException(TempestException):
+    message = "Error registering plugin %(name)s: %(detailed_error)s"

@@ -14,17 +14,13 @@
 #    under the License.
 
 import copy
-
 from oslo_log import log as logging
-
 from tempest.common import negative_rest_client
 from tempest import config
 from tempest import exceptions
 from tempest.lib import auth
-from tempest.lib.services import compute
-from tempest.lib.services import image
-from tempest.lib.services import network
-from tempest import service_clients
+from tempest.lib import exceptions as lib_exc
+from tempest.lib.services import clients
 from tempest.services import baremetal
 from tempest.services import data_processing
 from tempest.services import identity
@@ -36,18 +32,13 @@ CONF = config.CONF
 LOG = logging.getLogger(__name__)
 
 
-class Manager(service_clients.ServiceClients):
+class Manager(clients.ServiceClients):
     """Top level manager for OpenStack tempest clients"""
 
-    default_params = {
-        'disable_ssl_certificate_validation':
-            CONF.identity.disable_ssl_certificate_validation,
-        'ca_certs': CONF.identity.ca_certificates_file,
-        'trace_requests': CONF.debug.trace_requests
-    }
+    default_params = config.service_client_config()
 
-    # NOTE: Tempest uses timeout values of compute API if project specific
-    # timeout values don't exist.
+    # TODO(andreaf) This is only used by data_processing and baremetal clients,
+    # and should be removed once they are out of Tempest
     default_params_with_timeout_values = {
         'build_interval': CONF.compute.build_interval,
         'build_timeout': CONF.compute.build_timeout
@@ -65,7 +56,11 @@ class Manager(service_clients.ServiceClients):
         _, identity_uri = get_auth_provider_class(credentials)
         super(Manager, self).__init__(
             credentials=credentials, identity_uri=identity_uri, scope=scope,
-            region=CONF.identity.region, **self.default_params)
+            region=CONF.identity.region,
+            client_parameters=self._prepare_configuration())
+        # TODO(andreaf) When clients are initialised without the right
+        # parameters available, the calls below will trigger a KeyError.
+        # We should catch that and raise a better error.
         self._set_compute_clients()
         self._set_identity_clients()
         self._set_volume_clients()
@@ -96,164 +91,120 @@ class Manager(service_clients.ServiceClients):
         self.negative_client = negative_rest_client.NegativeRestClient(
             self.auth_provider, service, **self.default_params)
 
+    def _prepare_configuration(self):
+        """Map values from CONF into Manager parameters
+
+        This uses `config.service_client_config` for all services to collect
+        most configuration items needed to init the clients.
+        """
+        # NOTE(andreaf) Once all service clients in Tempest are migrated
+        # to tempest.lib, their configuration will be picked up from the
+        # registry, and this method will become redundant.
+
+        configuration = {}
+
+        # Setup the parameters for all Tempest services which are not in lib.
+        # NOTE(andreaf) Since client.py is an internal module of Tempest,
+        # it doesn't have to consider plugin configuration.
+        for service in clients._tempest_internal_modules():
+            try:
+                # NOTE(andreaf) Use the unversioned service name to fetch
+                # the configuration since configuration is not versioned.
+                service_for_config = service.split('.')[0]
+                if service_for_config not in configuration:
+                    configuration[service_for_config] = (
+                        config.service_client_config(service_for_config))
+            except lib_exc.UnknownServiceClient:
+                LOG.warn(
+                    'Could not load configuration for service %s' % service)
+
+        return configuration
+
     def _set_network_clients(self):
-        params = {
-            'service': CONF.network.catalog_type,
-            'region': CONF.network.region or CONF.identity.region,
-            'endpoint_type': CONF.network.endpoint_type,
-            'build_interval': CONF.network.build_interval,
-            'build_timeout': CONF.network.build_timeout
-        }
-        params.update(self.default_params)
-        self.network_agents_client = network.AgentsClient(
-            self.auth_provider, **params)
-        self.network_extensions_client = network.ExtensionsClient(
-            self.auth_provider, **params)
-        self.networks_client = network.NetworksClient(
-            self.auth_provider, **params)
-        self.subnetpools_client = network.SubnetpoolsClient(
-            self.auth_provider, **params)
-        self.subnets_client = network.SubnetsClient(
-            self.auth_provider, **params)
-        self.ports_client = network.PortsClient(
-            self.auth_provider, **params)
-        self.network_quotas_client = network.QuotasClient(
-            self.auth_provider, **params)
-        self.floating_ips_client = network.FloatingIPsClient(
-            self.auth_provider, **params)
-        self.metering_labels_client = network.MeteringLabelsClient(
-            self.auth_provider, **params)
-        self.metering_label_rules_client = network.MeteringLabelRulesClient(
-            self.auth_provider, **params)
-        self.routers_client = network.RoutersClient(
-            self.auth_provider, **params)
-        self.security_group_rules_client = network.SecurityGroupRulesClient(
-            self.auth_provider, **params)
-        self.security_groups_client = network.SecurityGroupsClient(
-            self.auth_provider, **params)
-        self.network_versions_client = network.NetworkVersionsClient(
-            self.auth_provider, **params)
+        self.network_agents_client = self.network.AgentsClient()
+        self.network_extensions_client = self.network.ExtensionsClient()
+        self.networks_client = self.network.NetworksClient()
+        self.subnetpools_client = self.network.SubnetpoolsClient()
+        self.subnets_client = self.network.SubnetsClient()
+        self.ports_client = self.network.PortsClient()
+        self.network_quotas_client = self.network.QuotasClient()
+        self.floating_ips_client = self.network.FloatingIPsClient()
+        self.metering_labels_client = self.network.MeteringLabelsClient()
+        self.metering_label_rules_client = (
+            self.network.MeteringLabelRulesClient())
+        self.routers_client = self.network.RoutersClient()
+        self.security_group_rules_client = (
+            self.network.SecurityGroupRulesClient())
+        self.security_groups_client = self.network.SecurityGroupsClient()
+        self.network_versions_client = self.network.NetworkVersionsClient()
 
     def _set_image_clients(self):
-        params = {
-            'service': CONF.image.catalog_type,
-            'region': CONF.image.region or CONF.identity.region,
-            'endpoint_type': CONF.image.endpoint_type,
-            'build_interval': CONF.image.build_interval,
-            'build_timeout': CONF.image.build_timeout
-        }
-        params.update(self.default_params)
-
         if CONF.service_available.glance:
-            self.image_client = image.v1.ImagesClient(
-                self.auth_provider, **params)
-            self.image_member_client = image.v1.ImageMembersClient(
-                self.auth_provider, **params)
-            self.image_client_v2 = image.v2.ImagesClient(
-                self.auth_provider, **params)
-            self.image_member_client_v2 = image.v2.ImageMembersClient(
-                self.auth_provider, **params)
-            self.namespaces_client = image.v2.NamespacesClient(
-                self.auth_provider, **params)
-            self.resource_types_client = image.v2.ResourceTypesClient(
-                self.auth_provider, **params)
-            self.schemas_client = image.v2.SchemasClient(
-                self.auth_provider, **params)
+            self.image_client = self.image_v1.ImagesClient()
+            self.image_member_client = self.image_v1.ImageMembersClient()
+            self.image_client_v2 = self.image_v2.ImagesClient()
+            self.image_member_client_v2 = self.image_v2.ImageMembersClient()
+            self.namespaces_client = self.image_v2.NamespacesClient()
+            self.resource_types_client = self.image_v2.ResourceTypesClient()
+            self.schemas_client = self.image_v2.SchemasClient()
 
     def _set_compute_clients(self):
-        params = {
-            'service': CONF.compute.catalog_type,
-            'region': CONF.compute.region or CONF.identity.region,
-            'endpoint_type': CONF.compute.endpoint_type,
-            'build_interval': CONF.compute.build_interval,
-            'build_timeout': CONF.compute.build_timeout
-        }
-        params.update(self.default_params)
-
-        self.agents_client = compute.AgentsClient(self.auth_provider, **params)
-        self.compute_networks_client = compute.NetworksClient(
-            self.auth_provider, **params)
-        self.migrations_client = compute.MigrationsClient(self.auth_provider,
-                                                          **params)
+        self.agents_client = self.compute.AgentsClient()
+        self.compute_networks_client = self.compute.NetworksClient()
+        self.migrations_client = self.compute.MigrationsClient()
         self.security_group_default_rules_client = (
-            compute.SecurityGroupDefaultRulesClient(self.auth_provider,
-                                                    **params))
-        self.certificates_client = compute.CertificatesClient(
-            self.auth_provider, **params)
-        self.servers_client = compute.ServersClient(
-            self.auth_provider,
-            enable_instance_password=CONF.compute_feature_enabled
-                .enable_instance_password,
-            **params)
-        self.server_groups_client = compute.ServerGroupsClient(
-            self.auth_provider, **params)
-        self.limits_client = compute.LimitsClient(self.auth_provider, **params)
-        self.compute_images_client = compute.ImagesClient(self.auth_provider,
-                                                          **params)
-        self.keypairs_client = compute.KeyPairsClient(self.auth_provider,
-                                                      **params)
-        self.quotas_client = compute.QuotasClient(self.auth_provider, **params)
-        self.quota_classes_client = compute.QuotaClassesClient(
-            self.auth_provider, **params)
-        self.flavors_client = compute.FlavorsClient(self.auth_provider,
-                                                    **params)
-        self.extensions_client = compute.ExtensionsClient(self.auth_provider,
-                                                          **params)
-        self.floating_ip_pools_client = compute.FloatingIPPoolsClient(
-            self.auth_provider, **params)
-        self.floating_ips_bulk_client = compute.FloatingIPsBulkClient(
-            self.auth_provider, **params)
-        self.compute_floating_ips_client = compute.FloatingIPsClient(
-            self.auth_provider, **params)
+            self.compute.SecurityGroupDefaultRulesClient())
+        self.certificates_client = self.compute.CertificatesClient()
+        eip = CONF.compute_feature_enabled.enable_instance_password
+        self.servers_client = self.compute.ServersClient(
+            enable_instance_password=eip)
+        self.server_groups_client = self.compute.ServerGroupsClient()
+        self.limits_client = self.compute.LimitsClient()
+        self.compute_images_client = self.compute.ImagesClient()
+        self.keypairs_client = self.compute.KeyPairsClient()
+        self.quotas_client = self.compute.QuotasClient()
+        self.quota_classes_client = self.compute.QuotaClassesClient()
+        self.flavors_client = self.compute.FlavorsClient()
+        self.extensions_client = self.compute.ExtensionsClient()
+        self.floating_ip_pools_client = self.compute.FloatingIPPoolsClient()
+        self.floating_ips_bulk_client = self.compute.FloatingIPsBulkClient()
+        self.compute_floating_ips_client = self.compute.FloatingIPsClient()
         self.compute_security_group_rules_client = (
-            compute.SecurityGroupRulesClient(self.auth_provider, **params))
-        self.compute_security_groups_client = compute.SecurityGroupsClient(
-            self.auth_provider, **params)
-        self.interfaces_client = compute.InterfacesClient(self.auth_provider,
-                                                          **params)
-        self.fixed_ips_client = compute.FixedIPsClient(self.auth_provider,
-                                                       **params)
-        self.availability_zone_client = compute.AvailabilityZoneClient(
-            self.auth_provider, **params)
-        self.aggregates_client = compute.AggregatesClient(self.auth_provider,
-                                                          **params)
-        self.services_client = compute.ServicesClient(self.auth_provider,
-                                                      **params)
-        self.tenant_usages_client = compute.TenantUsagesClient(
-            self.auth_provider, **params)
-        self.hosts_client = compute.HostsClient(self.auth_provider, **params)
-        self.hypervisor_client = compute.HypervisorClient(self.auth_provider,
-                                                          **params)
+            self.compute.SecurityGroupRulesClient())
+        self.compute_security_groups_client = (
+            self.compute.SecurityGroupsClient())
+        self.interfaces_client = self.compute.InterfacesClient()
+        self.fixed_ips_client = self.compute.FixedIPsClient()
+        self.availability_zone_client = self.compute.AvailabilityZoneClient()
+        self.aggregates_client = self.compute.AggregatesClient()
+        self.services_client = self.compute.ServicesClient()
+        self.tenant_usages_client = self.compute.TenantUsagesClient()
+        self.hosts_client = self.compute.HostsClient()
+        self.hypervisor_client = self.compute.HypervisorClient()
         self.instance_usages_audit_log_client = (
-            compute.InstanceUsagesAuditLogClient(self.auth_provider, **params))
-        self.tenant_networks_client = compute.TenantNetworksClient(
-            self.auth_provider, **params)
-        self.baremetal_nodes_client = compute.BaremetalNodesClient(
-            self.auth_provider, **params)
+            self.compute.InstanceUsagesAuditLogClient())
+        self.tenant_networks_client = self.compute.TenantNetworksClient()
+        self.baremetal_nodes_client = self.compute.BaremetalNodesClient()
 
         # NOTE: The following client needs special timeout values because
         # the API is a proxy for the other component.
-        params_volume = copy.deepcopy(params)
-        params_volume.update({
-            'build_interval': CONF.volume.build_interval,
-            'build_timeout': CONF.volume.build_timeout
-        })
-        self.volumes_extensions_client = compute.VolumesClient(
-            self.auth_provider, **params_volume)
-        self.compute_versions_client = compute.VersionsClient(
-            self.auth_provider, **params_volume)
-        self.snapshots_extensions_client = compute.SnapshotsClient(
-            self.auth_provider, **params_volume)
+        params_volume = {}
+        for _key in ('build_interval', 'build_timeout'):
+            _value = self.parameters['volume'].get(_key)
+            if _value:
+                params_volume[_key] = _value
+        self.volumes_extensions_client = self.compute.VolumesClient(
+            **params_volume)
+        self.compute_versions_client = self.compute.VersionsClient(
+            **params_volume)
+        self.snapshots_extensions_client = self.compute.SnapshotsClient(
+            **params_volume)
 
     def _set_identity_clients(self):
-        params = {
-            'service': CONF.identity.catalog_type,
-            'region': CONF.identity.region
-        }
-        params.update(self.default_params_with_timeout_values)
+        params = self.parameters['identity']
 
         # Clients below use the admin endpoint type of Keystone API v2
-        params_v2_admin = params.copy()
+        params_v2_admin = copy.copy(params)
         params_v2_admin['endpoint_type'] = CONF.identity.v2_admin_endpoint_type
         self.endpoints_client = identity.v2.EndpointsClient(self.auth_provider,
                                                             **params_v2_admin)
@@ -269,7 +220,7 @@ class Manager(service_clients.ServiceClients):
             self.auth_provider, **params_v2_admin)
 
         # Clients below use the public endpoint type of Keystone API v2
-        params_v2_public = params.copy()
+        params_v2_public = copy.copy(params)
         params_v2_public['endpoint_type'] = (
             CONF.identity.v2_public_endpoint_type)
         self.identity_public_client = identity.v2.IdentityClient(
@@ -279,8 +230,9 @@ class Manager(service_clients.ServiceClients):
         self.users_public_client = identity.v2.UsersClient(
             self.auth_provider, **params_v2_public)
 
-        # Clients below use the endpoint type of Keystone API v3
-        params_v3 = params.copy()
+        # Clients below use the endpoint type of Keystone API v3, which is set
+        # in endpoint_type
+        params_v3 = copy.copy(params)
         params_v3['endpoint_type'] = CONF.identity.v3_endpoint_type
         self.domains_client = identity.v3.DomainsClient(self.auth_provider,
                                                         **params_v3)
@@ -326,14 +278,8 @@ class Manager(service_clients.ServiceClients):
                 raise exceptions.InvalidConfiguration(msg)
 
     def _set_volume_clients(self):
-        params = {
-            'service': CONF.volume.catalog_type,
-            'region': CONF.volume.region or CONF.identity.region,
-            'endpoint_type': CONF.volume.endpoint_type,
-            'build_interval': CONF.volume.build_interval,
-            'build_timeout': CONF.volume.build_timeout
-        }
-        params.update(self.default_params)
+        # Mandatory parameters (always defined)
+        params = self.parameters['volume']
 
         self.volume_qos_client = volume.v1.QosSpecsClient(self.auth_provider,
                                                           **params)
@@ -381,12 +327,8 @@ class Manager(service_clients.ServiceClients):
             volume.v2.AvailabilityZoneClient(self.auth_provider, **params)
 
     def _set_object_storage_clients(self):
-        params = {
-            'service': CONF.object_storage.catalog_type,
-            'region': CONF.object_storage.region or CONF.identity.region,
-            'endpoint_type': CONF.object_storage.endpoint_type
-        }
-        params.update(self.default_params_with_timeout_values)
+        # Mandatory parameters (always defined)
+        params = self.parameters['object-storage']
 
         self.account_client = object_storage.AccountClient(self.auth_provider,
                                                            **params)
@@ -404,12 +346,8 @@ def get_auth_provider_class(credentials):
 
 
 def get_auth_provider(credentials, pre_auth=False, scope='project'):
-    default_params = {
-        'disable_ssl_certificate_validation':
-            CONF.identity.disable_ssl_certificate_validation,
-        'ca_certs': CONF.identity.ca_certificates_file,
-        'trace_requests': CONF.debug.trace_requests
-    }
+    # kwargs for auth provider match the common ones used by service clients
+    default_params = config.service_client_config()
     if credentials is None:
         raise exceptions.InvalidCredentials(
             'Credentials must be specified')

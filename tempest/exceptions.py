@@ -63,14 +63,15 @@ class StackBuildErrorException(exceptions.TempestException):
 
 
 class ServerUnreachable(exceptions.TempestException):
-    message = "The server is not reachable via the configured network"
+    message = ("Server %(server_id)s is not reachable via "
+               "the configured network")
 
 
 # NOTE(andreaf) This exception is added here to facilitate the migration
 # of get_network_from_name and preprov_creds to tempest.lib, and it should
 # be migrated along with them
 class InvalidTestResource(exceptions.TempestException):
-    message = "%(name) is not a valid %(type), or the name is ambiguous"
+    message = "%(name)s is not a valid %(type)s, or the name is ambiguous"
 
 
 class RFCViolation(exceptions.RestClientException):

@@ -64,8 +64,10 @@ class RestClient(object):
                                                     certificate validation
     :param str ca_certs: File containing the CA Bundle to use in verifying a
                          TLS server cert
-    :param str trace_request: Regex to use for specifying logging the entirety
+    :param str trace_requests: Regex to use for specifying logging the entirety
                               of the request and response payload
+    :param str http_timeout: Timeout in seconds to wait for the http request to
+                             return
     """
     TYPE = "json"
 
@@ -78,7 +80,7 @@ class RestClient(object):
                  endpoint_type='publicURL',
                  build_interval=1, build_timeout=60,
                  disable_ssl_certificate_validation=False, ca_certs=None,
-                 trace_requests='', name=None):
+                 trace_requests='', name=None, http_timeout=None):
         self.auth_provider = auth_provider
         self.service = service
         self.region = region
@@ -99,9 +101,13 @@ class RestClient(object):
                                        'vary', 'www-authenticate'))
         dscv = disable_ssl_certificate_validation
         self.http_obj = http.ClosingHttp(
-            disable_ssl_certificate_validation=dscv, ca_certs=ca_certs)
+            disable_ssl_certificate_validation=dscv, ca_certs=ca_certs,
+            timeout=http_timeout)
 
     def _get_type(self):
+        if self.TYPE != "json":
+            self.LOG.warning("Tempest has dropped XML support and the TYPE "
+                             "became meaningless")
         return self.TYPE
 
     def get_headers(self, accept_type=None, send_type=None):
@@ -229,8 +235,8 @@ class RestClient(object):
             raise TypeError("'read_code' must be an int instead of (%s)"
                             % type(read_code))
 
-        assert_msg = ("This function only allowed to use for HTTP status"
-                      "codes which explicitly defined in the RFC 7231 & 4918."
+        assert_msg = ("This function only allowed to use for HTTP status "
+                      "codes which explicitly defined in the RFC 7231 & 4918. "
                       "{0} is not a defined Success Code!"
                       ).format(expected_code)
         if isinstance(expected_code, list):
@@ -397,19 +403,14 @@ class RestClient(object):
         else:
             return text
 
-    def _log_request_start(self, method, req_url, req_headers=None,
-                           req_body=None):
-        if req_headers is None:
-            req_headers = {}
+    def _log_request_start(self, method, req_url):
         caller_name = test_utils.find_test_caller()
         if self.trace_requests and re.search(self.trace_requests, caller_name):
             self.LOG.debug('Starting Request (%s): %s %s' %
                            (caller_name, method, req_url))
 
-    def _log_request_full(self, method, req_url, resp,
-                          secs="", req_headers=None,
-                          req_body=None, resp_body=None,
-                          caller_name=None, extra=None):
+    def _log_request_full(self, resp, req_headers=None, req_body=None,
+                          resp_body=None, extra=None):
         if 'X-Auth-Token' in req_headers:
             req_headers['X-Auth-Token'] = '<omitted>'
         # A shallow copy is sufficient
@@ -455,8 +456,8 @@ class RestClient(object):
         # Also look everything at DEBUG if you want to filter this
         # out, don't run at debug.
         if self.LOG.isEnabledFor(real_logging.DEBUG):
-            self._log_request_full(method, req_url, resp, secs, req_headers,
-                                   req_body, resp_body, caller_name, extra)
+            self._log_request_full(resp, req_headers, req_body,
+                                   resp_body, extra)
 
     def _parse_resp(self, body):
         try:
@@ -892,11 +893,11 @@ class RestClient(object):
                                         cls=JSONSCHEMA_VALIDATOR,
                                         format_checker=FORMAT_CHECKER)
                 except jsonschema.ValidationError as ex:
-                    msg = ("HTTP response body is invalid (%s)") % ex
+                    msg = ("HTTP response body is invalid (%s)" % ex)
                     raise exceptions.InvalidHTTPResponseBody(msg)
             else:
                 if body:
-                    msg = ("HTTP response body should not exist (%s)") % body
+                    msg = ("HTTP response body should not exist (%s)" % body)
                     raise exceptions.InvalidHTTPResponseBody(msg)
 
             # Check the header of a response
@@ -907,7 +908,7 @@ class RestClient(object):
                                         cls=JSONSCHEMA_VALIDATOR,
                                         format_checker=FORMAT_CHECKER)
                 except jsonschema.ValidationError as ex:
-                    msg = ("HTTP response header is invalid (%s)") % ex
+                    msg = ("HTTP response header is invalid (%s)" % ex)
                     raise exceptions.InvalidHTTPResponseHeader(msg)
 
 

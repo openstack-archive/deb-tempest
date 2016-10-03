@@ -27,23 +27,23 @@ from tempest import test
 CONF = config.CONF
 
 
-class VolumesBackupsV2Test(base.BaseVolumeAdminTest):
+class VolumesBackupsAdminV2Test(base.BaseVolumeAdminTest):
 
     @classmethod
     def skip_checks(cls):
-        super(VolumesBackupsV2Test, cls).skip_checks()
+        super(VolumesBackupsAdminV2Test, cls).skip_checks()
         if not CONF.volume_feature_enabled.backup:
             raise cls.skipException("Cinder backup feature disabled")
 
     @classmethod
     def resource_setup(cls):
-        super(VolumesBackupsV2Test, cls).resource_setup()
+        super(VolumesBackupsAdminV2Test, cls).resource_setup()
 
         cls.volume = cls.create_volume()
 
     def _delete_backup(self, backup_id):
         self.admin_backups_client.delete_backup(backup_id)
-        self.admin_backups_client.wait_for_backup_deletion(backup_id)
+        self.admin_backups_client.wait_for_resource_deletion(backup_id)
 
     def _decode_url(self, backup_url):
         return json.loads(base64.decodestring(backup_url))
@@ -59,44 +59,6 @@ class VolumesBackupsV2Test(base.BaseVolumeAdminTest):
         backup.update(changes)
         return self._encode_backup(backup)
 
-    @test.idempotent_id('a66eb488-8ee1-47d4-8e9f-575a095728c6')
-    def test_volume_backup_create_get_detailed_list_restore_delete(self):
-        # Create backup
-        backup_name = data_utils.rand_name('Backup')
-        create_backup = self.admin_backups_client.create_backup
-        backup = create_backup(volume_id=self.volume['id'],
-                               name=backup_name)['backup']
-        self.addCleanup(self.admin_backups_client.delete_backup,
-                        backup['id'])
-        self.assertEqual(backup_name, backup['name'])
-        waiters.wait_for_volume_status(self.admin_volume_client,
-                                       self.volume['id'], 'available')
-        self.admin_backups_client.wait_for_backup_status(backup['id'],
-                                                         'available')
-
-        # Get a given backup
-        backup = self.admin_backups_client.show_backup(backup['id'])['backup']
-        self.assertEqual(backup_name, backup['name'])
-
-        # Get all backups with detail
-        backups = self.admin_backups_client.list_backups(
-            detail=True)['backups']
-        self.assertIn((backup['name'], backup['id']),
-                      [(m['name'], m['id']) for m in backups])
-
-        # Restore backup
-        restore = self.admin_backups_client.restore_backup(
-            backup['id'])['restore']
-
-        # Delete backup
-        self.addCleanup(self.admin_volume_client.delete_volume,
-                        restore['volume_id'])
-        self.assertEqual(backup['id'], restore['backup_id'])
-        self.admin_backups_client.wait_for_backup_status(backup['id'],
-                                                         'available')
-        waiters.wait_for_volume_status(self.admin_volume_client,
-                                       restore['volume_id'], 'available')
-
     @test.idempotent_id('a99c54a1-dd80-4724-8a13-13bf58d4068d')
     def test_volume_backup_export_import(self):
         """Test backup export import functionality.
@@ -105,7 +67,7 @@ class VolumesBackupsV2Test(base.BaseVolumeAdminTest):
         be imported back in case of a DB loss.
         """
         # Create backup
-        backup_name = data_utils.rand_name('Backup')
+        backup_name = data_utils.rand_name(self.__class__.__name__ + '-Backup')
         backup = (self.admin_backups_client.create_backup(
             volume_id=self.volume['id'], name=backup_name)['backup'])
         self.addCleanup(self._delete_backup, backup['id'])
@@ -166,6 +128,24 @@ class VolumesBackupsV2Test(base.BaseVolumeAdminTest):
         self.admin_backups_client.wait_for_backup_status(import_backup['id'],
                                                          'available')
 
+    @test.idempotent_id('47a35425-a891-4e13-961c-c45deea21e94')
+    def test_volume_backup_reset_status(self):
+        # Create a backup
+        backup_name = data_utils.rand_name(
+            self.__class__.__name__ + '-Backup')
+        backup = self.admin_backups_client.create_backup(
+            volume_id=self.volume['id'], name=backup_name)['backup']
+        self.addCleanup(self.admin_backups_client.delete_backup,
+                        backup['id'])
+        self.assertEqual(backup_name, backup['name'])
+        self.admin_backups_client.wait_for_backup_status(backup['id'],
+                                                         'available')
+        # Reset backup status to error
+        self.admin_backups_client.reset_backup_status(backup_id=backup['id'],
+                                                      status="error")
+        self.admin_backups_client.wait_for_backup_status(backup['id'],
+                                                         'error')
 
-class VolumesBackupsV1Test(VolumesBackupsV2Test):
+
+class VolumesBackupsAdminV1Test(VolumesBackupsAdminV2Test):
     _api_version = 1

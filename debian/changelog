@@ -1,5 +1,8 @@
-tempest (1:12.1.0-4) UNRELEASED; urgency=medium
+tempest (1:12.2.0-0) experimental; urgency=medium
 
+  * New upstream release.
+  * Fixed (build-)depends for this release.
+  * Removed fix-privacy-breach.patch.
   * Fixed oslotest EPOCH.
   * Using OpenStack's Gerrit as VCS URLs.
   * Added .gitreview in extend-diff-ignore.

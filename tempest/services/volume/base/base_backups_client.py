@@ -51,13 +51,13 @@ class BaseBackupsClient(rest_client.RestClient):
 
     def delete_backup(self, backup_id):
         """Delete a backup of volume."""
-        resp, body = self.delete('backups/%s' % (str(backup_id)))
+        resp, body = self.delete('backups/%s' % backup_id)
         self.expected_success(202, resp.status)
         return rest_client.ResponseBody(resp, body)
 
     def show_backup(self, backup_id):
         """Returns the details of a single backup."""
-        url = "backups/%s" % str(backup_id)
+        url = "backups/%s" % backup_id
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -89,6 +89,13 @@ class BaseBackupsClient(rest_client.RestClient):
         self.expected_success(201, resp.status)
         return rest_client.ResponseBody(resp, body)
 
+    def reset_backup_status(self, backup_id, status):
+        """Reset the specified backup's status."""
+        post_body = json.dumps({'os-reset_status': {"status": status}})
+        resp, body = self.post('backups/%s/action' % backup_id, post_body)
+        self.expected_success(202, resp.status)
+        return rest_client.ResponseBody(resp, body)
+
     def wait_for_backup_status(self, backup_id, status):
         """Waits for a Backup to reach a given status."""
         body = self.show_backup(backup_id)['backup']
@@ -99,7 +106,7 @@ class BaseBackupsClient(rest_client.RestClient):
             time.sleep(self.build_interval)
             body = self.show_backup(backup_id)['backup']
             backup_status = body['status']
-            if backup_status == 'error':
+            if backup_status == 'error' and backup_status != status:
                 raise exceptions.VolumeBackupException(backup_id=backup_id)
 
             if int(time.time()) - start >= self.build_timeout:
@@ -109,14 +116,9 @@ class BaseBackupsClient(rest_client.RestClient):
                             self.build_timeout))
                 raise exceptions.TimeoutException(message)
 
-    def wait_for_backup_deletion(self, backup_id):
-        """Waits for backup deletion"""
-        start_time = int(time.time())
-        while True:
-            try:
-                self.show_backup(backup_id)
-            except lib_exc.NotFound:
-                return
-            if int(time.time()) - start_time >= self.build_timeout:
-                raise exceptions.TimeoutException
-            time.sleep(self.build_interval)
+    def is_resource_deleted(self, id):
+        try:
+            self.show_backup(id)
+        except lib_exc.NotFound:
+            return True
+        return False

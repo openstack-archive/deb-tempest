@@ -13,13 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import logging
 import os
 
 import fixtures
 import testtools
-
-LOG = logging.getLogger(__name__)
 
 
 class BaseTestCase(testtools.testcase.WithAttributes, testtools.TestCase):
@@ -45,7 +42,7 @@ class BaseTestCase(testtools.testcase.WithAttributes, testtools.TestCase):
     def setUp(self):
         super(BaseTestCase, self).setUp()
         if not self.setUpClassCalled:
-            raise RuntimeError("setUpClass does not calls the super's"
+            raise RuntimeError("setUpClass does not calls the super's "
                                "setUpClass in the "
                                + self.__class__.__name__)
         test_timeout = os.environ.get('OS_TEST_TIMEOUT', 0)

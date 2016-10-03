@@ -42,21 +42,14 @@ class VolumesV2ListTestJSON(base.BaseVolumeTest):
         super(VolumesV2ListTestJSON, cls).resource_setup()
 
         # Create 3 test volumes
-        cls.volume_list = []
-        cls.volume_id_list = []
         cls.metadata = {'Type': 'work'}
+        # NOTE(zhufl): When using pre-provisioned credentials, the project
+        # may have volumes other than those created below.
+        existing_volumes = cls.client.list_volumes()['volumes']
+        cls.volume_id_list = [vol['id'] for vol in existing_volumes]
         for i in range(3):
             volume = cls.create_volume(metadata=cls.metadata)
-            volume = cls.client.show_volume(volume['id'])['volume']
-            cls.volume_list.append(volume)
             cls.volume_id_list.append(volume['id'])
-
-    @classmethod
-    def resource_cleanup(cls):
-        # Delete the created volumes
-        for volid in cls.volume_id_list:
-            cls.delete_volume(cls.client, volid)
-        super(VolumesV2ListTestJSON, cls).resource_cleanup()
 
     @test.idempotent_id('2a7064eb-b9c3-429b-b888-33928fc5edd3')
     def test_volume_list_details_with_multiple_params(self):
@@ -174,9 +167,9 @@ class VolumesV2ListTestJSON(base.BaseVolumeTest):
 
             # If cannot follow make sure it's because we have finished
             else:
-                self.assertListEqual([], remaining or [],
-                                     'No more pages reported, but still '
-                                     'missing ids %s' % remaining)
+                self.assertEqual([], remaining or [],
+                                 'No more pages reported, but still '
+                                 'missing ids %s' % remaining)
                 break
 
     @test.idempotent_id('e9138a2c-f67b-4796-8efa-635c196d01de')

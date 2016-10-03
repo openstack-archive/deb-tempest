@@ -15,17 +15,14 @@
 
 from oslo_log import log as logging
 
-from tempest import config
 from tempest.scenario import manager
 from tempest import test
-
-CONF = config.CONF
 
 LOG = logging.getLogger(__name__)
 
 
 class BaremetalBasicOps(manager.BaremetalScenarioTest):
-    """This smoke test tests the pxe_ssh Ironic driver.
+    """This test tests the pxe_ssh Ironic driver.
 
     It follows this basic set of operations:
         * Creates a keypair
