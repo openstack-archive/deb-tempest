@@ -10,15 +10,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_log import log as logging
 from oslo_serialization import jsonutils as json
 from six.moves.urllib import parse as urllib
 
 from tempest.lib.common import rest_client
 from tempest.lib import exceptions as lib_exc
-
-
-LOG = logging.getLogger(__name__)
 
 
 class BaseSnapshotsClient(rest_client.RestClient):
@@ -27,7 +23,11 @@ class BaseSnapshotsClient(rest_client.RestClient):
     create_resp = 200
 
     def list_snapshots(self, detail=False, **params):
-        """List all the snapshot."""
+        """List all the snapshot.
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-blockstorage-v2.html#listSnapshots
+        """
         url = 'snapshots'
         if detail:
             url += '/detail'
@@ -40,8 +40,12 @@ class BaseSnapshotsClient(rest_client.RestClient):
         return rest_client.ResponseBody(resp, body)
 
     def show_snapshot(self, snapshot_id):
-        """Returns the details of a single snapshot."""
-        url = "snapshots/%s" % str(snapshot_id)
+        """Returns the details of a single snapshot.
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-blockstorage-v2.html#showSnapshot
+        """
+        url = "snapshots/%s" % snapshot_id
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -72,8 +76,12 @@ class BaseSnapshotsClient(rest_client.RestClient):
         return rest_client.ResponseBody(resp, body)
 
     def delete_snapshot(self, snapshot_id):
-        """Delete Snapshot."""
-        resp, body = self.delete("snapshots/%s" % str(snapshot_id))
+        """Delete Snapshot.
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-blockstorage-v2.html#deleteSnapshot
+        """
+        resp, body = self.delete("snapshots/%s" % snapshot_id)
         self.expected_success(202, resp.status)
         return rest_client.ResponseBody(resp, body)
 
@@ -104,7 +112,7 @@ class BaseSnapshotsClient(rest_client.RestClient):
         # Bug https://bugs.launchpad.net/openstack-api-site/+bug/1532645
 
         post_body = json.dumps({'os-update_snapshot_status': kwargs})
-        url = 'snapshots/%s/action' % str(snapshot_id)
+        url = 'snapshots/%s/action' % snapshot_id
         resp, body = self.post(url, post_body)
         self.expected_success(202, resp.status)
         return rest_client.ResponseBody(resp, body)
@@ -112,15 +120,20 @@ class BaseSnapshotsClient(rest_client.RestClient):
     def create_snapshot_metadata(self, snapshot_id, metadata):
         """Create metadata for the snapshot."""
         put_body = json.dumps({'metadata': metadata})
-        url = "snapshots/%s/metadata" % str(snapshot_id)
+        url = "snapshots/%s/metadata" % snapshot_id
         resp, body = self.post(url, put_body)
         body = json.loads(body)
         self.expected_success(200, resp.status)
         return rest_client.ResponseBody(resp, body)
 
     def show_snapshot_metadata(self, snapshot_id):
-        """Get metadata of the snapshot."""
-        url = "snapshots/%s/metadata" % str(snapshot_id)
+        """Get metadata of the snapshot.
+
+        Available params: see http://developer.openstack.org/
+                              api-ref-blockstorage-v2.html#
+                              showSnapshotMetadata
+        """
+        url = "snapshots/%s/metadata" % snapshot_id
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -130,10 +143,11 @@ class BaseSnapshotsClient(rest_client.RestClient):
         """Update metadata for the snapshot.
 
         Available params: see http://developer.openstack.org/
-                              api-ref-blockstorage-v2.html#updateSnapshotMetadata
+                              api-ref-blockstorage-v2.html#
+                              updateSnapshotMetadata
         """
         put_body = json.dumps(kwargs)
-        url = "snapshots/%s/metadata" % str(snapshot_id)
+        url = "snapshots/%s/metadata" % snapshot_id
         resp, body = self.put(url, put_body)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -146,7 +160,7 @@ class BaseSnapshotsClient(rest_client.RestClient):
         # link to api-site.
         # LP: https://bugs.launchpad.net/openstack-api-site/+bug/1529064
         put_body = json.dumps(kwargs)
-        url = "snapshots/%s/metadata/%s" % (str(snapshot_id), str(id))
+        url = "snapshots/%s/metadata/%s" % (snapshot_id, id)
         resp, body = self.put(url, put_body)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -154,7 +168,7 @@ class BaseSnapshotsClient(rest_client.RestClient):
 
     def delete_snapshot_metadata_item(self, snapshot_id, id):
         """Delete metadata item for the snapshot."""
-        url = "snapshots/%s/metadata/%s" % (str(snapshot_id), str(id))
+        url = "snapshots/%s/metadata/%s" % (snapshot_id, id)
         resp, body = self.delete(url)
         self.expected_success(200, resp.status)
         return rest_client.ResponseBody(resp, body)

@@ -63,7 +63,11 @@ class BaseVolumesClient(rest_client.RestClient):
         return rest_client.ResponseBody(resp, body)
 
     def show_pools(self, detail=False):
-        # List all the volumes pools (hosts)
+        """List all the volumes pools (hosts).
+
+        Output params: see http://developer.openstack.org/
+                           api-ref-blockstorage-v2.html#listPools
+        """
         url = 'scheduler-stats/get_pools'
         if detail:
             url += '?detail=True'
@@ -73,9 +77,22 @@ class BaseVolumesClient(rest_client.RestClient):
         self.expected_success(200, resp.status)
         return rest_client.ResponseBody(resp, body)
 
+    def show_backend_capabilities(self, host):
+        """Shows capabilities for a storage back end.
+
+         Output params: see http://developer.openstack.org/
+                            api-ref-blockstorage-v2.html
+                            #showBackendCapabilities
+        """
+        url = 'capabilities/%s' % host
+        resp, body = self.get(url)
+        body = json.loads(body)
+        self.expected_success(200, resp.status)
+        return rest_client.ResponseBody(resp, body)
+
     def show_volume(self, volume_id):
         """Returns the details of a single volume."""
-        url = "volumes/%s" % str(volume_id)
+        url = "volumes/%s" % volume_id
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -109,7 +126,7 @@ class BaseVolumesClient(rest_client.RestClient):
 
     def delete_volume(self, volume_id):
         """Deletes the Specified Volume."""
-        resp, body = self.delete("volumes/%s" % str(volume_id))
+        resp, body = self.delete("volumes/%s" % volume_id)
         self.expected_success(202, resp.status)
         return rest_client.ResponseBody(resp, body)
 
@@ -201,22 +218,6 @@ class BaseVolumesClient(rest_client.RestClient):
         self.expected_success(202, resp.status)
         return rest_client.ResponseBody(resp, body)
 
-    def volume_begin_detaching(self, volume_id):
-        """Volume Begin Detaching."""
-        # ref cinder/api/contrib/volume_actions.py#L158
-        post_body = json.dumps({'os-begin_detaching': {}})
-        resp, body = self.post('volumes/%s/action' % volume_id, post_body)
-        self.expected_success(202, resp.status)
-        return rest_client.ResponseBody(resp, body)
-
-    def volume_roll_detaching(self, volume_id):
-        """Volume Roll Detaching."""
-        # cinder/api/contrib/volume_actions.py#L170
-        post_body = json.dumps({'os-roll_detaching': {}})
-        resp, body = self.post('volumes/%s/action' % volume_id, post_body)
-        self.expected_success(202, resp.status)
-        return rest_client.ResponseBody(resp, body)
-
     def create_volume_transfer(self, **kwargs):
         """Create a volume transfer.
 
@@ -231,7 +232,7 @@ class BaseVolumesClient(rest_client.RestClient):
 
     def show_volume_transfer(self, transfer_id):
         """Returns the details of a volume transfer."""
-        url = "os-volume-transfer/%s" % str(transfer_id)
+        url = "os-volume-transfer/%s" % transfer_id
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -253,7 +254,7 @@ class BaseVolumesClient(rest_client.RestClient):
 
     def delete_volume_transfer(self, transfer_id):
         """Delete a volume transfer."""
-        resp, body = self.delete("os-volume-transfer/%s" % str(transfer_id))
+        resp, body = self.delete("os-volume-transfer/%s" % transfer_id)
         self.expected_success(202, resp.status)
         return rest_client.ResponseBody(resp, body)
 
@@ -288,7 +289,7 @@ class BaseVolumesClient(rest_client.RestClient):
     def create_volume_metadata(self, volume_id, metadata):
         """Create metadata for the volume."""
         put_body = json.dumps({'metadata': metadata})
-        url = "volumes/%s/metadata" % str(volume_id)
+        url = "volumes/%s/metadata" % volume_id
         resp, body = self.post(url, put_body)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -296,7 +297,7 @@ class BaseVolumesClient(rest_client.RestClient):
 
     def show_volume_metadata(self, volume_id):
         """Get metadata of the volume."""
-        url = "volumes/%s/metadata" % str(volume_id)
+        url = "volumes/%s/metadata" % volume_id
         resp, body = self.get(url)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -305,7 +306,7 @@ class BaseVolumesClient(rest_client.RestClient):
     def update_volume_metadata(self, volume_id, metadata):
         """Update metadata for the volume."""
         put_body = json.dumps({'metadata': metadata})
-        url = "volumes/%s/metadata" % str(volume_id)
+        url = "volumes/%s/metadata" % volume_id
         resp, body = self.put(url, put_body)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -314,7 +315,7 @@ class BaseVolumesClient(rest_client.RestClient):
     def update_volume_metadata_item(self, volume_id, id, meta_item):
         """Update metadata item for the volume."""
         put_body = json.dumps({'meta': meta_item})
-        url = "volumes/%s/metadata/%s" % (str(volume_id), str(id))
+        url = "volumes/%s/metadata/%s" % (volume_id, id)
         resp, body = self.put(url, put_body)
         body = json.loads(body)
         self.expected_success(200, resp.status)
@@ -322,7 +323,7 @@ class BaseVolumesClient(rest_client.RestClient):
 
     def delete_volume_metadata_item(self, volume_id, id):
         """Delete metadata item for the volume."""
-        url = "volumes/%s/metadata/%s" % (str(volume_id), str(id))
+        url = "volumes/%s/metadata/%s" % (volume_id, id)
         resp, body = self.delete(url)
         self.expected_success(200, resp.status)
         return rest_client.ResponseBody(resp, body)

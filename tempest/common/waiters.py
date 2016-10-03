@@ -18,7 +18,7 @@ from oslo_log import log as logging
 from tempest.common import image as common_image
 from tempest import config
 from tempest import exceptions
-from tempest.lib.common.utils import misc as misc_utils
+from tempest.lib.common.utils import test_utils
 from tempest.lib import exceptions as lib_exc
 from tempest.lib.services.image.v1 import images_client as images_v1_client
 
@@ -53,9 +53,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
                     return
                 # NOTE(afazekas): The instance is in "ready for action state"
                 # when no task in progress
-                # NOTE(afazekas): Converted to string because of the XML
-                # responses
-                if str(task_state) == "None":
+                if task_state is None:
                     # without state api extension 3 sec usually enough
                     time.sleep(CONF.compute.ready_wait)
                     return
@@ -91,7 +89,7 @@ def wait_for_server_status(client, server_id, status, ready_wait=True,
                         'timeout': timeout})
             message += ' Current status: %s.' % server_status
             message += ' Current task state: %s.' % task_state
-            caller = misc_utils.find_test_caller()
+            caller = test_utils.find_test_caller()
             if caller:
                 message = '(%s) %s' % (caller, message)
             raise exceptions.TimeoutException(message)
@@ -141,7 +139,7 @@ def wait_for_image_status(client, image_id, status):
     while int(time.time()) - start < client.build_timeout:
         image = show_image(image_id)
         # Compute image client returns response wrapped in 'image' element
-        # which is not case with Glance image client.
+        # which is not the case with Glance image client.
         if 'image' in image:
             image = image['image']
 
@@ -162,7 +160,7 @@ def wait_for_image_status(client, image_id, status):
                                           'status': status,
                                           'current_status': current_status,
                                           'timeout': client.build_timeout})
-    caller = misc_utils.find_test_caller()
+    caller = test_utils.find_test_caller()
     if caller:
         message = '(%s) %s' % (caller, message)
     raise exceptions.TimeoutException(message)
@@ -235,7 +233,7 @@ def wait_for_bm_node_status(client, node_id, attr, status):
                         'status': status,
                         'timeout': client.build_timeout})
             message += ' Current state of %s: %s.' % (attr, status_curr)
-            caller = misc_utils.find_test_caller()
+            caller = test_utils.find_test_caller()
             if caller:
                 message = '(%s) %s' % (caller, message)
             raise exceptions.TimeoutException(message)
