@@ -144,6 +144,18 @@ class BaseV2ImageTest(BaseImageTest):
         cls.resource_types_client = cls.os.resource_types_client
         cls.schemas_client = cls.os.schemas_client
 
+    def create_namespace(cls, namespace_name=None, visibility='public',
+                         description='Tempest', protected=False,
+                         **kwargs):
+        if not namespace_name:
+            namespace_name = data_utils.rand_name('test-ns')
+        kwargs.setdefault('display_name', namespace_name)
+        namespace = cls.namespaces_client.create_namespace(
+            namespace=namespace_name, visibility=visibility,
+            description=description, protected=protected, **kwargs)
+        cls.addCleanup(cls.namespaces_client.delete_namespace, namespace_name)
+        return namespace
+
 
 class BaseV2MemberImageTest(BaseV2ImageTest):
 
@@ -167,7 +179,7 @@ class BaseV2MemberImageTest(BaseV2ImageTest):
         return image_ids
 
     def _create_image(self):
-        name = data_utils.rand_name('image')
+        name = data_utils.rand_name(self.__class__.__name__ + '-image')
         image = self.client.create_image(name=name,
                                          container_format='bare',
                                          disk_format='raw')

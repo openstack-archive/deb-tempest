@@ -1,13 +1,8 @@
 Tempest - The OpenStack Integration Test Suite
 ==============================================
 
-.. image:: https://img.shields.io/pypi/v/tempest.svg
-    :target: https://pypi.python.org/pypi/tempest/
-    :alt: Latest Version
-
-.. image:: https://img.shields.io/pypi/dm/tempest.svg
-    :target: https://pypi.python.org/pypi/tempest/
-    :alt: Downloads
+The documentation for Tempest is officially hosted at:
+http://docs.openstack.org/developer/tempest/
 
 This is a set of integration tests to be run against a live OpenStack
 cluster. Tempest has batteries of tests for OpenStack API validation,
@@ -63,19 +58,21 @@ as it is simpler, and quicker to work with.
    This can be done within a venv, but the assumption for this guide is that
    the Tempest cli entry point will be in your shell's PATH.
 
-#. Installing Tempest will create a /etc/tempest dir which will contain the
-   sample config file packaged with Tempest. The contents of /etc/tempest will
-   be copied to all local working dirs, so if there is any common configuration
-   you'd like to be shared between anyone setting up local Tempest working dirs
-   it's recommended that you copy or rename tempest.conf.sample to tempest.conf
-   and make those changes to that file in /etc/tempest
+#. Installing Tempest may create a /etc/tempest dir, however if one isn't
+   created you can create one or use ~/.tempest/etc or ~/.config/tempest in
+   place of /etc/tempest. If none of these dirs are created tempest will create
+   ~/.tempest/etc when it's needed. The contents of this dir will always
+   automatically be copied to all etc/ dirs in local workspaces as an initial
+   setup step. So if there is any common configuration you'd like to be shared
+   between local Tempest workspaces it's recommended that you pre-populate it
+   before running ``tempest init``.
 
-#. Setup a local working Tempest dir. This is done by using the tempest init
+#. Setup a local Tempest workspace. This is done by using the tempest init
    command::
 
     $ tempest init cloud-01
 
-   works the same as::
+   which also works the same as::
 
     $ mkdir cloud-01 && cd cloud-01 && tempest init
 
@@ -88,11 +85,23 @@ as it is simpler, and quicker to work with.
    config files located in the etc/ subdir created by the ``tempest init``
    command. Tempest is expecting a tempest.conf file in etc/ so if only a
    sample exists you must rename or copy it to tempest.conf before making
-   any changes to it otherwise Tempest will not know how to load it.
+   any changes to it otherwise Tempest will not know how to load it. For
+   details on configuring tempest refer to the :ref:`tempest-configuration`.
 
 #. Once the configuration is done you're now ready to run Tempest. This can
-   be done with testr directly or any `testr`_ based test runner, like
-   `ostestr`_. For example, from the working dir running::
+   be done using the :ref:`tempest_run` command. This can be done by either
+   running::
+
+     $ tempest run
+
+   from the Tempest workspace directory. Or you can use the ``--workspace``
+   argument to run in the workspace you created regarless of your current
+   working directory. For example::
+
+     $ tempest run --workspace cloud-01
+
+   There is also the option to use testr directly, or any `testr`_ based test
+   runner, like `ostestr`_. For example, from the workspace dir run::
 
      $ ostestr --regex '(?!.*\[.*\bslow\b.*\])(^tempest\.(api|scenario))'
 
@@ -115,6 +124,9 @@ For more details refer to the library documentation here: :ref:`library`
 
 Release Versioning
 ------------------
+`Tempest Release Notes <http://docs.openstack.org/releasenotes/tempest>`_
+shows what changes have been released on each version.
+
 Tempest's released versions are broken into 2 sets of information. Depending on
 how you intend to consume tempest you might need
 
@@ -169,9 +181,8 @@ should only be run on the unit test directory. The default value of OS_TEST_PATH
 is OS_TEST_PATH=./tempest/test_discover which will only run test discover on the
 Tempest suite.
 
-Alternatively, you can use the run_tests.sh script which will create a venv and
-run the unit tests. There are also the py27 and py34 tox jobs which will run
-the unit tests with the corresponding version of python.
+Alternatively, there are the py27 and py34 tox jobs which will run the unit
+tests with the corresponding version of python.
 
 Python 2.6
 ----------
@@ -215,7 +226,7 @@ configuration file is to generate a sample in the ``etc/`` directory ::
 
     $ cd $TEMPEST_ROOT_DIR
     $ oslo-config-generator --config-file \
-        etc/config-generator.tempest.conf \
+        tempest/cmd/config-generator.tempest.conf \
         --output-file etc/tempest.conf
 
 After that, open up the ``etc/tempest.conf`` file and edit the

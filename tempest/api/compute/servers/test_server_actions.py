@@ -110,6 +110,10 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                 servers_client=self.client)
             boot_time = linux_client.get_boot_time()
 
+            # NOTE: This sync is for avoiding the loss of pub key data
+            # in a server
+            linux_client.exec_command("sync")
+
         self.client.reboot_server(self.server_id, type=reboot_type)
         waiters.wait_for_server_status(self.client, self.server_id, 'ACTIVE')
 
@@ -151,7 +155,7 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
     def test_rebuild_server(self):
         # The server should be rebuilt using the provided image and data
         meta = {'rebuild': 'server'}
-        new_name = data_utils.rand_name('server')
+        new_name = data_utils.rand_name(self.__class__.__name__ + '-server')
         password = 'rebuildPassw0rd'
         rebuilt_server = self.client.rebuild_server(
             self.server_id,
@@ -266,6 +270,9 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
                                            'SHUTOFF')
 
         self.client.resize_server(self.server_id, self.flavor_ref_alt)
+        # NOTE(jlk): Explicitly delete the server to get a new one for later
+        # tests. Avoids resize down race issues.
+        self.addCleanup(self.delete_server, self.server_id)
         waiters.wait_for_server_status(self.client, self.server_id,
                                        'VERIFY_RESIZE')
 
@@ -280,10 +287,6 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         if stop:
             # NOTE(mriedem): tearDown requires the server to be started.
             self.client.start_server(self.server_id)
-
-        # NOTE(jlk): Explicitly delete the server to get a new one for later
-        # tests. Avoids resize down race issues.
-        self.addCleanup(self.delete_server, self.server_id)
 
     @test.idempotent_id('1499262a-9328-4eda-9068-db1ac57498d2')
     @testtools.skipUnless(CONF.compute_feature_enabled.resize,
@@ -305,6 +308,9 @@ class ServerActionsTestJSON(base.BaseV2ComputeTest):
         # values after a resize is reverted
 
         self.client.resize_server(self.server_id, self.flavor_ref_alt)
+        # NOTE(zhufl): Explicitly delete the server to get a new one for later
+        # tests. Avoids resize down race issues.
+        self.addCleanup(self.delete_server, self.server_id)
         waiters.wait_for_server_status(self.client, self.server_id,
                                        'VERIFY_RESIZE')
 

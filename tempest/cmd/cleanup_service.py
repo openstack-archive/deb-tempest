@@ -67,11 +67,8 @@ def init_conf():
     CONF_PRIV_NETWORK_NAME = CONF.compute.fixed_network_name
     CONF_PUB_NETWORK = CONF.network.public_network_id
     CONF_PUB_ROUTER = CONF.network.public_router_id
-    CONF_TENANTS = [CONF.auth.admin_project_name,
-                    CONF.identity.project_name,
-                    CONF.identity.alt_project_name]
-    CONF_USERS = [CONF.auth.admin_username, CONF.identity.username,
-                  CONF.identity.alt_username]
+    CONF_TENANTS = [CONF.auth.admin_project_name]
+    CONF_USERS = [CONF.auth.admin_username]
 
     if IS_NEUTRON:
         CONF_PRIV_NETWORK = _get_network_id(CONF.compute.fixed_network_name,
@@ -352,7 +349,8 @@ class VolumeQuotaService(BaseService):
             LOG.exception("Delete Volume Quotas exception.")
 
     def dry_run(self):
-        quotas = self.client.show_quota_usage(self.tenant_id)['quota_set']
+        quotas = self.client.show_quota_set(
+            self.tenant_id, params={'usage': True})['quota_set']
         self.data['volume_quotas'] = quotas
 
 

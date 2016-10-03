@@ -25,6 +25,8 @@ from oslo_config import cfg
 from oslo_log import log as logging
 import testtools
 
+from tempest.lib import exceptions
+from tempest.lib.services import clients
 from tempest.test_discover import plugins
 
 
@@ -172,6 +174,16 @@ IdentityGroup = [
                      "a domain scoped token to use admin APIs")
 ]
 
+service_clients_group = cfg.OptGroup(name='service-clients',
+                                     title="Service Clients Options")
+
+ServiceClientsGroup = [
+    cfg.IntOpt('http_timeout',
+               default=60,
+               help='Timeout in seconds to wait for the http request to '
+                    'return'),
+]
+
 identity_feature_group = cfg.OptGroup(name='identity-feature-enabled',
                                       title='Enabled Identity Features')
 
@@ -191,7 +203,12 @@ IdentityFeatureGroup = [
                 help="A list of enabled identity extensions with a special "
                      "entry all which indicates every extension is enabled. "
                      "Empty list indicates all extensions are disabled. "
-                     "To get the list of extensions run: 'keystone discover'")
+                     "To get the list of extensions run: 'keystone discover'"),
+    # TODO(rodrigods): Remove the reseller flag when Kilo and Liberty is end
+    # of life.
+    cfg.BoolOpt('reseller',
+                default=False,
+                help='Does the environment support reseller?')
 ]
 
 compute_group = cfg.OptGroup(name='compute',
@@ -363,10 +380,11 @@ ComputeFeaturesGroup = [
                 help='Does the test environment support creating snapshot '
                      'images of running instances?'),
     cfg.BoolOpt('nova_cert',
-                default=True,
-                help='Does the test environment have the nova cert running?'),
+                default=False,
+                help='Does the test environment have the nova cert running?',
+                deprecated_for_removal=True),
     cfg.BoolOpt('personality',
-                default=True,
+                default=False,
                 help='Does the test environment support server personality'),
     cfg.BoolOpt('attach_encrypted_volume',
                 default=True,
@@ -485,7 +503,7 @@ NetworkGroup = [
                 default=False,
                 help="Whether project networks can be reached directly from "
                      "the test client. This must be set to True when the "
-                     "'fixed' ssh_connect_method is selected."),
+                     "'fixed' connect_method is selected."),
     cfg.StrOpt('public_network_id',
                default="",
                help="Id of the public network that provides external "
@@ -636,7 +654,7 @@ ValidationGroup = [
     cfg.StrOpt('network_for_ssh',
                default='public',
                help="Network used for SSH connections. Ignored if "
-                    "connect_method=floating or run_validation=false.",
+                    "connect_method=floating.",
                deprecated_opts=[cfg.DeprecatedOpt('network_for_ssh',
                                                   group='compute')]),
 ]
@@ -1113,6 +1131,7 @@ _opts = [
     (compute_group, ComputeGroup),
     (compute_features_group, ComputeFeaturesGroup),
     (identity_group, IdentityGroup),
+    (service_clients_group, ServiceClientsGroup),
     (identity_feature_group, IdentityFeatureGroup),
     (image_group, ImageGroup),
     (image_feature_group, ImageFeaturesGroup),
@@ -1178,6 +1197,7 @@ class TempestConfigPrivate(object):
         self.compute = _CONF.compute
         self.compute_feature_enabled = _CONF['compute-feature-enabled']
         self.identity = _CONF.identity
+        self.service_clients = _CONF['service-clients']
         self.identity_feature_enabled = _CONF['identity-feature-enabled']
         self.image = _CONF.image
         self.image_feature_enabled = _CONF['image-feature-enabled']
@@ -1269,6 +1289,15 @@ class TempestConfigProxy(object):
             lockutils.set_defaults(lock_dir)
             self._config = TempestConfigPrivate(config_path=self._path)
 
+            # Pushing tempest internal service client configuration to the
+            # service clients register. Doing this in the config module ensures
+            # that the configuration is available by the time we register the
+            # service clients.
+            # NOTE(andreaf) This has to be done at the time the first
+            # attribute is accessed, to ensure all plugins have been already
+            # loaded, options registered, and _config is set.
+            _register_tempest_service_clients()
+
         return getattr(self._config, attr)
 
     def set_config_path(self, path):
@@ -1345,3 +1374,112 @@ def skip_if_config(*args):
             return f(self, *func_args, **func_kwargs)
         return wrapper
     return decorator
+
+
+def service_client_config(service_client_name=None):
+    """Return a dict with the parameters to init service clients
+
+    Extracts from CONF the settings specific to the service_client_name and
+    api_version, and formats them as dict ready to be passed to the service
+    clients __init__:
+
+        * `region` (default to identity)
+        * `catalog_type`
+        * `endpoint_type`
+        * `build_timeout` (object-storage and identity default to compute)
+        * `build_interval` (object-storage and identity default to compute)
+
+    The following common settings are always returned, even if
+    `service_client_name` is None:
+
+        * `disable_ssl_certificate_validation`
+        * `ca_certs`
+        * `trace_requests`
+        * `http_timeout`
+
+    The dict returned by this does not fit a few service clients:
+
+        * The endpoint type is not returned for identity client, since it takes
+          three different values for v2 admin, v2 public and v3
+        * The `ServersClient` from compute accepts an optional
+          `enable_instance_password` parameter, which is not returned.
+        * The `VolumesClient` for both v1 and v2 volume accept an optional
+          `default_volume_size` parameter, which is not returned.
+        * The `TokenClient` and `V3TokenClient` have a very different
+          interface, only auth_url is needed for them.
+
+    :param service_client_name: str Name of the service. Supported values are
+        'compute', 'identity', 'image', 'network', 'object-storage', 'volume'
+    :return: dictionary of __init__ parameters for the service clients
+    :rtype: dict
+    """
+    _parameters = {
+        'disable_ssl_certificate_validation':
+            CONF.identity.disable_ssl_certificate_validation,
+        'ca_certs': CONF.identity.ca_certificates_file,
+        'trace_requests': CONF.debug.trace_requests,
+        'http_timeout': CONF.service_clients.http_timeout
+    }
+
+    if service_client_name is None:
+        return _parameters
+
+    # Get the group of options first, by normalising the service_group_name
+    # Services with a '-' in the name have an '_' in the option group name
+    config_group = service_client_name.replace('-', '_')
+    # NOTE(andreaf) Check if the config group exists. This allows for this
+    # helper to be used for settings from registered plugins as well
+    try:
+        options = getattr(CONF, config_group)
+    except cfg.NoSuchOptError:
+        # Option group not defined
+        raise exceptions.UnknownServiceClient(services=service_client_name)
+    # Set endpoint_type
+    # Identity uses different settings depending on API version, so do not
+    # return the endpoint at all.
+    if service_client_name != 'identity':
+        _parameters['endpoint_type'] = getattr(options, 'endpoint_type')
+    # Set build_*
+    # Object storage and identity groups do not have conf settings for
+    # build_* parameters, and we default to compute in any case
+    for setting in ['build_timeout', 'build_interval']:
+        if not hasattr(options, setting) or not getattr(options, setting):
+            _parameters[setting] = getattr(CONF.compute, setting)
+        else:
+            _parameters[setting] = getattr(options, setting)
+    # Set region
+    # If a service client does not define region or region is not set
+    # default to the identity region
+    if not hasattr(options, 'region') or not getattr(options, 'region'):
+        _parameters['region'] = CONF.identity.region
+    else:
+        _parameters['region'] = getattr(options, 'region')
+    # Set service
+    _parameters['service'] = getattr(options, 'catalog_type')
+    return _parameters
+
+
+def _register_tempest_service_clients():
+    # Register tempest own service clients using the same mechanism used
+    # for external plugins.
+    # The configuration data is pushed to the registry so that automatic
+    # configuration of tempest own service clients is possible both for
+    # tempest as well as for the plugins.
+    service_clients = clients.tempest_modules()
+    registry = clients.ClientsRegistry()
+    all_clients = []
+    for service_client in service_clients:
+        module = service_clients[service_client]
+        configs = service_client.split('.')[0]
+        service_client_data = dict(
+            name=service_client.replace('.', '_'),
+            service_version=service_client,
+            module_path=module.__name__,
+            client_names=module.__all__,
+            **service_client_config(configs)
+        )
+        all_clients.append(service_client_data)
+    # NOTE(andreaf) Internal service clients do not actually belong
+    # to a plugin, so using '__tempest__' to indicate a virtual plugin
+    # which holds internal service clients.
+    registry.register_service_client('__tempest__', all_clients)

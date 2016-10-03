@@ -23,6 +23,27 @@ Tempest run has several options:
                    any tests that match on re.match() with the regex
  * **--smoke**: Run all the tests tagged as smoke
 
+There are also the **--blacklist-file** and **--whitelist-file** options that
+let you pass a filepath to tempest run with the file format being a line
+separated regex, with '#' used to signify the start of a comment on a line.
+For example::
+
+    # Regex file
+    ^regex1 # Match these tests
+    .*regex2 # Match those tests
+
+The blacklist file will be used to construct a negative lookahead regex and
+the whitelist file will simply OR all the regexes in the file. The whitelist
+and blacklist file options are mutually exclusive so you can't use them
+together. However, you can combine either with a normal regex or the *--smoke*
+flag. When used with a blacklist file the generated regex will be combined to
+something like::
+
+    ^((?!black_regex1|black_regex2).)*$cli_regex1
+
+When combined with a whitelist file all the regexes from the file and the CLI
+regexes will be ORed.
+
 You can also use the **--list-tests** option in conjunction with selection
 arguments to list which tests will be run.
 
@@ -32,6 +53,24 @@ There are several options to control how the tests are executed. By default
 tempest will run in parallel with a worker for each CPU present on the machine.
 If you want to adjust the number of workers use the **--concurrency** option
 and if you want to run tests serially use **--serial**
+
+Running with Workspaces
+-----------------------
+Tempest run enables you to run your tempest tests from any setup tempest
+workspace it relies on you having setup a tempest workspace with either the
+``tempest init`` or ``tempest workspace`` commands. Then using the
+``--workspace`` CLI option you can specify which one of your workspaces you
+want to run tempest from. Using this option you don't have to run Tempest
+directly with you current working directory being the workspace, Tempest will
+take care of managing everything to be executed from there.
+
+Running from Anywhere
+---------------------
+Tempest run provides you with an option to execute tempest from anywhere on
+your system. You are required to provide a config file in this case with the
+``--config-file`` option. When run tempest will create a .testrepository
+directory and a .testr.conf file in your current working directory. This way
+you can use testr commands directly to inspect the state of the previous run.
 
 Test Output
 ===========
@@ -47,20 +86,23 @@ import sys
 import threading
 
 from cliff import command
+from os_testr import regex_builder
 from os_testr import subunit_trace
-from oslo_log import log as logging
 from testrepository.commands import run_argv
 
+from tempest.cmd import init
+from tempest.cmd import workspace
 from tempest import config
 
 
-LOG = logging.getLogger(__name__)
 CONF = config.CONF
 
 
 class TempestRun(command.Command):
 
-    def _set_env(self):
+    def _set_env(self, config_file=None):
+        if config_file:
+            CONF.set_config_path(os.path.abspath(config_file))
         # NOTE(mtreinish): This is needed so that testr doesn't gobble up any
         # stacktraces on failure.
         if 'TESTR_PDB' in os.environ:
@@ -68,18 +110,45 @@ class TempestRun(command.Command):
         else:
             os.environ["TESTR_PDB"] = ""
 
+    def _create_testrepository(self):
+        if not os.path.isdir('.testrepository'):
+            returncode = run_argv(['testr', 'init'], sys.stdin, sys.stdout,
+                                  sys.stderr)
+            if returncode:
+                sys.exit(returncode)
+
+    def _create_testr_conf(self):
+        top_level_path = os.path.dirname(os.path.dirname(__file__))
+        discover_path = os.path.join(top_level_path, 'test_discover')
+        file_contents = init.TESTR_CONF % (top_level_path, discover_path)
+        with open('.testr.conf', 'w+') as testr_conf_file:
+                testr_conf_file.write(file_contents)
+
     def take_action(self, parsed_args):
-        self._set_env()
         returncode = 0
+        if parsed_args.config_file:
+            self._set_env(parsed_args.config_file)
+        else:
+            self._set_env()
+        # Workspace execution mode
+        if parsed_args.workspace:
+            workspace_mgr = workspace.WorkspaceManager(
+                parsed_args.workspace_path)
+            path = workspace_mgr.get_workspace(parsed_args.workspace)
+            os.chdir(path)
+            # NOTE(mtreinish): tempest init should create a .testrepository dir
+            # but since workspaces can be imported let's sanity check and
+            # ensure that one is created
+            self._create_testrepository()
         # Local execution mode
-        if os.path.isfile('.testr.conf'):
+        elif os.path.isfile('.testr.conf'):
             # If you're running in local execution mode and there is not a
             # testrepository dir create one
-            if not os.path.isdir('.testrepository'):
-                returncode = run_argv(['testr', 'init'], sys.stdin, sys.stdout,
-                                      sys.stderr)
-                if returncode:
-                    sys.exit(returncode)
+            self._create_testrepository()
+        # local execution with config file mode
+        elif parsed_args.config_file:
+            self._create_testr_conf()
+            self._create_testrepository()
         else:
             print("No .testr.conf file was found for local execution")
             sys.exit(2)
@@ -102,6 +171,18 @@ class TempestRun(command.Command):
         return parser
 
     def _add_args(self, parser):
+        # workspace args
+        parser.add_argument('--workspace', default=None,
+                            help='Name of tempest workspace to use for running'
+                                 ' tests. You can see a list of workspaces '
+                                 'with tempest workspace list')
+        parser.add_argument('--workspace-path', default=None,
+                            dest='workspace_path',
+                            help="The path to the workspace file, the default "
+                                 "is ~/.tempest/workspace.yaml")
+        # Configuration flags
+        parser.add_argument('--config-file', default=None, dest='config_file',
+                            help='Configuration file to run tempest with')
         # test selection args
         regex = parser.add_mutually_exclusive_group()
         regex.add_argument('--smoke', action='store_true',
@@ -109,11 +190,20 @@ class TempestRun(command.Command):
         regex.add_argument('--regex', '-r', default='',
                            help='A normal testr selection regex used to '
                                 'specify a subset of tests to run')
+        list_selector = parser.add_mutually_exclusive_group()
+        list_selector.add_argument('--whitelist-file', '--whitelist_file',
+                                   help="Path to a whitelist file, this file "
+                                        "contains a separate regex on each "
+                                        "newline.")
+        list_selector.add_argument('--blacklist-file', '--blacklist_file',
+                                   help='Path to a blacklist file, this file '
+                                        'contains a separate regex exclude on '
+                                        'each newline')
         # list only args
         parser.add_argument('--list-tests', '-l', action='store_true',
                             help='List tests',
                             default=False)
-        # exectution args
+        # execution args
         parser.add_argument('--concurrency', '-w',
                             help="The number of workers to use, defaults to "
                                  "the number of cpus")
@@ -138,6 +228,10 @@ class TempestRun(command.Command):
             regex = 'smoke'
         elif parsed_args.regex:
             regex = parsed_args.regex
+        if parsed_args.whitelist_file or parsed_args.blacklist_file:
+            regex = regex_builder.construct_regex(parsed_args.blacklist_file,
+                                                  parsed_args.whitelist_file,
+                                                  regex, False)
         return regex
 
     def _build_options(self, parsed_args):
