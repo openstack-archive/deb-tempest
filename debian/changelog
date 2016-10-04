@@ -6,6 +6,7 @@ tempest (1:12.2.0-0) experimental; urgency=medium
   * Fixed oslotest EPOCH.
   * Using OpenStack's Gerrit as VCS URLs.
   * Added .gitreview in extend-diff-ignore.
+  * Removed javelin2 from update-alternatives.
 
  -- Thomas Goirand <zigo@debian.org>  Wed, 28 Sep 2016 10:23:17 +0200
 

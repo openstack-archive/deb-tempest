@@ -4,7 +4,6 @@ set -e
 
 if [ "$1" = "configure" ] ; then
 	update-alternatives --install /usr/bin/check-uuid check-uuid /usr/bin/python3-check-uuid 200
-	update-alternatives --install /usr/bin/javelin2 javelin2 /usr/bin/python3-javelin2 200
 	update-alternatives --install /usr/bin/run-tempest-stress run-tempest-stress /usr/bin/python3-run-tempest-stress 200
 	update-alternatives --install /usr/bin/skip-tracker skip-tracker /usr/bin/python3-skip-tracker 200
 	update-alternatives --install /usr/bin/tempest tempest /usr/bin/python3-tempest 200
