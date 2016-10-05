@@ -1,0 +1,9 @@
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Workflow+1: Masayuki Igawa <masayuki@igawa.me>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 05 Oct 2016 05:18:40 +0000
+Reviewed-on: https://review.openstack.org/379013
+Project: openstack/deb-tempest
+Branch: refs/heads/master
