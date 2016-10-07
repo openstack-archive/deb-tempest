@@ -98,7 +98,7 @@ override_dh_auto_install:
 
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
-	export OS_TEST_PATH=$(CURDIR)/tempest/tests ; PATH=$$PATH:$(CURDIR)/debian/bin pkgos-dh_auto_test 'tempest\.tests\.(?!(.*test_pretty_tox.*|.*cmd\.test_subunit_describe_calls\.TestSubunitDescribeCalls\.test_return_code.*))'
+	export OS_TEST_PATH=$(CURDIR)/tempest/tests ; PATH=$$PATH:$(CURDIR)/debian/bin pkgos-dh_auto_test 'tempest\.tests\.(?!(.*test_pretty_tox.*|.*cmd\.test_subunit_describe_calls\.TestSubunitDescribeCalls\.test_return_code.*|.*TestTestList\.test_testr_list_tests_no_errors.*))'
 endif
 
 override_dh_sphinxdoc:

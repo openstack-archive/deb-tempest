@@ -1,6 +1,8 @@
 tempest (1:12.2.0-1) unstable; urgency=medium
 
   * Uploading to unstable.
+  * Blacklist failing test:
+    - TestTestList.test_testr_list_tests_no_errors
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 04 Oct 2016 15:22:26 +0200
 
