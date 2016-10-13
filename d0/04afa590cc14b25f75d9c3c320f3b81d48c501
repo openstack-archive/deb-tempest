@@ -1,0 +1,10 @@
+Code-Review+1: Elise Eiden <ee550x@att.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 12 Oct 2016 22:22:56 +0000
+Reviewed-on: https://review.openstack.org/375354
+Project: openstack/deb-tempest
+Branch: refs/heads/master
