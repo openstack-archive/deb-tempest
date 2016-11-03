@@ -1,0 +1,11 @@
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Code-Review+1: Alex Schultz <aschultz@redhat.com>
+Code-Review+1: Steve Baker <sbaker@redhat.com>
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Workflow+1: Masayuki Igawa <masayuki@igawa.me>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 03 Nov 2016 10:21:21 +0000
+Reviewed-on: https://review.openstack.org/392885
+Project: openstack/deb-tempest
+Branch: refs/heads/master
