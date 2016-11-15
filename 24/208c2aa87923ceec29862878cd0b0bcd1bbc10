@@ -1,0 +1,11 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: zhubingbing <1392607554@qq.com>
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 15 Nov 2016 10:36:00 +0000
+Reviewed-on: https://review.openstack.org/390458
+Project: openstack/deb-tempest
+Branch: refs/heads/master
