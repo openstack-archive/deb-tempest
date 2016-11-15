@@ -1,0 +1,12 @@
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Code-Review+1: Moshe Levi <moshele@mellanox.com>
+Code-Review+1: Anna Babich <ababich@mirantis.com>
+Code-Review+1: zhubingbing <1392607554@qq.com>
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Workflow+1: Masayuki Igawa <masayuki@igawa.me>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 15 Nov 2016 08:51:14 +0000
+Reviewed-on: https://review.openstack.org/339230
+Project: openstack/deb-tempest
+Branch: refs/heads/master
