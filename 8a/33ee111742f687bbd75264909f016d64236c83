@@ -1,0 +1,14 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: Gal Amado <gamado@redhat.com>
+Code-Review+1: Tzach Shefi <tshefi@redhat.com>
+Code-Review+1: Mike Abrams <m75abrams@gmail.com>
+Code-Review+1: zhubingbing <1392607554@qq.com>
+Code-Review+1: guo yunxian <yunxian.guo@easystack.cn>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Workflow+1: Ghanshyam Mann <ghanshyammann@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sun, 20 Nov 2016 06:15:52 +0000
+Reviewed-on: https://review.openstack.org/395462
+Project: openstack/deb-tempest
+Branch: refs/heads/master
