@@ -1,0 +1,11 @@
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+1: Eric Lei <leiyashuai@inspur.com>
+Code-Review+1: ShangXiao <shangxiaobj@inspur.com>
+Workflow+1: Ghanshyam Mann <ghanshyammann@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 25 Nov 2016 07:38:00 +0000
+Reviewed-on: https://review.openstack.org/398001
+Project: openstack/deb-tempest
+Branch: refs/heads/master
