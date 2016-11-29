@@ -1,0 +1,12 @@
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Code-Review+1: Mike Abrams <m75abrams@gmail.com>
+Code-Review+1: Gal Amado <gamado@redhat.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+1: melissaml <ma.lei@99cloud.net>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 28 Nov 2016 15:01:09 +0000
+Reviewed-on: https://review.openstack.org/391788
+Project: openstack/deb-tempest
+Branch: refs/heads/master
