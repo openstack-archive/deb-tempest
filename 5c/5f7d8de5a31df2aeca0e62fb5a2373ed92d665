@@ -1,0 +1,13 @@
+Code-Review+1: Mike Abrams <m75abrams@gmail.com>
+Code-Review+1: Anna Babich <ababich@mirantis.com>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Code-Review+1: Gal Amado <gamado@redhat.com>
+Code-Review+1: Avi Avraham <aavraham@redhat.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 29 Nov 2016 19:22:38 +0000
+Reviewed-on: https://review.openstack.org/369355
+Project: openstack/deb-tempest
+Branch: refs/heads/master
