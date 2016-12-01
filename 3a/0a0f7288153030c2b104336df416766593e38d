@@ -1,0 +1,10 @@
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Code-Review+1: Brian Haley <brian.haley@hpe.com>
+Code-Review+2: afazekas <afazekas@redhat.com>
+Workflow+1: afazekas <afazekas@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 30 Nov 2016 14:35:27 +0000
+Reviewed-on: https://review.openstack.org/403289
+Project: openstack/deb-tempest
+Branch: refs/heads/master
