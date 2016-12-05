@@ -1,0 +1,14 @@
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+1: jian.song <jian.song@easystack.cn>
+Code-Review+1: zhubingbing <zhu.bingbing@99cloud.net>
+Code-Review+1: Sergey Reshetnyak <sreshetniak@mirantis.com>
+Code-Review+1: Peter Stachowski <peter@tesora.com>
+Code-Review+1: Benny Kopilov <bkopilov@redhat.com>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Workflow+1: Ghanshyam Mann <ghanshyammann@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 02 Dec 2016 10:04:36 +0000
+Reviewed-on: https://review.openstack.org/404809
+Project: openstack/deb-tempest
+Branch: refs/heads/master
