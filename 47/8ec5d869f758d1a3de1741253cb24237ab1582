@@ -1,0 +1,9 @@
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Workflow+1: Ghanshyam Mann <ghanshyammann@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 08 Dec 2016 08:35:02 +0000
+Reviewed-on: https://review.openstack.org/405232
+Project: openstack/deb-tempest
+Branch: refs/heads/master
