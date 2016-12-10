@@ -1,0 +1,10 @@
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+1: Daniel Mellado <dmellado@redhat.com>
+Code-Review+2: Sean Dague <sean@dague.net>
+Workflow+1: Sean Dague <sean@dague.net>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 09 Dec 2016 18:26:20 +0000
+Reviewed-on: https://review.openstack.org/409215
+Project: openstack/deb-tempest
+Branch: refs/heads/master
