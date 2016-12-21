@@ -1,0 +1,13 @@
+Code-Review+1: Jim Rollenhagen <jim@jimrollenhagen.com>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Code-Review+1: zhubingbing <zhu.bingbing@99cloud.net>
+Code-Review+1: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+1: Emilien Macchi <emilien@redhat.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Workflow+1: Jordan Pittier <jordan.pittier@scality.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 20 Dec 2016 15:33:31 +0000
+Reviewed-on: https://review.openstack.org/412511
+Project: openstack/deb-tempest
+Branch: refs/heads/master

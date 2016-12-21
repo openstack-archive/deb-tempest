@@ -1,0 +1,11 @@
+Code-Review+1: Jonte Watford <jonte.watford@intel.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Code-Review+1: Jim Rollenhagen <jim@jimrollenhagen.com>
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Workflow+1: Ghanshyam Mann <ghanshyammann@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 19 Dec 2016 10:36:53 +0000
+Reviewed-on: https://review.openstack.org/406675
+Project: openstack/deb-tempest
+Branch: refs/heads/master
