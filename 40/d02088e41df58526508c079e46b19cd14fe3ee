@@ -1,0 +1,10 @@
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Code-Review+1: Anthony Washington <anthony.washington@intel.com>
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Workflow+1: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 18 Jan 2017 01:08:29 +0000
+Reviewed-on: https://review.openstack.org/420616
+Project: openstack/deb-tempest
+Branch: refs/heads/master
