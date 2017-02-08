@@ -1,0 +1,10 @@
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+1: Daniel Mellado <dmellado@redhat.com>
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Workflow+1: Matthew Treinish <mtreinish@kortar.org>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 08 Feb 2017 11:33:18 +0000
+Reviewed-on: https://review.openstack.org/425702
+Project: openstack/deb-tempest
+Branch: refs/heads/master
