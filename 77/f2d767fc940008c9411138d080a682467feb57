@@ -1,0 +1,9 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Workflow+1: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: Zou Keke <zoukeke@cmss.chinamobile.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 09 Feb 2017 01:47:23 +0000
+Reviewed-on: https://review.openstack.org/431001
+Project: openstack/deb-tempest
+Branch: refs/heads/master
