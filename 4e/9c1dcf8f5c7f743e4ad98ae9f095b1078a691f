@@ -1,0 +1,9 @@
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+1: Daniel Mellado <dmellado@redhat.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 22 Feb 2017 04:10:11 +0000
+Reviewed-on: https://review.openstack.org/436666
+Project: openstack/deb-tempest
+Branch: refs/heads/master

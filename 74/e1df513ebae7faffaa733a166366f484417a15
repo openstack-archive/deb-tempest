@@ -1,0 +1,11 @@
+Code-Review+2: Ken'ichi Ohmichi <ken1ohmichi@gmail.com>
+Code-Review+1: qtlu <qtlu@fiberhome.com>
+Code-Review+1: Zhongwei He <zwhe@fiberhome.com>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Workflow+1: Ghanshyam Mann <ghanshyammann@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 15 Mar 2017 06:45:33 +0000
+Reviewed-on: https://review.openstack.org/437745
+Project: openstack/deb-tempest
+Branch: refs/heads/master

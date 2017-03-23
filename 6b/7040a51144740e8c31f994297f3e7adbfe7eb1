@@ -1,0 +1,12 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: lifan <lifan@awcloud.com>
+Code-Review+1: DavidPurcell <david.purcell@att.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Workflow+1: Matthew Treinish <mtreinish@kortar.org>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 17 Feb 2017 03:19:35 +0000
+Reviewed-on: https://review.openstack.org/421724
+Project: openstack/deb-tempest
+Branch: refs/heads/master

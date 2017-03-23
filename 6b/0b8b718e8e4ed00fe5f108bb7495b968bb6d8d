@@ -1,0 +1,11 @@
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Code-Review+1: Luz Cazares <luz.cazares@intel.com>
+Code-Review+1: Andrea Frittoli <andrea.frittoli@gmail.com>
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Workflow+1: Jordan Pittier <jordan.pittier@scality.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 14 Mar 2017 19:34:34 +0000
+Reviewed-on: https://review.openstack.org/442939
+Project: openstack/deb-tempest
+Branch: refs/heads/master
