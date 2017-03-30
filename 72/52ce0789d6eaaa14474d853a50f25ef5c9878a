@@ -1,0 +1,10 @@
+Code-Review+2: Masayuki Igawa <masayuki@igawa.me>
+Code-Review+1: Liang Hao <lianghao@cmss.chinamobile.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 30 Mar 2017 19:14:14 +0000
+Reviewed-on: https://review.openstack.org/450032
+Project: openstack/deb-tempest
+Branch: refs/heads/master
