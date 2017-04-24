@@ -1,0 +1,9 @@
+Code-Review+2: Sean Dague <sean@dague.net>
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Workflow+1: Matthew Treinish <mtreinish@kortar.org>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 24 Apr 2017 15:27:45 +0000
+Reviewed-on: https://review.openstack.org/458844
+Project: openstack/deb-tempest
+Branch: refs/heads/master

@@ -1,0 +1,9 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+2: Andrea Frittoli <andrea.frittoli@gmail.com>
+Workflow+1: Andrea Frittoli <andrea.frittoli@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 24 Apr 2017 15:27:17 +0000
+Reviewed-on: https://review.openstack.org/458383
+Project: openstack/deb-tempest
+Branch: refs/heads/master
