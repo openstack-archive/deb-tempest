@@ -1,0 +1,10 @@
+Code-Review+2: Jordan Pittier <jordan.pittier@scality.com>
+Code-Review+1: Konstantin Baikov <konstantin.baikov@gmail.com>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Workflow+1: Ghanshyam Mann <ghanshyammann@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 10 May 2017 20:19:49 +0000
+Reviewed-on: https://review.openstack.org/462478
+Project: openstack/deb-tempest
+Branch: refs/heads/master
