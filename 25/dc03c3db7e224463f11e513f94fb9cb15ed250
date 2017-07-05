@@ -1,0 +1,10 @@
+Code-Review+1: Jeremy Zhang <zhangjun_inspur@163.com>
+Code-Review+2: Ghanshyam Mann <ghanshyammann@gmail.com>
+Code-Review+2: zhufl <zhu.fanglei@zte.com.cn>
+Workflow+1: zhufl <zhu.fanglei@zte.com.cn>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 05 Jul 2017 06:16:30 +0000
+Reviewed-on: https://review.openstack.org/480338
+Project: openstack/deb-tempest
+Branch: refs/heads/master
