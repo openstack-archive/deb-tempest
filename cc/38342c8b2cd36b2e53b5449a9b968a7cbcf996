@@ -1,0 +1,12 @@
+Code-Review+1: Kevin Benton <kevin@benton.pub>
+Code-Review+1: Brian Haley <haleyb.dev@gmail.com>
+Code-Review+2: zhufl <zhu.fanglei@zte.com.cn>
+Code-Review+1: Cuong Nguyen <cuongnv@vn.fujitsu.com>
+Code-Review+2: Masayuki Igawa <masayuki@igawa.io>
+Workflow+1: Masayuki Igawa <masayuki@igawa.io>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Wed, 05 Jul 2017 07:37:29 +0000
+Reviewed-on: https://review.openstack.org/474987
+Project: openstack/deb-tempest
+Branch: refs/heads/master
