@@ -1,0 +1,9 @@
+Code-Review+2: Masayuki Igawa <masayuki@igawa.io>
+Code-Review+2: zhufl <zhu.fanglei@zte.com.cn>
+Workflow+1: zhufl <zhu.fanglei@zte.com.cn>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 14 Jul 2017 21:01:28 +0000
+Reviewed-on: https://review.openstack.org/482076
+Project: openstack/deb-tempest
+Branch: refs/heads/master
