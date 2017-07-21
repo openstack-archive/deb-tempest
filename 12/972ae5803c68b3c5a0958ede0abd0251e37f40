@@ -1,0 +1,10 @@
+Code-Review+1: Felipe Monteiro <felipe.monteiro@att.com>
+Code-Review+2: Matthew Treinish <mtreinish@kortar.org>
+Code-Review+2: afazekas <afazekas@redhat.com>
+Workflow+1: afazekas <afazekas@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 21 Jul 2017 20:01:47 +0000
+Reviewed-on: https://review.openstack.org/485138
+Project: openstack/deb-tempest
+Branch: refs/heads/master
