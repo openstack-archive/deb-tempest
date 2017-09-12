@@ -1,4 +1,0 @@
----
-prelude: >
-    This is an intermediate release during the Pike development cycle to
-    make new functionality available to plugins and other consumers.

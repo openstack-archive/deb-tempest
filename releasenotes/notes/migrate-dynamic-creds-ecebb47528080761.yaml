@@ -1,5 +1,0 @@
----
-features:
-  - |
-    The tempest module tempest.common.dynamic creds which is used for
-    dynamically allocating credentials has been migrated into tempest lib.

@@ -1,4 +1,0 @@
----
-upgrade:
-  - The Negative Tests Generator has been removed (it was not used by any
-    Tempest tests).

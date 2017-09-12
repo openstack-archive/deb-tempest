@@ -1,6 +1,0 @@
----
-features:
-  - |
-    Add the list auth projects API to the identity client library. This feature
-    enables the possibility to list projects that are available to be scoped
-    to based on the X-Auth-Token provided in the request.

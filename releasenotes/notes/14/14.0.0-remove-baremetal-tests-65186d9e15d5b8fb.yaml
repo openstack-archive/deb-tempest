@@ -1,4 +1,0 @@
----
-upgrade:
-  - All tests for the Ironic project have been removed from Tempest. Those
-    exist as a Tempest plugin in the Ironic project.

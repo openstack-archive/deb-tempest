@@ -1,5 +1,0 @@
----
-features:
-  - Adds tempest workspaces command and WorkspaceManager.
-    This is used to have a centralized repository for managing
-    different tempest configurations.

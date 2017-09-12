@@ -1,5 +1,0 @@
----
-upgrade:
-  - |
-    The deprecated ``volume_services`` option in the ``volume_feature_enabled``
-    section has now been removed.

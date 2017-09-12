@@ -1,4 +1,0 @@
----
-upgrade:
-  - All tests for the Sahara project have been removed from Tempest. They now
-    live as a Tempest plugin in the ``openstack/sahara-tests`` repository.

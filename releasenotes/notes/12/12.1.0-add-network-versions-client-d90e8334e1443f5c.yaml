@@ -1,4 +1,0 @@
----
-features:
-  - Adds a network version client for querying
-    Neutron's API version discovery URL ("GET /").

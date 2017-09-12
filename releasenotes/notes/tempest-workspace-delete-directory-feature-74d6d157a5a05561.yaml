@@ -1,5 +1,0 @@
----
-features:
-  - |
-    Added tempest workspace remove --name <workspace_name> --rmdir
-    feature to delete the workspace directory as well as entry.
